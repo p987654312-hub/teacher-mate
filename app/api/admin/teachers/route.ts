@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// 이 코드는 서버에서만 실행됩니다. 서비스 롤 키는 브라우저로 절대 보내지지 않습니다.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+// 빌드 시점에는 env가 없을 수 있으므로 요청 시점에만 클라이언트 생성 (서버 전용, 서비스 롤 키는 브라우저로 노출되지 않음)
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+  }
+  return createClient(supabaseUrl, serviceRoleKey);
+}
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +22,7 @@ export async function POST(req: Request) {
       );
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
     // auth.users 테이블은 Admin API를 통해 조회합니다.
     const { data, error } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
