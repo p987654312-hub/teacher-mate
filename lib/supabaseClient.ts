@@ -24,7 +24,7 @@ function getSupabase(): SupabaseClient {
 // sessionStorage 사용 → 브라우저/탭을 닫으면 로그인 해제됨
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) {
-    return (getSupabase() as Record<string, unknown>)[prop as string];
+    return (getSupabase() as unknown as Record<string, unknown>)[prop as string];
   },
 });
 
