@@ -88,7 +88,8 @@ ${text}
         throw err;
       }
     }
-    throw lastError;
+    const finalError = lastError instanceof Error ? lastError : new Error(String(lastError ?? "모든 API 키로 시도했으나 실패"));
+    throw finalError;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";
     console.error("Error in /api/ai-refine-mileage:", error);

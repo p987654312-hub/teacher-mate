@@ -17,7 +17,7 @@ export async function GET() {
     "NEXT_PUBLIC_ADMIN_CODE",
   ] as const;
 
-  const status: Record<string, "설정됨" | "비어있음"> = {};
+  const status: Record<string, string> = {};
   for (const key of envKeys) {
     const val = process.env[key];
     status[key] = val && String(val).trim() ? "설정됨" : "비어있음";
