@@ -11,6 +11,8 @@ function getGeminiKeys(): string[] {
   return keys;
 }
 
+let keyIndex = 0;
+
 const CATEGORY_KEYS = ["training", "class_open", "community", "book_edutech", "health", "other"] as const;
 
 /** 교사가 입력한 텍스트를 분석해 활동별로 분류하고, YY.MM.DD + 요약 형식으로 반환 */
@@ -67,21 +69,41 @@ ${text}
 [출력] JSON 배열만 출력할 것.`;
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(geminiKeys[0]);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let raw = response.text().trim();
-    const jsonMatch = raw.match(/\[[\s\S]*\]/);
-    if (jsonMatch) raw = jsonMatch[0];
-    const parsed = JSON.parse(raw) as { category: string; content: string }[];
-    const entries = (Array.isArray(parsed) ? parsed : [])
-      .filter((e) => e && typeof e.category === "string" && typeof e.content === "string")
-      .filter((e) => CATEGORY_KEYS.includes(e.category as (typeof CATEGORY_KEYS)[number]))
-      .map((e) => ({ category: e.category, content: String(e.content).trim() }))
-      .filter((e) => e.content.length > 0);
+    const startIdx = keyIndex % geminiKeys.length;
+    keyIndex += 1;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
+      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
+      try {
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        let raw = response.text().trim();
+        const jsonMatch = raw.match(/\[[\s\S]*\]/);
+        if (jsonMatch) raw = jsonMatch[0];
+        const parsed = JSON.parse(raw) as { category: string; content: string }[];
+        const entries = (Array.isArray(parsed) ? parsed : [])
+          .filter((e) => e && typeof e.category === "string" && typeof e.content === "string")
+          .filter((e) => CATEGORY_KEYS.includes(e.category as (typeof CATEGORY_KEYS)[number]))
+          .map((e) => ({ category: e.category, content: String(e.content).trim() }))
+          .filter((e) => e.content.length > 0);
 
-    return NextResponse.json({ entries });
+        return NextResponse.json({ entries });
+      } catch (err: unknown) {
+        lastError = err;
+        const msg = (err instanceof Error ? err.message : "").toLowerCase();
+        const isQuotaOrRate =
+          (err as { status?: number })?.status === 429 ||
+          msg.includes("quota") ||
+          msg.includes("rate") ||
+          msg.includes("limit") ||
+          msg.includes("resource_exhausted");
+        if (isQuotaOrRate && attempt < geminiKeys.length - 1) continue;
+        throw err;
+      }
+    }
+    throw lastError;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";
     console.error("Error in /api/ai-classify-mileage:", error);

@@ -11,6 +11,8 @@ function getGeminiKeys(): string[] {
   return keys;
 }
 
+let keyIndex = 0;
+
 /** 기록 내용을 한 번 필터링·정리해서 짧은 문장으로 반환 */
 export async function POST(req: Request) {
   const geminiKeys = getGeminiKeys();
@@ -55,21 +57,38 @@ ${text}
 출력 (한 줄에 한 건씩, 여러 건이면 줄바꿈으로 구분):`;
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const key = geminiKeys[0];
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const raw = response.text().trim();
-    const refinedList = raw
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const refined = refinedList.length > 0 ? refinedList : [text];
+    const startIdx = keyIndex % geminiKeys.length;
+    keyIndex += 1;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
+      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
+      try {
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const raw = response.text().trim();
+        const refinedList = raw
+          .split(/\n+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const refined = refinedList.length > 0 ? refinedList : [text];
 
-    return NextResponse.json({
-      refined,
-    });
+        return NextResponse.json({ refined });
+      } catch (err: unknown) {
+        lastError = err;
+        const msg = (err instanceof Error ? err.message : "").toLowerCase();
+        const isQuotaOrRate =
+          (err as { status?: number })?.status === 429 ||
+          msg.includes("quota") ||
+          msg.includes("rate") ||
+          msg.includes("limit") ||
+          msg.includes("resource_exhausted");
+        if (isQuotaOrRate && attempt < geminiKeys.length - 1) continue;
+        throw err;
+      }
+    }
+    throw lastError;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";
     console.error("Error in /api/ai-refine-mileage:", error);
