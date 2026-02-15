@@ -241,13 +241,13 @@ function DiagnosisResultContent() {
         if (error) {
           console.error("Error fetching diagnosis result:", error);
           alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-          router.push(role === "admin" ? "/dashboard/admin" : "/dashboard");
+          router.push("/dashboard");
           return;
         }
 
         if (!data) {
           alert("진단 결과가 없습니다.");
-          router.push(role === "admin" ? "/dashboard/admin" : "/dashboard");
+          router.push("/dashboard");
           return;
         }
 
