@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     const users = (listData?.users ?? []) as Array<{
       id: string;
       email?: string;
-      user_metadata?: { role?: string; schoolName?: string; name?: string };
+      user_metadata?: { role?: string; schoolName?: string; name?: string; gradeClass?: string; schoolLevel?: string };
       created_at?: string;
     }>;
 
