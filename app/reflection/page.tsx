@@ -157,10 +157,10 @@ export default function ReflectionPage() {
           if (savedGoal != null && savedGoal !== "") setGoalAchievementText(savedGoal);
           if (savedReflection != null) setReflectionText(savedReflection ?? "");
           if ((savedGoal ?? "") !== "" || (savedReflection ?? "") !== "") {
-            supabase.from("reflection_drafts").upsert(
+            void supabase.from("reflection_drafts").upsert(
               { user_email: emailKey, goal_achievement_text: savedGoal ?? "", reflection_text: savedReflection ?? "", updated_at: new Date().toISOString() },
               { onConflict: "user_email" }
-            ).then(() => {}).catch(() => {});
+            ).then(() => {}, () => {});
           }
         }
         const { data: evidenceRow } = await supabase
@@ -205,7 +205,7 @@ export default function ReflectionPage() {
       supabase.from("reflection_drafts").upsert(
         { user_email: userEmail, goal_achievement_text: goalAchievementText, reflection_text: reflectionText, updated_at: new Date().toISOString() },
         { onConflict: "user_email" }
-      ).then(() => {}).catch(() => {});
+      ).then(() => {}, () => {});
     }, 800);
     return () => { if (saveDraftTimeoutRef.current) clearTimeout(saveDraftTimeoutRef.current); };
   }, [userEmail, goalAchievementText, reflectionText]);
@@ -216,7 +216,7 @@ export default function ReflectionPage() {
       supabase.from("reflection_drafts").upsert(
         { user_email: userEmail, goal_achievement_text: goalAchievementText, reflection_text: reflectionText, updated_at: new Date().toISOString() },
         { onConflict: "user_email" }
-      ).then(() => {}).catch(() => {});
+      ).then(() => {}, () => {});
     };
     const onVisibilityChange = () => { if (document.visibilityState === "hidden") saveToServer(); };
     const onBeforeUnload = () => saveToServer();
@@ -236,7 +236,7 @@ export default function ReflectionPage() {
       supabase.from("user_preferences").upsert(
         { user_email: userEmail, pref_key: "reflection_evidence_text", pref_value: evidenceText, updated_at: new Date().toISOString() },
         { onConflict: "user_email,pref_key" }
-      ).then(() => {}).catch(() => {});
+      ).then(() => {}, () => {});
     }, 800);
     return () => { if (saveEvidenceTimeoutRef.current) clearTimeout(saveEvidenceTimeoutRef.current); };
   }, [userEmail, evidenceText]);
@@ -249,7 +249,7 @@ export default function ReflectionPage() {
       supabase.from("user_preferences").upsert(
         { user_email: userEmail, pref_key: "reflection_next_year_goal", pref_value: nextYearGoalText, updated_at: new Date().toISOString() },
         { onConflict: "user_email,pref_key" }
-      ).then(() => {}).catch(() => {});
+      ).then(() => {}, () => {});
     }, 800);
     return () => { if (saveNextYearTimeoutRef.current) clearTimeout(saveNextYearTimeoutRef.current); };
   }, [userEmail, nextYearGoalText]);

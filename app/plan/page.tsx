@@ -1204,7 +1204,7 @@ export default function PlanPage() {
       const { data, error } = res;
 
       if (error) {
-        const e = error as Record<string, unknown>;
+        const e = error as unknown as Record<string, unknown>;
         const msg = [e.message, e.error_description, e.details].find((v) => typeof v === "string");
         const extra = [e.code, e.hint].filter((v) => v != null && v !== "").join(" · ");
         const detail = [msg, extra].filter(Boolean).join(" ") || JSON.stringify(error, Object.getOwnPropertyNames(error));
@@ -1327,12 +1327,16 @@ export default function PlanPage() {
                       <PolarGrid stroke="#e5e7eb" />
                       <PolarAngleAxis
                         dataKey="name"
-                        tick={({ x, y, cx, cy, payload }) => {
+                        tick={(props) => {
+                          const p = props as { x?: number; y?: number; cx?: number; cy?: number; payload?: { value?: string } };
+                          const { x, y, cx, cy, payload } = p;
                           const pushOut = 1.25;
-                          const dx = x - (cx ?? x);
-                          const dy = y - (cy ?? y);
-                          const outX = (cx ?? x) + dx * pushOut;
-                          const outY = (cy ?? y) + dy * pushOut;
+                          const numX = typeof x === "number" ? x : 0;
+                          const numY = typeof y === "number" ? y : 0;
+                          const dx = numX - (cx ?? numX);
+                          const dy = numY - (cy ?? numY);
+                          const outX = (cx ?? numX) + dx * pushOut;
+                          const outY = (cy ?? numY) + dy * pushOut;
                           const name = payload?.value ?? "";
                           const isStrength = strengthNames.has(name);
                           const isWeakness = weaknessNames.has(name);
@@ -1347,7 +1351,6 @@ export default function PlanPage() {
                                 style={{ overflow: "visible" }}
                               >
                                 <div
-                                  xmlns="http://www.w3.org/1999/xhtml"
                                   style={{
                                     fontSize: 11,
                                     color,

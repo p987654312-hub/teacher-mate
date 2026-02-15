@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
@@ -83,7 +83,7 @@ const QUESTIONS: Array<{ id: string; text: string; domain: string }> = [
   { id: "30", text: "교실에서 모든 학생이 참여할 수 있도록 포용적 활동(역할, 수준, 참여 방식)을 설계한다.", domain: "domain6" },
 ];
 
-export default function DiagnosisResultPage() {
+function DiagnosisResultContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isPost = searchParams.get("type") === "post";
@@ -397,7 +397,12 @@ export default function DiagnosisResultPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="name" width={32} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number | undefined) => [v != null ? `${Number(v).toFixed(1)}점` : "-", "총점(100점 환산)"]} />
+                      <Tooltip
+                        formatter={(value: number | undefined): [string, string] => [
+                          value != null ? `${Number(value).toFixed(1)}점` : "-",
+                          "총점(100점 환산)",
+                        ]}
+                      />
                       <Bar name="총점(100점 환산)" dataKey="점수" radius={[0, 4, 4, 0]} barSize={24}>
                         {barChartData?.map((entry) => (
                           <Cell key={entry.name} fill={entry.name === "사전" ? "#9ca3af" : "#6366f1"} />
@@ -529,5 +534,13 @@ export default function DiagnosisResultPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DiagnosisResultPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white"><p className="text-sm text-slate-500">불러오는 중...</p></div>}>
+      <DiagnosisResultContent />
+    </Suspense>
   );
 }

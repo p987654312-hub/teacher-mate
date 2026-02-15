@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -176,7 +176,7 @@ const QUESTIONS: Question[] = [
 ];
 
 
-export default function DiagnosisPage() {
+function DiagnosisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isPost = searchParams.get("type") === "post";
@@ -494,5 +494,13 @@ export default function DiagnosisPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DiagnosisPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white"><p className="text-sm text-slate-500">불러오는 중...</p></div>}>
+      <DiagnosisContent />
+    </Suspense>
   );
 }
