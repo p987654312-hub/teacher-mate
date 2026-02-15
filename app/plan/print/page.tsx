@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ type PlanData = {
 
 type DiagnosisRow = { domain: string; label: string; avg: number };
 
-export default function PlanPrintPage() {
+function PlanPrintContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -494,5 +494,13 @@ export default function PlanPrintPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PlanPrintPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[40vh] items-center justify-center text-slate-500">로딩 중...</div>}>
+      <PlanPrintContent />
+    </Suspense>
   );
 }
