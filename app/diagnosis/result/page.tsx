@@ -397,7 +397,7 @@ export default function DiagnosisResultPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="name" width={32} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number) => [`${v.toFixed(1)}점`, "총점(100점 환산)"]} />
+                      <Tooltip formatter={(v: number | undefined) => [v != null ? `${Number(v).toFixed(1)}점` : "-", "총점(100점 환산)"]} />
                       <Bar name="총점(100점 환산)" dataKey="점수" radius={[0, 4, 4, 0]} barSize={24}>
                         {barChartData?.map((entry) => (
                           <Cell key={entry.name} fill={entry.name === "사전" ? "#9ca3af" : "#6366f1"} />
