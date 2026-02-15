@@ -688,11 +688,18 @@ export default function DashboardPage() {
 
               </div>
 
-              {/* 오른쪽: 목적지 마일리지 + (사후) 교원 역량 진단 + 교사 성찰 기록장 */}
+              {/* 오른쪽: 목적지 마일리지 + (사후) 교원 역량 진단 + 교사 성찰 기록장 — 2번 완료 시에만 활성화 */}
               <div className="flex w-full flex-1 flex-col gap-4 md:min-w-0 md:w-[60%]">
-                <div className="relative flex min-h-0 flex-1 flex-col">
+                <div className="relative flex min-h-0 flex-1 flex-col isolate">
+                  {!planCompleted && (
+                    <div className="absolute inset-0 z-[50] rounded-2xl bg-slate-200/50 backdrop-blur-[0.5px]" aria-hidden role="presentation" />
+                  )}
                   <Card
-                    className="flex min-h-0 flex-1 flex-col rounded-2xl p-4 shadow-sm backdrop-blur-sm transition-all relative border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                    className={`flex min-h-0 flex-1 flex-col rounded-2xl p-4 shadow-sm backdrop-blur-sm transition-all relative ${
+                      planCompleted
+                        ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                        : "z-0 pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
+                    }`}
                   >
                     <div className="relative flex flex-col gap-3">
                       <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>3</span>
@@ -796,12 +803,12 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="relative flex flex-col md:flex-row min-h-[180px] md:h-[180px] shrink-0 gap-3 isolate">
-                  {!(mileageSummary || mileageStarted) && (
+                  {!planCompleted && (
                     <div className="absolute inset-0 z-[50] rounded-2xl bg-slate-200/50 backdrop-blur-[0.5px]" aria-hidden role="presentation" />
                   )}
                   <Card
                     className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
-                      (mileageSummary || mileageStarted)
+                      planCompleted
                         ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
@@ -819,7 +826,7 @@ export default function DashboardPage() {
                           >
                             {hasPostDiagnosis ? "실시완료" : "미실시"}
                           </span>
-                          <div className={`rounded-2xl p-2 ${(mileageSummary || mileageStarted) ? "bg-indigo-50 text-indigo-500 group-hover:bg-indigo-100" : "bg-indigo-50 text-indigo-500"}`}>
+                          <div className={`rounded-2xl p-2 ${planCompleted ? "bg-indigo-50 text-indigo-500 group-hover:bg-indigo-100" : "bg-indigo-50 text-indigo-500"}`}>
                             <ClipboardCheck className="h-5 w-5" />
                           </div>
                         </div>
@@ -854,7 +861,7 @@ export default function DashboardPage() {
                   </Card>
                   <Card
                     className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
-                      (mileageSummary || mileageStarted)
+                      planCompleted
                         ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
@@ -870,7 +877,7 @@ export default function DashboardPage() {
                           >
                             {reflectionDone ? "실시완료" : "미실시"}
                           </span>
-                          <div className={`rounded-2xl p-2 ${(mileageSummary || mileageStarted) ? "bg-violet-50 text-violet-500 group-hover:bg-violet-100" : "bg-violet-50 text-violet-500"}`}>
+                          <div className={`rounded-2xl p-2 ${planCompleted ? "bg-violet-50 text-violet-500 group-hover:bg-violet-100" : "bg-violet-50 text-violet-500"}`}>
                             <NotebookPen className="h-5 w-5" />
                           </div>
                         </div>
