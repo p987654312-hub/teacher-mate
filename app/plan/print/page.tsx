@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
@@ -46,6 +46,7 @@ type DiagnosisRow = { domain: string; label: string; avg: number };
 
 export default function PlanPrintPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const contentRef = useRef<HTMLDivElement>(null);
   const [userName, setUserName] = useState<string>("");
   const [userSchool, setUserSchool] = useState<string>("");
@@ -60,14 +61,84 @@ export default function PlanPrintPage() {
         setLoading(false);
         return;
       }
-      const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
+
+      const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string; role?: string };
+      let targetEmail: string;
+      if (meta.role === "admin" && searchParams.get("email")) {
+        const viewEmail = searchParams.get("email")!.trim();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          router.replace("/");
+          setLoading(false);
+          return;
+        }
+        const res = await fetch("/api/admin/plan-by-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: viewEmail }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err?.error ?? "해당 교원 계획서를 볼 수 없습니다.");
+          router.replace("/dashboard");
+          setLoading(false);
+          return;
+        }
+        const j = await res.json();
+        setUserName(j.name ?? viewEmail ?? "");
+        setUserSchool(j.schoolName ?? "");
+        if (j.diagnosisSummary) setDiagnosisSummary(j.diagnosisSummary);
+        const planRow = j.plan;
+        if (planRow) {
+          setPlan({
+            development_goal: (planRow.development_goal as string) ?? "",
+            expected_outcome: (planRow.expected_outcome as string) ?? "",
+            annual_goal: (planRow.annual_goal as string) ?? "",
+            expense_annual_goal: (planRow.expense_annual_goal as string) ?? "",
+            community_annual_goal: (planRow.community_annual_goal as string) ?? "",
+            book_annual_goal: (planRow.book_annual_goal as string) ?? "",
+            education_annual_goal: (planRow.education_annual_goal as string) ?? "",
+            education_annual_goal_unit: (planRow.education_annual_goal_unit as string) ?? "시간",
+            other_annual_goal: (planRow.other_annual_goal as string) ?? "",
+            training_plans: (planRow.training_plans as TrainingPlanRow[]) ?? [],
+            education_plans: (planRow.education_plans as EducationPlanRow[]) ?? [],
+            book_plans: (planRow.book_plans as BookPlanRow[]) ?? [],
+            expense_requests: (planRow.expense_requests as ExpenseRequestRow[]) ?? [],
+            community_plans: (planRow.community_plans as CommunityPlanRow[]) ?? [],
+            other_plans: (planRow.other_plans as OtherPlanRow[]) ?? [],
+          });
+        } else {
+          setPlan({
+            development_goal: "",
+            expected_outcome: "",
+            annual_goal: "",
+            expense_annual_goal: "",
+            community_annual_goal: "",
+            book_annual_goal: "",
+            education_annual_goal: "",
+            education_annual_goal_unit: "시간",
+            other_annual_goal: "",
+            training_plans: [],
+            education_plans: [],
+            book_plans: [],
+            expense_requests: [],
+            community_plans: [],
+            other_plans: [],
+          });
+        }
+        setLoading(false);
+        return;
+      }
+
+      targetEmail = user.email!;
       setUserName(meta.name ?? user.email ?? "");
       setUserSchool(meta.schoolName ?? "");
 
       const { data: planRow } = await supabase
         .from("development_plans")
         .select("*")
-        .eq("user_email", user.email)
+        .eq("user_email", targetEmail)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -113,7 +184,8 @@ export default function PlanPrintPage() {
       const { data: diag } = await supabase
         .from("diagnosis_results")
         .select("domain1,domain2,domain3,domain4,domain5,domain6")
-        .eq("user_email", user.email)
+        .eq("user_email", targetEmail)
+        .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -136,7 +208,7 @@ export default function PlanPrintPage() {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [router, searchParams]);
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -156,12 +228,12 @@ export default function PlanPrintPage() {
     );
   }
 
-  const trainingPlans = plan?.training_plans ?? [];
-  const educationPlans = plan?.education_plans ?? [];
-  const bookPlans = plan?.book_plans ?? [];
-  const expenseRequests = plan?.expense_requests ?? [];
-  const communityPlans = plan?.community_plans ?? [];
-  const otherPlans = plan?.other_plans ?? [];
+  const trainingPlans = (plan?.training_plans ?? []) as TrainingPlanRow[];
+  const educationPlans = (plan?.education_plans ?? []) as EducationPlanRow[];
+  const bookPlans = (plan?.book_plans ?? []) as BookPlanRow[];
+  const expenseRequests = (plan?.expense_requests ?? []) as ExpenseRequestRow[];
+  const communityPlans = (plan?.community_plans ?? []) as CommunityPlanRow[];
+  const otherPlans = (plan?.other_plans ?? []) as OtherPlanRow[];
 
   return (
     <div className="min-h-screen bg-white px-4 py-6">

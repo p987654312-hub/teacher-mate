@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ type MileageEntry = { id: string; content: string; category: string; created_at:
 
 export default function ResultReportPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const contentRef = useRef<HTMLDivElement>(null);
   const [userName, setUserName] = useState("");
   const [userSchool, setUserSchool] = useState("");
@@ -73,15 +74,61 @@ export default function ResultReportPage() {
         return;
       }
       const role = (user.user_metadata as { role?: string })?.role;
-      if (role !== "teacher") {
-        router.replace("/");
+      let email: string;
+
+      if (role === "admin" && searchParams.get("email")) {
+        const viewEmail = searchParams.get("email")!.trim();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          router.replace("/");
+          setLoading(false);
+          return;
+        }
+        const res = await fetch("/api/admin/result-report-by-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: viewEmail }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err?.error ?? "해당 교원 성찰 결과를 볼 수 없습니다.");
+          router.replace("/dashboard");
+          setLoading(false);
+          return;
+        }
+        const j = await res.json();
+        setUserName(j.name ?? viewEmail ?? "");
+        setUserSchool(j.schoolName ?? "");
+        setUserEmail(j.email ?? viewEmail);
+        if (j.preResult) setPreResult(j.preResult as DiagnosisRow);
+        if (j.postResult) setPostResult(j.postResult as DiagnosisRow);
+        const byCat: Record<string, MileageEntry[]> = {};
+        (j.mileageEntries ?? []).forEach((r: MileageEntry) => {
+          const c = r.category || "other";
+          if (!byCat[c]) byCat[c] = [];
+          byCat[c].push(r);
+        });
+        setMileageByCategory(byCat);
+        setGoalAchievementText(j.goalAchievementText ?? "");
+        setReflectionText(j.reflectionText ?? "");
+        setEvidenceText(j.evidenceText ?? "");
+        setNextYearGoalText(j.nextYearGoalText ?? "");
+        setLoading(false);
         return;
       }
-      const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
-      setUserName(meta.name ?? user.email ?? "");
-      setUserSchool(meta.schoolName ?? "");
-      setUserEmail(user.email ?? null);
-      const email = user.email!;
+
+      if (role === "teacher") {
+        email = user.email!;
+        const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
+        setUserName(meta.name ?? user.email ?? "");
+        setUserSchool(meta.schoolName ?? "");
+        setUserEmail(email);
+      } else {
+        router.replace("/");
+        setLoading(false);
+        return;
+      }
 
       const { data: preData } = await supabase.from("diagnosis_results").select("*").eq("user_email", email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (preData) setPreResult(preData as DiagnosisRow);
@@ -113,7 +160,7 @@ export default function ResultReportPage() {
       setLoading(false);
     };
     load();
-  }, [router]);
+  }, [router, searchParams]);
 
   const result = postResult ?? preResult;
   const domainAverages = result

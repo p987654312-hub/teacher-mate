@@ -178,7 +178,7 @@ export default function MileagePage() {
       }
       const meta = user.user_metadata as { role?: string } | undefined;
       if (meta?.role !== "teacher") {
-        router.replace("/");
+        router.replace(meta?.role === "admin" ? "/dashboard" : "/");
         return;
       }
       setUserEmail(user.email);

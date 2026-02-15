@@ -6,26 +6,15 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { supabase } from "@/lib/supabaseClient";
 import {
   ClipboardCheck,
   Flag,
   NotebookPen,
-  Inbox,
-  BarChart3,
-  CalendarCog,
   Printer,
   Compass,
   Plane,
+  KeyRound,
 } from "lucide-react";
 import {
   RadarChart,
@@ -82,13 +71,31 @@ export default function DashboardPage() {
   const router = useRouter();
   const [userSchool, setUserSchool] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [userGradeClass, setUserGradeClass] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<"teacher" | "admin" | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [teachers, setTeachers] = useState<
     { id: string; name: string; email: string; createdAt: string }[]
   >([]);
+  const [teacherSummaries, setTeacherSummaries] = useState<
+    {
+      id: string;
+      email: string;
+      name: string;
+      schoolName: string;
+      createdAt: string;
+      gradeClass?: string;
+      hasPreDiagnosis: boolean;
+      hasPostDiagnosis: boolean;
+      planCompleted: boolean;
+      reflectionDone: boolean;
+      mileageSummary: { overallProgress: number; categories: { key: string; label: string; progress: number }[] };
+    }[]
+  >([]);
+  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("createdAt");
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [teachersError, setTeachersError] = useState<string | null>(null);
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [diagnosisSummary, setDiagnosisSummary] = useState<{
     domain1: number;
     domain2: number;
@@ -143,6 +150,7 @@ export default function DashboardPage() {
             name?: string;
             schoolName?: string;
             schoolLevel?: string;
+            gradeClass?: string;
             role?: "teacher" | "admin";
           }
         | undefined;
@@ -150,9 +158,11 @@ export default function DashboardPage() {
       const name = metadata?.name ?? user.email ?? null;
       const schoolName = metadata?.schoolName ?? null;
       const role = metadata?.role ?? null;
+      const gradeClass = metadata?.gradeClass ?? metadata?.schoolLevel ?? null;
 
       setUserName(name);
       setUserSchool(schoolName);
+      setUserGradeClass(gradeClass);
       setUserRole(role);
       setIsChecking(false);
 
@@ -246,11 +256,9 @@ export default function DashboardPage() {
           setIsLoadingTeachers(true);
           setTeachersError(null);
 
-          const res = await fetch("/api/admin/teachers", {
+          const res = await fetch("/api/admin/teacher-summaries", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ schoolName }),
           });
 
@@ -260,7 +268,7 @@ export default function DashboardPage() {
             throw new Error(json.error || "교원 목록을 불러오지 못했습니다.");
           }
 
-          setTeachers(json.teachers ?? []);
+          setTeacherSummaries(json.teachers ?? []);
         } catch (error) {
           console.error(error);
           setTeachersError(
@@ -268,6 +276,7 @@ export default function DashboardPage() {
               ? error.message
               : "교원 목록을 불러오지 못했습니다."
           );
+          setTeacherSummaries([]);
         } finally {
           setIsLoadingTeachers(false);
         }
@@ -386,6 +395,35 @@ export default function DashboardPage() {
     router.push("/");
   };
 
+  const handleAdminResetPassword = async (userId: string, teacherName: string) => {
+    if (!confirm(`해당 회원의 비밀번호를 123456으로 초기화할까요?\n(${teacherName || "회원"})`)) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      alert("로그인 세션이 없습니다. 다시 로그인해 주세요.");
+      return;
+    }
+    setResettingPasswordId(userId);
+    try {
+      const res = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(j?.error ?? "비밀번호 초기화에 실패했습니다.");
+        return;
+      }
+      alert("비밀번호가 123456으로 초기화되었습니다.");
+    } catch (e) {
+      console.error(e);
+      alert("요청 중 오류가 발생했습니다.");
+    } finally {
+      setResettingPasswordId(null);
+    }
+  };
+
   if (isChecking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
@@ -442,6 +480,7 @@ export default function DashboardPage() {
         <div className="-mt-[6mm] mb-2 w-full border-b-2 border-slate-300/80" aria-hidden />
 
         <main className="flex flex-col gap-6 md:flex-row md:items-stretch">
+          {/* 관리자는 교사 대시보드(진단/계획/마일리지 등)를 볼 수 없고, 아래 isAdmin 블록(교원 목록·보고서 링크)만 표시 */}
           {isTeacher && (
             <>
               {/* 왼쪽: 사용자 정보 + 진단 + 계획 (가로는 오른쪽보다 짧게) */}
@@ -468,7 +507,7 @@ export default function DashboardPage() {
                         {userSchool ?? "소속"}
                       </p>
                       <p className="mt-0.5 truncate text-lg font-extrabold text-violet-900 drop-shadow-sm">
-                        {userName ? `${userName} 선생님` : "선생님"}
+                        {[userGradeClass, userName].filter(Boolean).join(" ")}{userName ? " 선생님" : "선생님"}
                       </p>
                     </div>
                     <div className="relative hidden h-14 flex-shrink-0 overflow-hidden sm:block sm:w-28">
@@ -916,128 +955,157 @@ export default function DashboardPage() {
           )}
 
           {isAdmin && (
-            <>
-              <Card className="group min-h-[150px] rounded-2xl border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70 transition-all">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      결재
-                    </p>
-                    <h2 className="mt-2 text-sm font-semibold text-slate-800">
-                      소속 교원 계획서 결재 대기함
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                      교원들이 제출한 역량개발계획서를 한눈에 확인하고 결재합니다.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-amber-50 p-2 text-amber-500 group-hover:bg-amber-100">
-                    <Inbox className="h-5 w-5" />
-                  </div>
-                </div>
-              </Card>
+            <div className="flex w-full flex-col gap-4">
+              <p className="text-base font-semibold text-slate-800">{userSchool ? `${userSchool} 관리자 페이지` : "관리자 페이지"}</p>
 
-              <Card className="group min-h-[150px] rounded-2xl border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70 transition-all">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      통계
-                    </p>
-                    <h2 className="mt-2 text-sm font-semibold text-slate-800">
-                      학교 전체 역량 개발 통계
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                      학교 차원의 역량 진단 결과와 개발 현황을 시각적으로 확인합니다.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-sky-50 p-2 text-sky-500 group-hover:bg-sky-100">
-                    <BarChart3 className="h-5 w-5" />
-                  </div>
-                </div>
-              </Card>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-xs text-slate-500">정렬</span>
+                <select
+                  value={adminSortBy}
+                  onChange={(e) => setAdminSortBy(e.target.value as "createdAt" | "name" | "gradeClass")}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                >
+                  <option value="createdAt">가입일 순</option>
+                  <option value="name">성명순</option>
+                  <option value="gradeClass">학년 반</option>
+                </select>
+              </div>
 
-              <Card className="group min-h-[150px] rounded-2xl border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70 transition-all">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      연수
-                    </p>
-                    <h2 className="mt-2 text-sm font-semibold text-slate-800">
-                      교내 연수 개설 관리
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                      학교 특성에 맞는 연수를 개설·관리하고 참여 현황을 살펴봅니다.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-emerald-50 p-2 text-emerald-500 group-hover:bg-emerald-100">
-                    <CalendarCog className="h-5 w-5" />
-                  </div>
+              {isLoadingTeachers ? (
+                <p className="py-8 text-center text-sm text-slate-500">목록을 불러오는 중입니다...</p>
+              ) : teachersError ? (
+                <p className="py-8 text-center text-sm text-red-500">{teachersError}</p>
+              ) : teacherSummaries.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-500">등록된 교원이 없습니다.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {[...teacherSummaries]
+                    .sort((a, b) => {
+                      if (adminSortBy === "createdAt") {
+                        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                      }
+                      if (adminSortBy === "name") {
+                        return (a.name || "").localeCompare(b.name || "", "ko");
+                      }
+                      return (a.gradeClass || "").localeCompare(b.gradeClass || "", "ko");
+                    })
+                    .map((t) => (
+                      <Card
+                        key={t.id}
+                        className="h-[1.62cm] max-h-[1.62cm] w-full overflow-x-auto overflow-y-hidden rounded-xl border-0 py-1.5 pl-8 pr-2 ring-1 ring-violet-200/50 shadow-sm"
+                        style={{ background: "linear-gradient(to bottom right, rgb(245 243 255 / 0.9), rgb(238 242 255 / 0.4), rgb(238 242 255 / 0.5))" }}
+                      >
+                        <div className="flex h-full min-w-0 flex-row flex-nowrap items-center gap-2 sm:gap-3">
+                          <div className="flex shrink-0 flex-col justify-center gap-0.5" style={{ width: "5rem" }}>
+                            {t.gradeClass && <span className="truncate text-[10px] leading-tight text-slate-500">{t.gradeClass}</span>}
+                            <p className="truncate text-sm font-semibold text-slate-800">{t.name || "-"}</p>
+                          </div>
+
+                          <div className="flex shrink-0 flex-col items-center gap-0.5">
+                            <div className="flex w-20 items-center gap-1 sm:w-28">
+                              <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                <div
+                                  className="h-full rounded-full bg-indigo-500"
+                                  style={{
+                                    width: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="w-6 shrink-0 text-[11px] text-slate-400 sm:text-xs">{Math.round(t.mileageSummary.overallProgress)}%</span>
+                            </div>
+                            <span className="text-[11px] font-medium text-slate-500 sm:text-xs">Mileage</span>
+                          </div>
+
+                          <div className="flex shrink-0 flex-row items-center">
+                            {t.mileageSummary.categories.map((c, i) => {
+                              const val = Math.min(100, Math.max(0, c.progress));
+                              const pieData = [
+                                { name: "a", value: val, fill: PIE_COLORS[i % PIE_COLORS.length] },
+                                { name: "b", value: 100 - val, fill: "#e2e8f0" },
+                              ].filter((d) => d.value > 0);
+                              return (
+                                <div key={c.key} className="flex min-w-[4.25rem] flex-col items-center gap-0.5 sm:min-w-[4.75rem] md:min-w-[5rem]" title={`${c.label} ${Math.round(c.progress)}%`}>
+                                  <ResponsiveContainer width={38} height={38}>
+                                    <PieChart>
+                                      <Pie
+                                        data={pieData.length ? pieData : [{ name: "a", value: 100, fill: "#e2e8f0" }]}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius="30%"
+                                        outerRadius="95%"
+                                        dataKey="value"
+                                        strokeWidth={0}
+                                      >
+                                        {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
+                                          <Cell key={j} fill={d.fill} />
+                                        ))}
+                                      </Pie>
+                                    </PieChart>
+                                  </ResponsiveContainer>
+                                  <span className="w-full truncate text-center text-[8px] text-slate-500 sm:text-[9px]">{c.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="ml-3 flex shrink-0 flex-row items-center gap-1 sm:ml-4 sm:gap-1.5">
+                          {t.hasPreDiagnosis ? (
+                            <Link href={`/diagnosis/result?email=${encodeURIComponent(t.email)}`}>
+                              <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">사전</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">진단</span></span>
+                            </Link>
+                          ) : (
+                            <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">사전</span><span className="text-[9px] text-slate-400 sm:text-[10px]">진단</span></span>
+                          )}
+                          {t.planCompleted ? (
+                            <Link href={`/plan/print?email=${encodeURIComponent(t.email)}`}>
+                              <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">개발</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">계획서</span></span>
+                            </Link>
+                          ) : (
+                            <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">개발</span><span className="text-[9px] text-slate-400 sm:text-[10px]">계획서</span></span>
+                          )}
+                          {t.hasPostDiagnosis ? (
+                            <Link href={`/diagnosis/result?type=post&email=${encodeURIComponent(t.email)}`}>
+                              <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">사후</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">진단</span></span>
+                            </Link>
+                          ) : (
+                            <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">사후</span><span className="text-[9px] text-slate-400 sm:text-[10px]">진단</span></span>
+                          )}
+                          {t.reflectionDone ? (
+                            <>
+                              <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=1`}>
+                                <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">결과</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">보고서1</span></span>
+                              </Link>
+                              <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=2`}>
+                                <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">결과</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">보고서2</span></span>
+                              </Link>
+                            </>
+                          ) : (
+                            <>
+                              <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">결과</span><span className="text-[9px] text-slate-400 sm:text-[10px]">보고서1</span></span>
+                              <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">결과</span><span className="text-[9px] text-slate-400 sm:text-[10px]">보고서2</span></span>
+                            </>
+                          )}
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-5 shrink-0 rounded-full border-amber-200 px-2 text-[10px] sm:h-6 sm:px-2.5 sm:text-xs"
+                            style={{ background: "#fffbeb", color: "#92400e" }}
+                            disabled={resettingPasswordId === t.id}
+                            onClick={() => handleAdminResetPassword(t.id, t.name)}
+                          >
+                            <KeyRound className="mr-0.5 h-3 w-3 sm:mr-1 sm:h-3.5 sm:w-3.5" />
+                            {resettingPasswordId === t.id ? "처리 중" : "비번 초기화"}
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
                 </div>
-              </Card>
-            </>
+              )}
+            </div>
           )}
         </main>
-
-        {isAdmin && (
-          <section className="mt-4 rounded-2xl bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm border-0 ring-1 ring-violet-200/50">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">
-                우리 학교 교원 목록
-              </h2>
-              <p className="text-xs text-slate-400">
-                동일 학교명으로 가입한 교사 계정만 표시됩니다.
-              </p>
-            </div>
-
-            {isLoadingTeachers ? (
-              <p className="text-xs text-slate-500">
-                교원 목록을 불러오는 중입니다...
-              </p>
-            ) : teachersError ? (
-              <p className="text-xs text-red-500">{teachersError}</p>
-            ) : teachers.length === 0 ? (
-              <p className="text-xs text-slate-500">
-                아직 우리 학교로 가입한 교원 정보가 없습니다.
-              </p>
-            ) : (
-              <Table>
-                <TableCaption className="text-xs text-slate-400">
-                  우리 학교에 등록된 교원 계정 목록입니다.
-                </TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40%] text-xs text-slate-500">
-                      성명
-                    </TableHead>
-                    <TableHead className="w-[40%] text-xs text-slate-500">
-                      이메일
-                    </TableHead>
-                    <TableHead className="w-[20%] text-right text-xs text-slate-500">
-                      가입일
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {teachers.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell className="py-2 text-xs text-slate-800">
-                        {t.name || "-"}
-                      </TableCell>
-                      <TableCell className="py-2 text-xs text-slate-600">
-                        {t.email}
-                      </TableCell>
-                      <TableCell className="py-2 text-right text-[11px] text-slate-400">
-                        {(() => {
-                          const d = new Date(t.createdAt);
-                          return `${String(d.getFullYear()).slice(-2)}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-                        })()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </section>
-        )}
       </div>
     </div>
   );

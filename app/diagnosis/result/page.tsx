@@ -107,10 +107,92 @@ function DiagnosisResultContent() {
     `,
   });
 
-  // 보호된 라우트 및 진단 결과 가져오기
+  // 보호된 라우트 및 진단 결과 가져오기 (관리자는 ?email= 로 다른 교원 결과 조회)
   useEffect(() => {
     const fetchData = async () => {
       await supabase.auth.refreshSession();
+      const viewEmailParam = searchParams.get("email")?.trim();
+
+      // 관리자 링크(?email=)로 들어온 경우: 세션 토큰만으로 먼저 검증 (새 탭에서 세션 지연 대비)
+      if (viewEmailParam) {
+        let token: string | null = null;
+        let { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token ?? null;
+        if (!token) {
+          await new Promise((r) => setTimeout(r, 600));
+          await supabase.auth.refreshSession();
+          const next = await supabase.auth.getSession();
+          session = next.data.session;
+          token = session?.access_token ?? null;
+        }
+        if (token) {
+          const res = await fetch("/api/admin/verify-teacher-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ email: viewEmailParam }),
+          });
+          if (res.ok) {
+            const j = await res.json();
+            const targetEmail = j.email ?? viewEmailParam;
+            const displayName = j.name || targetEmail || "교사";
+            setUserEmail(targetEmail);
+            setUserName(displayName);
+            setIsChecking(false);
+            try {
+              setIsLoading(true);
+              const query = supabase
+                .from("diagnosis_results")
+                .select("*")
+                .eq("user_email", targetEmail)
+                .order("created_at", { ascending: false })
+                .limit(1);
+              const { data, error } = await (isPost
+                ? query.eq("diagnosis_type", "post").maybeSingle()
+                : query.or("diagnosis_type.is.null,diagnosis_type.eq.pre").maybeSingle());
+              if (error) {
+                console.error("Error fetching diagnosis result:", error);
+                alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+                router.push("/dashboard");
+                return;
+              }
+              if (!data) {
+                alert("진단 결과가 없습니다.");
+                router.push("/dashboard");
+                return;
+              }
+              setDiagnosisResult(data as DiagnosisResult);
+              if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
+              if (isPost) {
+                const { data: preData } = await supabase
+                  .from("diagnosis_results")
+                  .select("*")
+                  .eq("user_email", targetEmail)
+                  .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
+                  .order("created_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (preData) setPreResult(preData as DiagnosisResult);
+              }
+            } catch (err) {
+              console.error(err);
+              alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+              router.push("/dashboard");
+            } finally {
+              setIsLoading(false);
+            }
+            return;
+          }
+          const j = await res.json().catch(() => ({}));
+          alert(j?.error ?? "해당 교원 결과를 볼 수 없습니다.");
+          router.push("/dashboard");
+          return;
+        }
+        // ?email= 로 들어왔지만 세션 없음 → 로그인 화면으로 보내지 않고 대시보드로
+        alert("로그인 세션이 인식되지 않았습니다. 같은 창에서 링크를 열거나, 대시보드에서 다시 시도해 주세요.");
+        router.push("/dashboard");
+        return;
+      }
+
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         router.replace("/");
@@ -120,31 +202,36 @@ function DiagnosisResultContent() {
       const metadata = user.user_metadata as
         | { role?: string; name?: string; full_name?: string }
         | undefined;
+      const role = metadata?.role;
 
-      if (metadata?.role !== "teacher") {
+      let targetEmail: string;
+      let displayName: string;
+
+      if (role === "teacher") {
+        targetEmail = user.email!;
+        const raw = user.user_metadata as Record<string, unknown> | undefined;
+        displayName =
+          (typeof raw?.name === "string" ? raw.name : null) ??
+          metadata?.name ??
+          metadata?.full_name ??
+          (typeof (raw?.full_name) === "string" ? raw.full_name : null) ??
+          user.email ??
+          "교사";
+      } else {
         router.replace("/");
         return;
       }
 
-      setUserEmail(user.email ?? null);
-      const raw = user.user_metadata as Record<string, unknown> | undefined;
-      const displayName =
-        (typeof raw?.name === "string" ? raw.name : null) ??
-        metadata?.name ??
-        metadata?.full_name ??
-        (typeof (raw?.full_name) === "string" ? raw.full_name : null) ??
-        user.email ??
-        "교사";
+      setUserEmail(targetEmail);
       setUserName(displayName);
       setIsChecking(false);
 
-      // 최신 진단 결과 가져오기 (사전/사후 구분)
       try {
         setIsLoading(true);
         const query = supabase
           .from("diagnosis_results")
           .select("*")
-          .eq("user_email", user.email!)
+          .eq("user_email", targetEmail)
           .order("created_at", { ascending: false })
           .limit(1);
         const { data, error } = await (isPost
@@ -154,25 +241,24 @@ function DiagnosisResultContent() {
         if (error) {
           console.error("Error fetching diagnosis result:", error);
           alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-          router.push("/dashboard");
+          router.push(role === "admin" ? "/dashboard/admin" : "/dashboard");
           return;
         }
 
         if (!data) {
           alert("진단 결과가 없습니다.");
-          router.push("/dashboard");
+          router.push(role === "admin" ? "/dashboard/admin" : "/dashboard");
           return;
         }
 
         setDiagnosisResult(data as DiagnosisResult);
         if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
 
-        // 사후 결과일 때 사전 결과도 조회
         if (isPost) {
           const { data: preData } = await supabase
             .from("diagnosis_results")
             .select("*")
-            .eq("user_email", user.email!)
+            .eq("user_email", targetEmail)
             .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
             .order("created_at", { ascending: false })
             .limit(1)
@@ -189,7 +275,7 @@ function DiagnosisResultContent() {
     };
 
     fetchData();
-  }, [router, isPost]);
+  }, [router, isPost, searchParams]);
 
   // 사후 결과 전용: 사전·사후 비교 분석 요청 (저장된 ai_analysis 없을 때만)
   useEffect(() => {

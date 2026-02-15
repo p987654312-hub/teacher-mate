@@ -203,7 +203,7 @@ function DiagnosisContent() {
         | undefined;
 
       if (metadata?.role !== "teacher") {
-        router.replace("/");
+        router.replace(metadata?.role === "admin" ? "/dashboard" : "/");
         return;
       }
 

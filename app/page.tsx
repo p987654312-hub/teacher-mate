@@ -21,18 +21,19 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"teacher" | "admin">("teacher");
   const [isLogin, setIsLogin] = useState(true);
   const [teacherSchool, setTeacherSchool] = useState("");
-  const [teacherLevel, setTeacherLevel] = useState("");
+  const [teacherGradeClass, setTeacherGradeClass] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [teacherEmail, setTeacherEmail] = useState("");
   const [teacherPassword, setTeacherPassword] = useState("");
   const [adminSchool, setAdminSchool] = useState("");
-  const [adminLevel, setAdminLevel] = useState("");
+  const [adminGradeClass, setAdminGradeClass] = useState("");
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
   const [teacherBetaCode, setTeacherBetaCode] = useState("");
   const [saveEmail, setSaveEmail] = useState(true);
+  const [saveAdminEmail, setSaveAdminEmail] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,13 @@ export default function Home() {
       const email = localStorage.getItem("teacher_mate_email");
       if (email) setTeacherEmail(email);
     }
+    const adminSaved = localStorage.getItem("teacher_mate_save_admin_email");
+    const wantSaveAdmin = adminSaved !== "0";
+    setSaveAdminEmail(wantSaveAdmin);
+    if (wantSaveAdmin) {
+      const adminEmailVal = localStorage.getItem("teacher_mate_admin_email");
+      if (adminEmailVal) setAdminEmail(adminEmailVal);
+    }
   }, []);
 
   const handleAuth = async () => {
@@ -52,8 +60,8 @@ export default function Home() {
     const name = activeTab === "teacher" ? teacherName : adminName;
     const schoolName =
       activeTab === "teacher" ? teacherSchool : adminSchool;
-    const schoolLevel =
-      activeTab === "teacher" ? teacherLevel : adminLevel;
+    const gradeClass =
+      activeTab === "teacher" ? teacherGradeClass : adminGradeClass;
 
     if (!email || !password) {
       alert("이메일과 비밀번호를 모두 입력해 주세요.");
@@ -76,13 +84,23 @@ export default function Home() {
           return;
         }
 
-        if (activeTab === "teacher" && typeof window !== "undefined") {
-          if (saveEmail) {
-            localStorage.setItem("teacher_mate_email", email);
-            localStorage.setItem("teacher_mate_save_email", "1");
+        if (typeof window !== "undefined") {
+          if (activeTab === "teacher") {
+            if (saveEmail) {
+              localStorage.setItem("teacher_mate_email", email);
+              localStorage.setItem("teacher_mate_save_email", "1");
+            } else {
+              localStorage.removeItem("teacher_mate_email");
+              localStorage.setItem("teacher_mate_save_email", "0");
+            }
           } else {
-            localStorage.removeItem("teacher_mate_email");
-            localStorage.setItem("teacher_mate_save_email", "0");
+            if (saveAdminEmail) {
+              localStorage.setItem("teacher_mate_admin_email", email);
+              localStorage.setItem("teacher_mate_save_admin_email", "1");
+            } else {
+              localStorage.removeItem("teacher_mate_admin_email");
+              localStorage.setItem("teacher_mate_save_admin_email", "0");
+            }
           }
         }
 
@@ -98,7 +116,7 @@ export default function Home() {
         // 교사·관리자 모두 베타 이용을 위한 슈퍼관리자 비번 검증
         const betaCode = activeTab === "teacher" ? teacherBetaCode.trim() : adminCode.trim();
         if (!betaCode) {
-          alert(activeTab === "teacher" ? "베타 이용 코드(슈퍼관리자 비번 3자리)를 입력해 주세요." : "관리자 인증코드가 올바르지 않습니다.");
+          alert(activeTab === "teacher" ? "베타버전 이용코드를 입력해 주세요." : "관리자 인증코드가 올바르지 않습니다.");
           setIsLoading(false);
           return;
         }
@@ -121,6 +139,25 @@ export default function Home() {
           setIsLoading(false);
           return;
         }
+        if (activeTab === "admin") {
+          try {
+            const countRes = await fetch("/api/admin/count-by-school", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ schoolName: (schoolName ?? "").trim() }),
+            });
+            if (countRes.ok) {
+              const { adminCount } = await countRes.json();
+              if (Number(adminCount) >= 3) {
+                alert("해당 학교는 관리자가 3명으로 이미 만원입니다.");
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -129,7 +166,7 @@ export default function Home() {
               role: activeTab, // teacher / admin 구분 정보 메타데이터로 저장
               name,
               schoolName,
-              schoolLevel,
+              gradeClass,
             },
           },
         });
@@ -229,13 +266,13 @@ export default function Home() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="teacher-level">학교급</Label>
+                      <Label htmlFor="teacher-grade-class">학년 반 / 교과</Label>
                       <Input
-                        id="teacher-level"
-                        placeholder="예: 초등 / 중등 / 고등"
+                        id="teacher-grade-class"
+                        placeholder="예: 4-1 / 영어교과"
                         className="rounded-2xl"
-                        value={teacherLevel}
-                        onChange={(e) => setTeacherLevel(e.target.value)}
+                        value={teacherGradeClass}
+                        onChange={(e) => setTeacherGradeClass(e.target.value)}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -278,14 +315,14 @@ export default function Home() {
                       type="checkbox"
                       checked={saveEmail}
                       onChange={(e) => setSaveEmail(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-[#8B5CF6] focus:ring-[#8B5CF6]"
+                      className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
                     />
                     이메일 저장
                   </label>
                 )}
                 {!isLogin && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="teacher-beta-code">베타 이용 코드 (슈퍼관리자 비번 3자리)</Label>
+                    <Label htmlFor="teacher-beta-code">베타버전 이용코드</Label>
                     <Input
                       id="teacher-beta-code"
                       placeholder="발급받은 코드를 입력하세요"
@@ -343,13 +380,13 @@ export default function Home() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="admin-level">학교급</Label>
+                      <Label htmlFor="admin-grade-class">학년 반 / 교과</Label>
                       <Input
-                        id="admin-level"
-                        placeholder="예: 초등 / 중등 / 고등"
+                        id="admin-grade-class"
+                        placeholder="예: 4-1 / 영어교과"
                         className="rounded-2xl"
-                        value={adminLevel}
-                        onChange={(e) => setAdminLevel(e.target.value)}
+                        value={adminGradeClass}
+                        onChange={(e) => setAdminGradeClass(e.target.value)}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -386,6 +423,17 @@ export default function Home() {
                     onChange={(e) => setAdminPassword(e.target.value)}
                   />
                 </div>
+                {isLogin && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={saveAdminEmail}
+                      onChange={(e) => setSaveAdminEmail(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
+                    />
+                    이메일 저장
+                  </label>
+                )}
                 {!isLogin && (
                   <div className="space-y-1.5">
                     <Label htmlFor="admin-code">관리자 인증코드</Label>

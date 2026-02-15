@@ -109,7 +109,7 @@ export default function ReflectionPage() {
       }
       const role = (user.user_metadata as { role?: string })?.role;
       if (role !== "teacher") {
-        router.replace("/");
+        router.replace(role === "admin" ? "/dashboard" : "/");
         return;
       }
       setUserEmail(user.email ?? null);
