@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -31,7 +31,20 @@ export default function Home() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
+  const [teacherBetaCode, setTeacherBetaCode] = useState("");
+  const [saveEmail, setSaveEmail] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("teacher_mate_save_email");
+    const wantSave = saved !== "0";
+    setSaveEmail(wantSave);
+    if (wantSave) {
+      const email = localStorage.getItem("teacher_mate_email");
+      if (email) setTeacherEmail(email);
+    }
+  }, []);
 
   const handleAuth = async () => {
     const email = activeTab === "teacher" ? teacherEmail : adminEmail;
@@ -63,6 +76,16 @@ export default function Home() {
           return;
         }
 
+        if (activeTab === "teacher" && typeof window !== "undefined") {
+          if (saveEmail) {
+            localStorage.setItem("teacher_mate_email", email);
+            localStorage.setItem("teacher_mate_save_email", "1");
+          } else {
+            localStorage.removeItem("teacher_mate_email");
+            localStorage.setItem("teacher_mate_save_email", "0");
+          }
+        }
+
         const displayName =
           (data.user?.user_metadata?.name as string | undefined) ||
           data.user?.email ||
@@ -72,42 +95,32 @@ export default function Home() {
         router.push("/dashboard");
       } else {
         // 회원가입 모드
-        // 관리자 탭에서는 서버 API를 통해 관리자 인증코드 검증
-        if (activeTab === "admin") {
-          const inputCode = adminCode.trim();
-
-          if (!inputCode) {
-            alert("관리자 인증코드가 올바르지 않습니다.");
-            setIsLoading(false);
-            return;
-          }
-
-          try {
-            const res = await fetch("/api/admin/verify-code", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ code: inputCode }),
-            });
-
-            if (!res.ok) {
-              const json = await res.json().catch(() => null);
-              const msg =
-                (json && json.error) ||
-                "관리자 인증코드가 올바르지 않습니다.";
-              alert(msg);
-              setIsLoading(false);
-              return;
-            }
-          } catch (error) {
-            console.error(error);
-            alert("관리자 인증코드 확인 중 오류가 발생했습니다.");
-            setIsLoading(false);
-            return;
-          }
+        // 교사·관리자 모두 베타 이용을 위한 슈퍼관리자 비번 검증
+        const betaCode = activeTab === "teacher" ? teacherBetaCode.trim() : adminCode.trim();
+        if (!betaCode) {
+          alert(activeTab === "teacher" ? "베타 이용 코드(슈퍼관리자 비번 3자리)를 입력해 주세요." : "관리자 인증코드가 올바르지 않습니다.");
+          setIsLoading(false);
+          return;
         }
-
+        try {
+          const res = await fetch("/api/admin/verify-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: betaCode }),
+          });
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            const msg = (json?.error) ?? "인증코드가 올바르지 않습니다.";
+            alert(msg);
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error(error);
+          alert("인증코드 확인 중 오류가 발생했습니다.");
+          setIsLoading(false);
+          return;
+        }
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -196,6 +209,13 @@ export default function Home() {
 
               {/* 교사 탭 */}
               <TabsContent value="teacher" className="mt-6 space-y-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAuth();
+                  }}
+                  className="space-y-4"
+                >
                 {!isLogin && (
                   <>
                     <div className="space-y-1.5">
@@ -252,10 +272,32 @@ export default function Home() {
                     onChange={(e) => setTeacherPassword(e.target.value)}
                   />
                 </div>
+                {isLogin && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={saveEmail}
+                      onChange={(e) => setSaveEmail(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#8B5CF6] focus:ring-[#8B5CF6]"
+                    />
+                    이메일 저장
+                  </label>
+                )}
+                {!isLogin && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="teacher-beta-code">베타 이용 코드 (슈퍼관리자 비번 3자리)</Label>
+                    <Input
+                      id="teacher-beta-code"
+                      placeholder="발급받은 코드를 입력하세요"
+                      className="rounded-2xl"
+                      value={teacherBetaCode}
+                      onChange={(e) => setTeacherBetaCode(e.target.value)}
+                    />
+                  </div>
+                )}
 
                 <Button
-                  type="button"
-                  onClick={handleAuth}
+                  type="submit"
                   disabled={isLoading}
                   className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
                 >
@@ -276,10 +318,18 @@ export default function Home() {
                     {isLogin ? "회원가입하기" : "로그인하기"}
                   </button>
                 </p>
+                </form>
               </TabsContent>
 
               {/* 관리자 탭 */}
               <TabsContent value="admin" className="mt-6 space-y-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAuth();
+                  }}
+                  className="space-y-4"
+                >
                 {!isLogin && (
                   <>
                     <div className="space-y-1.5">
@@ -350,8 +400,7 @@ export default function Home() {
                 )}
 
                 <Button
-                  type="button"
-                  onClick={handleAuth}
+                  type="submit"
                   disabled={isLoading}
                   className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
                 >
@@ -372,6 +421,7 @@ export default function Home() {
                     {isLogin ? "회원가입하기" : "로그인하기"}
                   </button>
                 </p>
+                </form>
               </TabsContent>
             </Tabs>
           </div>

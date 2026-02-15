@@ -795,18 +795,18 @@ export default function DashboardPage() {
                   </Card>
                 </div>
 
-                <div className="relative flex h-[180px] shrink-0 gap-3 isolate">
+                <div className="relative flex flex-col md:flex-row min-h-[180px] md:h-[180px] shrink-0 gap-3 isolate">
                   {!(mileageSummary || mileageStarted) && (
                     <div className="absolute inset-0 z-[50] rounded-2xl bg-slate-200/50 backdrop-blur-[0.5px]" aria-hidden role="presentation" />
                   )}
                   <Card
-                    className={`relative z-0 group min-w-0 flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all ${
+                    className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
                       (mileageSummary || mileageStarted)
                         ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
                   >
-                    <div className="relative flex flex-col gap-3">
+                    <div className="relative flex flex-col gap-3 min-w-0">
                       <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>4</span>
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
@@ -830,22 +830,22 @@ export default function DashboardPage() {
                           향상된 나의 역량을 진단합니다.
                         </p>
                       </div>
-                      <div className="mt-3 flex justify-end gap-2">
-                        <Link href="/diagnosis/result?type=post">
+                      <div className="mt-3 flex flex-wrap justify-end gap-2 min-w-0">
+                        <Link href="/diagnosis/result?type=post" className="shrink-0">
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5"
+                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1"
                           >
-                            <Printer className="h-3.5 w-3.5" />
+                            <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             결과 보기
                           </Button>
                         </Link>
                         <Button
                           asChild
                           size="sm"
-                          className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
+                          className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                         >
                           <Link href="/diagnosis?type=post">{hasPostDiagnosis ? "다시 실시하기" : "실시하기"}</Link>
                         </Button>
@@ -853,19 +853,19 @@ export default function DashboardPage() {
                     </div>
                   </Card>
                   <Card
-                    className={`relative z-0 group min-w-0 flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all ${
+                    className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
                       (mileageSummary || mileageStarted)
                         ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
                   >
-                    <div className="relative flex flex-col gap-3">
+                    <div className="relative flex flex-col gap-3 min-w-0">
                       <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>5</span>
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              reflectionDone ? "bg-violet-50 text-violet-600 border border-violet-100" : "bg-slate-50 text-slate-500 border border-slate-100"
+                              reflectionDone ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-50 text-slate-500 border border-slate-100"
                             }`}
                           >
                             {reflectionDone ? "실시완료" : "미실시"}
@@ -881,22 +881,22 @@ export default function DashboardPage() {
                           성장의 결과를 서식에 맞게 작성합니다.
                         </p>
                       </div>
-                      <div className="mt-3 flex justify-end gap-2">
-                        <Link href="/reflection/result-report">
+                      <div className="mt-3 flex flex-wrap justify-end gap-2 min-w-0">
+                        <Link href="/reflection/result-report" className="shrink-0">
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5"
+                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1"
                           >
-                            <Printer className="h-3.5 w-3.5" />
+                            <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             결과 보기
                           </Button>
                         </Link>
                         <Button
                           asChild
                           size="sm"
-                          className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
+                          className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                         >
                           <Link href="/reflection">관리하기</Link>
                         </Button>
