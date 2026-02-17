@@ -46,14 +46,14 @@ export function isAdmin(metadata?: UserMetadata | null): boolean {
 /**
  * 사용자가 특정 역할을 가지고 있는지 확인
  */
-export function hasRole(metadata?: UserMetadata | null, role: UserRole): boolean {
+export function hasRole(role: UserRole, metadata?: UserMetadata | null): boolean {
   if (!metadata?.role) return false;
-  
+
   // role이 배열인 경우
   if (Array.isArray(metadata.role)) {
     return metadata.role.includes(role);
   }
-  
+
   // role이 문자열인 경우
   return metadata.role === role;
 }
