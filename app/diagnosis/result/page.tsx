@@ -207,7 +207,8 @@ function DiagnosisResultContent() {
       let targetEmail: string;
       let displayName: string;
 
-      if (role === "teacher") {
+      // 관리자도 교원 권한을 가지므로 자신의 데이터를 볼 수 있음
+      if (role === "teacher" || role === "admin") {
         targetEmail = user.email!;
         const raw = user.user_metadata as Record<string, unknown> | undefined;
         displayName =

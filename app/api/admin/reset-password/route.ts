@@ -55,6 +55,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "같은 학교 소속 회원만 초기화할 수 있습니다." }, { status: 403 });
     }
 
+    // OAuth provider 확인 (구글 로그인 등)
+    const identities = targetUser.user.identities as Array<{ provider: string }> | undefined;
+    const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth");
+    const hasEmailPassword = identities?.some((id) => id.provider === "email");
+
+    // OAuth만 있고 이메일/비밀번호가 없는 경우 (구글 로그인만 사용하는 경우)
+    if (hasOAuthProvider && !hasEmailPassword) {
+      return NextResponse.json(
+        { error: "구글 로그인으로 가입한 회원은 비밀번호 초기화가 불가능합니다. 구글 로그인을 사용해 주세요." },
+        { status: 400 }
+      );
+    }
+
     const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
       password: RESET_PASSWORD,
     });

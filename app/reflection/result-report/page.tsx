@@ -58,6 +58,7 @@ function ResultReportContent() {
   const [evidenceText, setEvidenceText] = useState("");
   const [nextYearGoalText, setNextYearGoalText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>(CATEGORY_LABELS);
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -114,11 +115,26 @@ function ResultReportContent() {
         setReflectionText(j.reflectionText ?? "");
         setEvidenceText(j.evidenceText ?? "");
         setNextYearGoalText(j.nextYearGoalText ?? "");
+        const { data: { session: adminSession } } = await supabase.auth.getSession();
+        if (adminSession?.access_token) {
+          try {
+            const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` } });
+            if (catRes.ok) {
+              const catJ = await catRes.json();
+              if (Array.isArray(catJ.categories) && catJ.categories.length === 6) {
+                setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
         setLoading(false);
         return;
       }
 
-      if (role === "teacher") {
+      // 관리자도 교원 권한을 가지므로 자신의 데이터를 볼 수 있음
+      if (role === "teacher" || role === "admin") {
         email = user.email!;
         const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
         setUserName(meta.name ?? user.email ?? "");
@@ -157,6 +173,20 @@ function ResultReportContent() {
       if (evidenceRow?.pref_value != null) setEvidenceText(String(evidenceRow.pref_value));
       const { data: nextYearRow } = await supabase.from("user_preferences").select("pref_value").eq("user_email", email).eq("pref_key", "reflection_next_year_goal").maybeSingle();
       if (nextYearRow?.pref_value != null) setNextYearGoalText(String(nextYearRow.pref_value));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+          if (catRes.ok) {
+            const catJ = await catRes.json();
+            if (Array.isArray(catJ.categories) && catJ.categories.length === 6) {
+              setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       setLoading(false);
     };
     load();
@@ -386,7 +416,7 @@ function ResultReportContent() {
                   const rest = items.length - 1;
                   return (
                     <p key={key}>
-                      <span className="font-semibold text-slate-800">[{CATEGORY_LABELS[key] ?? key}] </span>
+                      <span className="font-semibold text-slate-800">[{categoryLabels[key] ?? key}] </span>
                       {rest > 0 ? `${toShortYear(first)} 외 ${rest}건` : toShortYear(first)}
                     </p>
                   );

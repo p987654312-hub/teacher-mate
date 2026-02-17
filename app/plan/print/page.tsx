@@ -48,6 +48,7 @@ function PlanPrintContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contentRef = useRef<HTMLDivElement>(null);
+  const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [userSchool, setUserSchool] = useState<string>("");
   const [plan, setPlan] = useState<PlanData | null>(null);
@@ -205,6 +206,21 @@ function PlanPrintContent() {
           weaknesses: sorted.slice(-3).reverse().map((r) => r.label),
         });
       }
+
+      // 학교 카테고리 설정 로드
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const res = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+          if (res.ok) {
+            const j = await res.json();
+            if (Array.isArray(j.categories)) setSchoolCategories(j.categories);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       setLoading(false);
     };
     load();
@@ -219,6 +235,41 @@ function PlanPrintContent() {
       .print-content-area { background: #fff !important; }
     `,
   });
+
+  // 데이터 로드 후 검증 (Hook은 조건부 렌더링 전에 선언되어야 함)
+  useEffect(() => {
+    if (!loading && plan) {
+      const PLAN_CATEGORY_LABELS: Record<string, string> = {
+        training: "연수(직무·자율)",
+        class_open: "수업 공개",
+        community: "교원학습 공동체",
+        book_edutech: "전문 서적/에듀테크",
+        health: "건강/체력",
+        other: "기타 계획",
+      };
+
+      const missingItems: string[] = [];
+      const goals = [
+        { key: "training", value: (plan.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.training },
+        { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.class_open },
+        { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.community },
+        { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.book_edutech },
+        { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.health },
+        { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.other },
+      ];
+
+      goals.forEach((goal) => {
+        if (!goal.value) {
+          missingItems.push(goal.label);
+        }
+      });
+
+      if (missingItems.length > 0) {
+        const missingList = missingItems.join(", ");
+        alert(`${missingList} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.`);
+      }
+    }
+  }, [loading, plan]);
 
   if (loading) {
     return (
@@ -235,6 +286,51 @@ function PlanPrintContent() {
   const communityPlans = (plan?.community_plans ?? []) as CommunityPlanRow[];
   const otherPlans = (plan?.other_plans ?? []) as OtherPlanRow[];
 
+  // 연간 목표량 검증 함수
+  const validateAnnualGoals = (): { isValid: boolean; missingItems: string[] } => {
+    if (!plan) return { isValid: false, missingItems: [] };
+
+    const PLAN_CATEGORY_LABELS: Record<string, string> = {
+      training: "연수(직무·자율)",
+      class_open: "수업 공개",
+      community: "교원학습 공동체",
+      book_edutech: "전문 서적/에듀테크",
+      health: "건강/체력",
+      other: "기타 계획",
+    };
+
+    const missingItems: string[] = [];
+    const goals = [
+      { key: "training", value: (plan.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.training },
+      { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.class_open },
+      { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.community },
+      { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.book_edutech },
+      { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.health },
+      { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.other },
+    ];
+
+    goals.forEach((goal) => {
+      if (!goal.value) {
+        missingItems.push(goal.label);
+      }
+    });
+
+    return {
+      isValid: missingItems.length === 0,
+      missingItems,
+    };
+  };
+
+  const handlePrintClick = () => {
+    const validation = validateAnnualGoals();
+    if (!validation.isValid) {
+      const missingList = validation.missingItems.join(", ");
+      alert(`${missingList} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.`);
+      return;
+    }
+    handlePrint();
+  };
+
   return (
     <div className="min-h-screen bg-white px-4 py-6">
       <div className="mx-auto max-w-4xl">
@@ -242,7 +338,7 @@ function PlanPrintContent() {
         <div className="mb-4 flex flex-wrap items-center justify-end gap-2 print:hidden">
           <Button
             type="button"
-            onClick={() => handlePrint()}
+            onClick={handlePrintClick}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             <Printer className="h-4 w-4" />
@@ -250,7 +346,7 @@ function PlanPrintContent() {
           </Button>
           <Button
             type="button"
-            onClick={() => handlePrint()}
+            onClick={handlePrintClick}
             title="인쇄 대화상자에서 대상을 'PDF로 저장'으로 선택하면 PDF 파일로 저장됩니다."
             className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
@@ -436,7 +532,7 @@ function PlanPrintContent() {
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
                   <span>건강/체력 향상 계획</span>
                   <span className="text-slate-600 font-normal text-xs">
-                    나의 연간 목표: {plan?.education_annual_goal || "—"} {plan?.education_annual_goal_unit === "거리" ? "거리 km" : "시간"}
+                    나의 연간 목표: {plan?.education_annual_goal || "—"} {schoolCategories.find((c) => c.key === "health")?.unit ?? "시간"}
                   </span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">

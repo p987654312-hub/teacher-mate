@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { computeMileageProgress, parseValueFromContent } from "@/lib/mileageProgress";
+import { parseStored } from "@/app/api/points/school-settings/route";
+import {
+  getTrainingDifficultyLevel,
+  getClassOpenDifficultyLevel,
+  getDifficultyStars,
+  getRelativeDifficultyStars,
+} from "@/lib/mileageDifficulty";
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,6 +32,7 @@ type PlanRow = {
   community_annual_goal?: string | null;
   book_annual_goal?: string | null;
   education_annual_goal?: string | null;
+  education_annual_goal_unit?: string | null;
   other_annual_goal?: string | null;
 };
 
@@ -99,13 +108,42 @@ export async function POST(req: Request) {
 
     const teachers = users.filter((u) => {
       const meta = u.user_metadata ?? {};
-      return meta.role === "teacher" && (meta.schoolName ?? "") === schoolName;
+      // 관리자도 교원 권한을 가지므로 교원 목록에 포함
+      return (meta.role === "teacher" || meta.role === "admin") && (meta.schoolName ?? "") === schoolName;
+    });
+
+    const { data: settingsRow } = await supabase
+      .from("school_point_settings")
+      .select("settings_json")
+      .eq("school_name", schoolName)
+      .maybeSingle();
+    const parsedSettings = parseStored(settingsRow);
+    const schoolCategories = parsedSettings.categories;
+    const pointSettings = parsedSettings.points ?? {};
+    const unitByKey: Record<string, string> = {};
+    schoolCategories.forEach((c) => {
+      unitByKey[c.key] = c.unit;
     });
 
     const result = await Promise.all(
       teachers.map(async (t) => {
         const email = t.email ?? "";
-        const [preRes, postRes, planRes, mileageRes, reflectionRes] = await Promise.all([
+        // 사용자의 provider 정보 확인 (구글 로그인 여부)
+        // listUsers는 identities를 포함하지 않을 수 있으므로 getUserById로 확인
+        let isGoogleOnly = false;
+        try {
+          const { data: userDetail, error: userError } = await supabase.auth.admin.getUserById(t.id);
+          if (!userError && userDetail?.user) {
+            const identities = (userDetail.user as any)?.identities as Array<{ provider: string }> | undefined;
+            const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth");
+            const hasEmailPassword = identities?.some((id) => id.provider === "email");
+            isGoogleOnly = hasOAuthProvider && !hasEmailPassword;
+          }
+        } catch (err) {
+          console.error(`Error fetching user ${t.id} identities:`, err);
+        }
+        
+        const [preRes, postRes, planRes, mileageRes, reflectionRes, pointsRes] = await Promise.all([
           supabase
             .from("diagnosis_results")
             .select("id")
@@ -122,39 +160,50 @@ export async function POST(req: Request) {
             .maybeSingle(),
           supabase
             .from("development_plans")
-            .select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, other_annual_goal")
+            .select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal")
             .eq("user_email", email)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          supabase.from("mileage_entries").select("category").eq("user_email", email),
+          supabase.from("mileage_entries").select("id, content, category").eq("user_email", email),
           supabase.from("reflection_drafts").select("id").eq("user_email", email).limit(1).maybeSingle(),
+          supabase.from("user_points").select("base_points, login_points").eq("user_email", email).maybeSingle(),
         ]);
 
         const planRow = planRes.data as PlanRow | null;
         const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
         const planCompleted = planFilledRatio >= 0.7;
 
-        const countByCategory: Record<string, number> = {};
+        const planGoals: Record<string, number> = {};
         MILEAGE_CATEGORIES.forEach((c) => {
-          countByCategory[c.key] = 0;
+          const key = PLAN_GOAL_KEYS[c.key];
+          const raw = String(planRow?.[key as keyof PlanRow] ?? "").trim();
+          planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
         });
-        (mileageRes.data ?? []).forEach((r: { category?: string }) => {
-          const k = r.category;
-          if (k && countByCategory[k] !== undefined) countByCategory[k] += 1;
-        });
+        const healthGoalUnit = (planRow?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
+        const { categories: categoriesWithGoal, overallProgress } = computeMileageProgress(
+          (mileageRes.data ?? []) as { content: string; category: string }[],
+          planGoals,
+          healthGoalUnit,
+          schoolCategories
+        );
 
-        const categories = MILEAGE_CATEGORIES.map((c) => {
-          const goalKey = PLAN_GOAL_KEYS[c.key];
-          const goalRaw = String(planRow?.[goalKey as keyof PlanRow] ?? "").trim();
-          const goalNum = parseFloat(goalRaw.replace(/[^\d.]/g, "")) || 0;
-          const progress = goalNum > 0 ? Math.min(100, (countByCategory[c.key] / goalNum) * 100) : 0;
-          return { key: c.key, label: c.label, progress };
+        // 개인 포인트(마일리지 총점) 계산: 기본/로그인 + 마일리지(학교 설정 단위당 포인트)
+        const sumByKey: Record<string, number> = {};
+        (mileageRes.data ?? []).forEach((e: { content: string; category: string }) => {
+          const unit = unitByKey[e.category];
+          const value = parseValueFromContent(e.content, e.category, healthGoalUnit, unit);
+          sumByKey[e.category] = (sumByKey[e.category] ?? 0) + value;
         });
-        const overallProgress =
-          categories.length > 0
-            ? Math.min(100, Math.round(categories.reduce((a, c) => a + c.progress, 0) / categories.length))
-            : 0;
+        let mileagePoints = 0;
+        schoolCategories.forEach((c) => {
+          const sum = sumByKey[c.key] ?? 0;
+          const ppu = pointSettings[c.key] ?? 0;
+          mileagePoints += Math.round(sum * ppu);
+        });
+        const basePoints = (pointsRes.data?.base_points ?? 100) as number;
+        const loginPoints = (pointsRes.data?.login_points ?? 0) as number;
+        const totalPoints = Math.round(basePoints + loginPoints + mileagePoints);
 
         return {
           id: t.id,
@@ -167,12 +216,56 @@ export async function POST(req: Request) {
           hasPostDiagnosis: !!postRes.data,
           planCompleted,
           reflectionDone: !!reflectionRes.data,
-          mileageSummary: { overallProgress, categories },
+          mileageSummary: { overallProgress, categories: categoriesWithGoal },
+          totalPoints,
+          planGoals,
+          isGoogleOnly, // 구글 로그인만 사용하는 경우
         };
       })
     );
 
-    return NextResponse.json({ teachers: result });
+    const goalKeysRel = ["community", "book_edutech", "health", "other"] as const;
+    const goalsByEmail: Record<string, Record<string, number>> = {};
+    result.forEach((r) => {
+      goalsByEmail[r.email] = (r as { planGoals?: Record<string, number> }).planGoals ?? {};
+    });
+    const n = result.length;
+    const relativeByEmail: Record<string, Record<string, 1 | 2 | 3>> = {};
+    result.forEach((r) => {
+      relativeByEmail[r.email] = {};
+      goalKeysRel.forEach((key) => {
+        if (n <= 1) relativeByEmail[r.email][key] = 1;
+        else if (n <= 5) relativeByEmail[r.email][key] = 2;
+        else {
+          const values = result
+            .map((t) => goalsByEmail[t.email]?.[key] ?? 0)
+            .sort((a, b) => a - b);
+          const current = goalsByEmail[r.email]?.[key] ?? 0;
+          const pos = values.indexOf(current);
+          const rank = pos >= 0 ? pos : values.length;
+          const third = Math.max(1, Math.floor(values.length / 3));
+          if (rank < third) relativeByEmail[r.email][key] = 1;
+          else if (rank < 2 * third) relativeByEmail[r.email][key] = 2;
+          else relativeByEmail[r.email][key] = 3;
+        }
+      });
+    });
+
+    const teachersOut = result.map((r) => {
+      const rel = relativeByEmail[r.email] ?? {};
+      const categories = (r.mileageSummary.categories as { key: string; label: string; progress: number; sum: number; goal: number; unit: string }[]).map((c) => {
+        const goal = c.goal ?? 0;
+        let difficultyStars: string;
+        if (c.key === "training") difficultyStars = getDifficultyStars(getTrainingDifficultyLevel(goal));
+        else if (c.key === "class_open") difficultyStars = getDifficultyStars(getClassOpenDifficultyLevel(goal));
+        else difficultyStars = getRelativeDifficultyStars(rel[c.key] ?? 2);
+        return { key: c.key, label: c.label, progress: c.progress, sum: c.sum ?? 0, goal: c.goal ?? 0, unit: c.unit ?? "", difficultyStars };
+      });
+      const { planGoals: _pg, ...rest } = r as { planGoals?: Record<string, number> };
+      return { ...rest, mileageSummary: { overallProgress: r.mileageSummary.overallProgress, categories } };
+    });
+
+    return NextResponse.json({ teachers: teachersOut });
   } catch (error) {
     console.error("teacher-summaries error:", error);
     return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { status: 500 });

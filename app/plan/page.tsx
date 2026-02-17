@@ -20,8 +20,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CardPageHeader } from "@/components/CardPageHeader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +40,7 @@ import {
   ListChecks,
   GripVertical,
   MessageCircle,
+  ClipboardList,
 } from "lucide-react";
 import {
   RadarChart,
@@ -548,6 +551,7 @@ export default function PlanPage() {
     domain6: number;
     createdAt: string;
   } | null>(null);
+  const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
 
   // 폼 데이터
   const [developmentGoal, setDevelopmentGoal] = useState("");
@@ -557,7 +561,6 @@ export default function PlanPage() {
   const [communityAnnualGoal, setCommunityAnnualGoal] = useState("");
   const [bookAnnualGoal, setBookAnnualGoal] = useState("");
   const [educationAnnualGoal, setEducationAnnualGoal] = useState("");
-  const [educationAnnualGoalUnit, setEducationAnnualGoalUnit] = useState<"시간" | "거리">("시간");
   const [otherAnnualGoal, setOtherAnnualGoal] = useState("");
   const [trainingPlans, setTrainingPlans] = useState<TrainingPlanRow[]>([
     { id: "1", name: "", period: "", duration: "", remarks: "" },
@@ -594,14 +597,28 @@ export default function PlanPage() {
         | { role?: string; schoolName?: string }
         | undefined;
 
-      if (metadata?.role !== "teacher") {
-        router.replace(metadata?.role === "admin" ? "/dashboard" : "/");
+      // 관리자는 교원 권한도 가집니다
+      if (metadata?.role !== "teacher" && metadata?.role !== "admin") {
+        router.replace("/");
         return;
       }
 
       setUserEmail(user.email ?? null);
       setUserSchool(metadata?.schoolName ?? null);
       setIsChecking(false);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const res = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+          if (res.ok) {
+            const j = await res.json();
+            if (Array.isArray(j.categories)) setSchoolCategories(j.categories);
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       // AI 추천 사용 여부 (localStorage - 한번 받았으면 '다시 받기' 표시)
       if (typeof window !== "undefined") {
@@ -628,7 +645,6 @@ export default function PlanPage() {
             setCommunityAnnualGoal((planData.community_annual_goal as string) ?? "");
             setBookAnnualGoal((planData.book_annual_goal as string) ?? "");
             setEducationAnnualGoal((planData.education_annual_goal as string) ?? "");
-            setEducationAnnualGoalUnit(((planData.education_annual_goal_unit as string) === "거리" ? "거리" : "시간"));
             setOtherAnnualGoal((planData.other_annual_goal as string) ?? "");
             const tp = planData.training_plans as TrainingPlanRow[] | null;
             if (Array.isArray(tp) && tp.length > 0) setTrainingPlans(tp);
@@ -883,6 +899,17 @@ export default function PlanPage() {
       setOtherPlans(arrayMove(otherPlans, oldIndex, newIndex));
     }
   };
+
+  const PLAN_CATEGORY_DEFAULTS: Record<string, { label: string; unit: string }> = {
+    training: { label: "연수(직무·자율)", unit: "시간" },
+    class_open: { label: "수업 공개", unit: "회" },
+    community: { label: "교원학습 공동체", unit: "회" },
+    book_edutech: { label: "전문 서적/에듀테크", unit: "회" },
+    health: { label: "건강/체력", unit: "시간" },
+    other: { label: "기타 계획", unit: "건" },
+  };
+  const getPlanCategoryLabel = (key: string) => schoolCategories.find((c) => c.key === key)?.label ?? PLAN_CATEGORY_DEFAULTS[key]?.label ?? key;
+  const getPlanCategoryUnit = (key: string) => schoolCategories.find((c) => c.key === key)?.unit ?? PLAN_CATEGORY_DEFAULTS[key]?.unit ?? "회";
 
   // AI 추천/수정 후 드래프트 저장 (API 절감: 한번 쓰인 내용 다시 열어도 유지)
   const savePlanDraft = async (
@@ -1170,11 +1197,46 @@ export default function PlanPage() {
     }
   };
 
+  // 연간 목표량 검증 함수
+  const validateAnnualGoals = (): { isValid: boolean; missingItems: string[] } => {
+    const missingItems: string[] = [];
+    const goals = [
+      { key: "training", value: annualGoal.trim(), label: getPlanCategoryLabel("training") },
+      { key: "class_open", value: expenseAnnualGoal.trim(), label: getPlanCategoryLabel("class_open") },
+      { key: "community", value: communityAnnualGoal.trim(), label: getPlanCategoryLabel("community") },
+      { key: "book_edutech", value: bookAnnualGoal.trim(), label: getPlanCategoryLabel("book_edutech") },
+      { key: "health", value: educationAnnualGoal.trim(), label: getPlanCategoryLabel("health") },
+      { key: "other", value: otherAnnualGoal.trim(), label: getPlanCategoryLabel("other") },
+    ];
+
+    goals.forEach((goal) => {
+      if (!goal.value) {
+        missingItems.push(goal.label);
+      }
+    });
+
+    return {
+      isValid: missingItems.length === 0,
+      missingItems,
+    };
+  };
+
   // 저장 핸들러
   const handleSave = async () => {
     if (!userEmail || !userSchool) {
       alert("로그인 정보가 올바르지 않습니다.");
       return;
+    }
+
+    // 연간 목표량 검증 (저장은 진행하되 경고만 표시)
+    const validation = validateAnnualGoals();
+    let hasWarning = false;
+    let warningMessage = "";
+
+    if (!validation.isValid) {
+      hasWarning = true;
+      const missingList = validation.missingItems.join(", ");
+      warningMessage = `${missingList} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.`;
     }
 
     try {
@@ -1190,7 +1252,7 @@ export default function PlanPage() {
         community_annual_goal: communityAnnualGoal,
         book_annual_goal: bookAnnualGoal,
         education_annual_goal: educationAnnualGoal,
-        education_annual_goal_unit: educationAnnualGoalUnit,
+        education_annual_goal_unit: schoolCategories.find((c) => c.key === "health")?.unit ?? "시간",
         other_annual_goal: otherAnnualGoal,
         training_plans: trainingPlans,
         education_plans: educationPlans,
@@ -1213,8 +1275,14 @@ export default function PlanPage() {
         return;
       }
 
-      alert("계획서가 저장되었습니다.");
-      router.push("/dashboard");
+      // 저장 성공 후 경고가 있으면 경고 표시, 없으면 저장 완료 메시지
+      const successMessage = hasWarning
+        ? `${warningMessage}\n\n계획서는 저장되었습니다. 확인을 누르면 대시보드로 이동합니다.`
+        : "계획서가 저장되었습니다.\n\n확인을 누르면 대시보드로 이동합니다.";
+
+      if (confirm(successMessage)) {
+        router.push("/dashboard");
+      }
     } catch (error) {
       console.error(error);
       alert("계획서 저장 중 오류가 발생했습니다.");
@@ -1232,14 +1300,13 @@ export default function PlanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white px-4 py-6">
+    <div className="flex min-h-screen flex-col bg-white px-4 py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 text-left">
-        {/* 헤더 */}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            자기역량 개발계획서 작성
-          </h1>
-        </div>
+        <CardPageHeader
+          icon={<ClipboardList className="h-6 w-6" />}
+          title="자기역량 개발계획서 작성"
+          subtitle="연간 역량 개발 목표와 실천 계획을 세우고 기록합니다."
+        />
 
         {/* 역량 진단 요약: 강점·개발우선·레이더 한 덩어리 */}
         <div className="space-y-4">
@@ -1441,7 +1508,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                연수(직무, 자율) 계획
+                {getPlanCategoryLabel("training")} 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1454,9 +1521,9 @@ export default function PlanPage() {
                   value={annualGoal}
                   onChange={(e) => setAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <span className="text-sm text-slate-600 whitespace-nowrap">시간</span>
+                <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("training")}</span>
               </div>
               <Button
                 type="button"
@@ -1503,7 +1570,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <Presentation className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                수업 공개 계획
+                {getPlanCategoryLabel("class_open")} 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1516,9 +1583,9 @@ export default function PlanPage() {
                   value={expenseAnnualGoal}
                   onChange={(e) => setExpenseAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <span className="text-sm text-slate-600 whitespace-nowrap">회</span>
+                <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("class_open")}</span>
               </div>
               <Button
                 type="button"
@@ -1565,7 +1632,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                교원학습 공동체 활동 계획
+                {getPlanCategoryLabel("community")} 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1578,9 +1645,9 @@ export default function PlanPage() {
                   value={communityAnnualGoal}
                   onChange={(e) => setCommunityAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <span className="text-sm text-slate-600 whitespace-nowrap">회</span>
+                <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("community")}</span>
               </div>
               <Button
                 type="button"
@@ -1627,7 +1694,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                전문 서적 / 에듀테크 등 구입 활용 계획
+                {getPlanCategoryLabel("book_edutech")} 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1640,9 +1707,9 @@ export default function PlanPage() {
                   value={bookAnnualGoal}
                   onChange={(e) => setBookAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <span className="text-sm text-slate-600 whitespace-nowrap">회</span>
+                <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("book_edutech")}</span>
               </div>
               <Button
                 type="button"
@@ -1688,7 +1755,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                건강/체력 향상 계획
+                {getPlanCategoryLabel("health")} 향상 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1701,30 +1768,11 @@ export default function PlanPage() {
                   value={educationAnnualGoal}
                   onChange={(e) => setEducationAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="education-annual-unit"
-                      checked={educationAnnualGoalUnit === "시간"}
-                      onChange={() => setEducationAnnualGoalUnit("시간")}
-                      className="rounded-full border-slate-300 text-slate-600"
-                    />
-                    <span className="text-sm text-slate-600">시간</span>
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="education-annual-unit"
-                      checked={educationAnnualGoalUnit === "거리"}
-                      onChange={() => setEducationAnnualGoalUnit("거리")}
-                      className="rounded-full border-slate-300 text-slate-600"
-                    />
-                    <span className="text-sm text-slate-600">거리 km</span>
-                  </label>
-                </div>
+                <span className="text-sm text-slate-600 whitespace-nowrap">
+                  {getPlanCategoryUnit("health")}
+                </span>
               </div>
               <Button
                 type="button"
@@ -1771,7 +1819,7 @@ export default function PlanPage() {
             <div className="flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-slate-600" />
               <h2 className="text-sm font-semibold text-slate-800">
-                기타 계획
+                {getPlanCategoryLabel("other")} 계획
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1784,9 +1832,9 @@ export default function PlanPage() {
                   value={otherAnnualGoal}
                   onChange={(e) => setOtherAnnualGoal(e.target.value)}
                   placeholder="연간 목표"
-                  className="w-[5cm] max-w-[5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
                 />
-                <span className="text-sm text-slate-600 whitespace-nowrap">건</span>
+                <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("other")}</span>
               </div>
               <Button
                 type="button"

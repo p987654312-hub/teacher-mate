@@ -3,12 +3,15 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CardPageHeader } from "@/components/CardPageHeader";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/lib/supabaseClient";
+import { ClipboardCheck } from "lucide-react";
 
 type Question = {
   id: string;
@@ -202,8 +205,9 @@ function DiagnosisContent() {
         | { role?: string; schoolName?: string }
         | undefined;
 
-      if (metadata?.role !== "teacher") {
-        router.replace(metadata?.role === "admin" ? "/dashboard" : "/");
+      // 관리자는 교원 권한도 가집니다
+      if (metadata?.role !== "teacher" && metadata?.role !== "admin") {
+        router.replace("/");
         return;
       }
 
@@ -417,20 +421,13 @@ function DiagnosisContent() {
   }
 
   return (
-    <div className="min-h-screen bg-white px-4 py-10">
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
-        {/* 헤더 */}
-        <header>
-          <p className="text-xs font-medium tracking-[0.2em] text-slate-500 uppercase">
-            진단 · 자기 이해
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-            {isPost ? "(사후) 나의 교원 역량 진단" : "나의 교원 역량 사전 진단"}
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            각 문항에 대해 현재 나의 수준에 가장 가까운 응답을 선택해 주세요.
-          </p>
-        </header>
+    <div className="flex min-h-screen flex-col bg-white px-4 py-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        <CardPageHeader
+          icon={<ClipboardCheck className="h-6 w-6" />}
+          title={isPost ? "(사후) 나의 교원 역량 진단" : "나의 교원 역량 사전 진단"}
+          subtitle="각 문항에 대해 현재 나의 수준에 가장 가까운 응답을 선택해 주세요."
+        />
 
         {/* 진행률 바 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">

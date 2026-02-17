@@ -35,6 +35,20 @@ export default function Home() {
   const [saveEmail, setSaveEmail] = useState(true);
   const [saveAdminEmail, setSaveAdminEmail] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    // URL 파라미터에서 에러 확인
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("error");
+      if (error) {
+        setErrorMessage(decodeURIComponent(error));
+        // URL에서 에러 파라미터 제거
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -53,6 +67,38 @@ export default function Home() {
       if (adminEmailVal) setAdminEmail(adminEmailVal);
     }
   }, []);
+
+  // 구글 로그인 처리
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account", // 계정 선택 화면 표시
+          },
+          skipBrowserRedirect: false,
+        },
+      });
+
+      if (error) {
+        setErrorMessage(`구글 로그인 오류: ${error.message}`);
+        setIsLoading(false);
+        return;
+      }
+
+      // OAuth 리다이렉트가 시작되면 로딩 상태 유지
+      // 실제 검증은 콜백 페이지에서 수행
+    } catch (error) {
+      console.error("Google sign in error:", error);
+      setErrorMessage("구글 로그인 중 오류가 발생했습니다.");
+      setIsLoading(false);
+    }
+  };
 
   const handleAuth = async () => {
     const email = activeTab === "teacher" ? teacherEmail : adminEmail;
@@ -109,7 +155,23 @@ export default function Home() {
           data.user?.email ||
           "사용자";
 
-        alert(`${displayName}님 로그인 되었습니다.`);
+        let pointMsg = "";
+        const token = data.session?.access_token;
+        if (token) {
+          try {
+            const res = await fetch("/api/points/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+              const j = await res.json();
+              if (j.added > 0) pointMsg = `\n로그인 성공과 함께 열정 포인트 +${j.added}점 획득했습니다.`;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        alert(`${displayName}님 로그인 되었습니다.${pointMsg}`);
         router.push("/dashboard");
       } else {
         // 회원가입 모드
@@ -181,7 +243,18 @@ export default function Home() {
           data.user?.email ||
           "사용자";
 
-        alert(`${displayName}님 로그인 되었습니다.`);
+        const token = data.session?.access_token;
+        if (token) {
+          try {
+            await fetch("/api/points/init", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            });
+          } catch {
+            // ignore
+          }
+        }
+        alert(`${displayName}님 가입되었습니다. 열정 포인트 100점으로 시작합니다.`);
         router.push("/dashboard");
       }
     } catch (error) {
@@ -221,6 +294,12 @@ export default function Home() {
             </p>
           </header>
 
+          {errorMessage && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-800">{errorMessage}</p>
+            </div>
+          )}
+
           <div className="w-full">
             <Tabs
               value={activeTab}
@@ -256,10 +335,10 @@ export default function Home() {
                 {!isLogin && (
                   <>
                     <div className="space-y-1.5">
-                      <Label htmlFor="teacher-school">학교명</Label>
+                      <Label htmlFor="teacher-school">학교명 (정식학교명)</Label>
                       <Input
                         id="teacher-school"
-                        placeholder="예: 서울 OO초등학교"
+                        placeholder="예: 서울00초등학교"
                         className="rounded-2xl"
                         value={teacherSchool}
                         onChange={(e) => setTeacherSchool(e.target.value)}
@@ -333,6 +412,45 @@ export default function Home() {
                   </div>
                 )}
 
+                {isLogin && (
+                  <>
+                    <div className="relative mt-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-slate-300" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-white px-2 text-slate-500">또는</span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={isLoading}
+                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-70 flex items-center justify-center gap-2"
+                    >
+                      <svg className="h-5 w-5" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      구글로 로그인 (@shingu.sen.es.kr)
+                    </Button>
+                  </>
+                )}
+
                 <Button
                   type="submit"
                   disabled={isLoading}
@@ -370,10 +488,10 @@ export default function Home() {
                 {!isLogin && (
                   <>
                     <div className="space-y-1.5">
-                      <Label htmlFor="admin-school">학교명</Label>
+                      <Label htmlFor="admin-school">학교명 (정식학교명)</Label>
                       <Input
                         id="admin-school"
-                        placeholder="예: 서울 OO초등학교"
+                        placeholder="예: 서울00초등학교"
                         className="rounded-2xl"
                         value={adminSchool}
                         onChange={(e) => setAdminSchool(e.target.value)}
@@ -436,13 +554,14 @@ export default function Home() {
                 )}
                 {!isLogin && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="admin-code">관리자 인증코드</Label>
+                    <Label htmlFor="admin-code">슈퍼관리자 코드</Label>
                     <Input
                       id="admin-code"
-                      placeholder="발급받은 인증코드를 입력하세요"
+                      placeholder="슈퍼관리자 코드를 입력하세요"
                       className="rounded-2xl"
                       value={adminCode}
                       onChange={(e) => setAdminCode(e.target.value)}
+                      maxLength={3}
                     />
                   </div>
                 )}
