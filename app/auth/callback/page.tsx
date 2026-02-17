@@ -95,7 +95,7 @@ export default function AuthCallbackPage() {
         console.log("Existing user, role:", metadata.role);
 
         // 기존 사용자: 로그인 포인트 추가
-        const token = session?.access_token || data.session?.access_token;
+        const token = session?.access_token;
         if (token) {
           try {
             await fetch("/api/points/login", {
