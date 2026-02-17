@@ -352,29 +352,6 @@ export default function MileagePage() {
           // ignore
         }
       }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        try {
-          const res = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
-          if (res.ok) {
-            const j = await res.json();
-            if (Array.isArray(j.categories) && j.categories.length === 6) {
-              setSchoolCategories(j.categories);
-              // localStorage에도 저장
-              localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(j.categories));
-              // healthGoalUnit도 업데이트
-              const healthCat = j.categories.find((c: { key: string; unit: string }) => c.key === "health");
-              if (healthCat?.unit === "km") {
-                setHealthGoalUnit("거리");
-              } else if (healthCat?.unit === "시간") {
-                setHealthGoalUnit("시간");
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
     };
     
     // 초기 로드
