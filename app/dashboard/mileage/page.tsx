@@ -198,6 +198,7 @@ export default function MileagePage() {
   const [recentlyMovedAt, setRecentlyMovedAt] = useState<Record<string, number>>({});
   const [, setTick] = useState(0);
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
+  const [userSchool, setUserSchool] = useState<string | null>(null);
   const [expandedByKey, setExpandedByKey] = useState<Record<string, boolean>>({});
 
   // 일일 성찰 기록 (기본 닫힘)
@@ -228,17 +229,19 @@ export default function MileagePage() {
         router.replace("/");
         return;
       }
-      const meta = user.user_metadata as { role?: string } | undefined;
+      const meta = user.user_metadata as { role?: string; schoolName?: string } | undefined;
       // 관리자는 교원 권한도 가집니다
       if (meta?.role !== "teacher" && meta?.role !== "admin") {
         router.replace("/");
         return;
       }
       setUserEmail(user.email);
+      const schoolName = (meta?.schoolName ?? "").trim() || null;
+      setUserSchool(schoolName);
 
       // 관리자 설정 단위 로드 (API 우선, 실패 시 localStorage)
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token && userSchool) {
+      if (session?.access_token && schoolName) {
         try {
           const res = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
           if (res.ok) {
@@ -246,7 +249,7 @@ export default function MileagePage() {
             if (Array.isArray(j.categories) && j.categories.length === 6) {
               setSchoolCategories(j.categories);
               // localStorage에도 저장하여 다음 로드 시 빠르게 반영
-              localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(j.categories));
+              localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(j.categories));
               // healthGoalUnit도 업데이트
               const healthCat = j.categories.find((c: { key: string; unit: string }) => c.key === "health");
               if (healthCat?.unit === "km") {
@@ -259,7 +262,7 @@ export default function MileagePage() {
         } catch {
           // API 실패 시 localStorage 확인
           try {
-            const cached = localStorage.getItem(`teacher_mate_category_settings_${userSchool}`);
+            const cached = localStorage.getItem(`teacher_mate_category_settings_${schoolName}`);
             if (cached) {
               const parsed = JSON.parse(cached);
               if (Array.isArray(parsed) && parsed.length === 6) {
