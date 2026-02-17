@@ -135,8 +135,8 @@ export async function POST(req: Request) {
           const { data: userDetail, error: userError } = await supabase.auth.admin.getUserById(t.id);
           if (!userError && userDetail?.user) {
             const identities = (userDetail.user as any)?.identities as Array<{ provider: string }> | undefined;
-            const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth");
-            const hasEmailPassword = identities?.some((id) => id.provider === "email");
+            const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth") ?? false;
+            const hasEmailPassword = identities?.some((id) => id.provider === "email") ?? false;
             isGoogleOnly = hasOAuthProvider && !hasEmailPassword;
           }
         } catch (err) {
