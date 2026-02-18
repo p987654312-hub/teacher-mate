@@ -5,25 +5,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  Cell,
-} from "recharts";
 import { ArrowLeft, Printer, FileDown } from "lucide-react";
+
+const DiagnosisResultCharts = dynamic(
+  () => import("@/components/charts/DiagnosisResultCharts"),
+  { ssr: false }
+);
 
 type DiagnosisResult = {
   id: string;
@@ -95,6 +86,9 @@ function DiagnosisResultContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [domainLabels, setDomainLabels] = useState<Record<string, string>>(DOMAIN_LABELS);
+  const [domainLabelsReady, setDomainLabelsReady] = useState(false);
+  const [diagnosisTitle, setDiagnosisTitle] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
@@ -119,7 +113,7 @@ function DiagnosisResultContent() {
         let { data: { session } } = await supabase.auth.getSession();
         token = session?.access_token ?? null;
         if (!token) {
-          await new Promise((r) => setTimeout(r, 600));
+          await new Promise((r) => setTimeout(r, 100));
           await supabase.auth.refreshSession();
           const next = await supabase.auth.getSession();
           session = next.data.session;
@@ -140,38 +134,40 @@ function DiagnosisResultContent() {
             setIsChecking(false);
             try {
               setIsLoading(true);
-              const query = supabase
-                .from("diagnosis_results")
-                .select("*")
-                .eq("user_email", targetEmail)
-                .order("created_at", { ascending: false })
-                .limit(1);
-              const { data, error } = await (isPost
-                ? query.eq("diagnosis_type", "post").maybeSingle()
-                : query.or("diagnosis_type.is.null,diagnosis_type.eq.pre").maybeSingle());
-              if (error) {
-                console.error("Error fetching diagnosis result:", error);
-                alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-                router.push("/dashboard");
-                return;
-              }
-              if (!data) {
-                alert("진단 결과가 없습니다.");
-                router.push("/dashboard");
-                return;
-              }
-              setDiagnosisResult(data as DiagnosisResult);
-              if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
               if (isPost) {
-                const { data: preData } = await supabase
-                  .from("diagnosis_results")
-                  .select("*")
-                  .eq("user_email", targetEmail)
-                  .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
-                  .order("created_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (preData) setPreResult(preData as DiagnosisResult);
+                const [postRes, preRes] = await Promise.all([
+                  supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+                  supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+                ]);
+                if (postRes.error) {
+                  console.error("Error fetching diagnosis result:", postRes.error);
+                  alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+                  router.push("/dashboard");
+                  return;
+                }
+                if (!postRes.data) {
+                  alert("진단 결과가 없습니다.");
+                  router.push("/dashboard");
+                  return;
+                }
+                setDiagnosisResult(postRes.data as DiagnosisResult);
+                if (postRes.data.ai_analysis) setAiAnalysis(postRes.data.ai_analysis as string);
+                if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
+              } else {
+                const { data, error } = await supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle();
+                if (error) {
+                  console.error("Error fetching diagnosis result:", error);
+                  alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+                  router.push("/dashboard");
+                  return;
+                }
+                if (!data) {
+                  alert("진단 결과가 없습니다.");
+                  router.push("/dashboard");
+                  return;
+                }
+                setDiagnosisResult(data as DiagnosisResult);
+                if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
               }
             } catch (err) {
               console.error(err);
@@ -229,34 +225,41 @@ function DiagnosisResultContent() {
 
       try {
         setIsLoading(true);
-        const query = supabase
-          .from("diagnosis_results")
-          .select("*")
-          .eq("user_email", targetEmail)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        const { data, error } = await (isPost
-          ? query.eq("diagnosis_type", "post").maybeSingle()
-          : query.or("diagnosis_type.is.null,diagnosis_type.eq.pre").maybeSingle());
-
-        if (error) {
-          console.error("Error fetching diagnosis result:", error);
-          alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-          router.push("/dashboard");
-          return;
-        }
-
-        if (!data) {
-          alert("진단 결과가 없습니다.");
-          router.push("/dashboard");
-          return;
-        }
-
-        setDiagnosisResult(data as DiagnosisResult);
-        if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
-
         if (isPost) {
-          const { data: preData } = await supabase
+          const [postRes, preRes] = await Promise.all([
+            supabase
+              .from("diagnosis_results")
+              .select("*")
+              .eq("user_email", targetEmail)
+              .eq("diagnosis_type", "post")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+            supabase
+              .from("diagnosis_results")
+              .select("*")
+              .eq("user_email", targetEmail)
+              .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+          ]);
+          if (postRes.error) {
+            console.error("Error fetching diagnosis result:", postRes.error);
+            alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+            router.push("/dashboard");
+            return;
+          }
+          if (!postRes.data) {
+            alert("진단 결과가 없습니다.");
+            router.push("/dashboard");
+            return;
+          }
+          setDiagnosisResult(postRes.data as DiagnosisResult);
+          if (postRes.data.ai_analysis) setAiAnalysis(postRes.data.ai_analysis as string);
+          if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
+        } else {
+          const { data, error } = await supabase
             .from("diagnosis_results")
             .select("*")
             .eq("user_email", targetEmail)
@@ -264,7 +267,19 @@ function DiagnosisResultContent() {
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (preData) setPreResult(preData as DiagnosisResult);
+          if (error) {
+            console.error("Error fetching diagnosis result:", error);
+            alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
+            router.push("/dashboard");
+            return;
+          }
+          if (!data) {
+            alert("진단 결과가 없습니다.");
+            router.push("/dashboard");
+            return;
+          }
+          setDiagnosisResult(data as DiagnosisResult);
+          if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
         }
       } catch (error) {
         console.error(error);
@@ -278,9 +293,44 @@ function DiagnosisResultContent() {
     fetchData();
   }, [router, isPost, searchParams]);
 
-  // 사후 결과 전용: 사전·사후 비교 분석 요청 (저장된 ai_analysis 없을 때만)
+  // 관리자가 변경한 검사 설정(역량명·제목) 반영 — 결과 화면에서 항상 현재 학교 설정 사용
   useEffect(() => {
-    if (!isPost || !diagnosisResult || !preResult || aiAnalysis || aiAnalysisLoading) return;
+    if (isChecking) return;
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setDomainLabelsReady(true);
+        return;
+      }
+      try {
+        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        if (res.ok) {
+          const j = await res.json();
+          if (typeof j.title === "string" && j.title.trim()) setDiagnosisTitle(j.title.trim());
+          if (Array.isArray(j.domains) && j.domains.length === 6) {
+            const labels: Record<string, string> = {
+              domain1: (j.domains[0]?.name ?? DOMAIN_LABELS.domain1).trim() || DOMAIN_LABELS.domain1,
+              domain2: (j.domains[1]?.name ?? DOMAIN_LABELS.domain2).trim() || DOMAIN_LABELS.domain2,
+              domain3: (j.domains[2]?.name ?? DOMAIN_LABELS.domain3).trim() || DOMAIN_LABELS.domain3,
+              domain4: (j.domains[3]?.name ?? DOMAIN_LABELS.domain4).trim() || DOMAIN_LABELS.domain4,
+              domain5: (j.domains[4]?.name ?? DOMAIN_LABELS.domain5).trim() || DOMAIN_LABELS.domain5,
+              domain6: (j.domains[5]?.name ?? DOMAIN_LABELS.domain6).trim() || DOMAIN_LABELS.domain6,
+            };
+            setDomainLabels(labels);
+          }
+        }
+      } catch {
+        // 실패 시 기본 DOMAIN_LABELS 유지
+      } finally {
+        setDomainLabelsReady(true);
+      }
+    };
+    load();
+  }, [isChecking]);
+
+  // 사후 결과 전용: 사전·사후 비교 분석 요청 (저장된 ai_analysis 없을 때만, 역량명 로드 후)
+  useEffect(() => {
+    if (!isPost || !diagnosisResult || !preResult || !domainLabelsReady || aiAnalysis || aiAnalysisLoading) return;
     const run = async () => {
       setAiAnalysisLoading(true);
       try {
@@ -309,6 +359,7 @@ function DiagnosisResultContent() {
             postScores,
             preTotal: preResult.total_score,
             postTotal: diagnosisResult.total_score,
+            domainLabels,
           }),
         });
         const json = await res.json();
@@ -326,7 +377,7 @@ function DiagnosisResultContent() {
       }
     };
     run();
-  }, [isPost, diagnosisResult?.id, preResult?.id, aiAnalysis, aiAnalysisLoading]);
+  }, [isPost, diagnosisResult?.id, preResult?.id, domainLabelsReady, domainLabels, aiAnalysis, aiAnalysisLoading]);
 
   if (isChecking || isLoading) {
     return (
@@ -342,25 +393,25 @@ function DiagnosisResultContent() {
     return null;
   }
 
-  // 영역별 평균 점수 계산 (각 영역당 5문항, 100점 척도)
+  // 영역별 평균 점수 계산 (각 영역당 5문항) — 관리자 설정 역량명(domainLabels) 반영
   const domainAverages = [
-    { domain: "domain1", label: DOMAIN_LABELS.domain1, avg: diagnosisResult.domain1 / 5, score: diagnosisResult.domain1 },
-    { domain: "domain2", label: DOMAIN_LABELS.domain2, avg: diagnosisResult.domain2 / 5, score: diagnosisResult.domain2 },
-    { domain: "domain3", label: DOMAIN_LABELS.domain3, avg: diagnosisResult.domain3 / 5, score: diagnosisResult.domain3 },
-    { domain: "domain4", label: DOMAIN_LABELS.domain4, avg: diagnosisResult.domain4 / 5, score: diagnosisResult.domain4 },
-    { domain: "domain5", label: DOMAIN_LABELS.domain5, avg: diagnosisResult.domain5 / 5, score: diagnosisResult.domain5 },
-    { domain: "domain6", label: DOMAIN_LABELS.domain6, avg: diagnosisResult.domain6 / 5, score: diagnosisResult.domain6 },
+    { domain: "domain1", label: domainLabels.domain1, avg: diagnosisResult.domain1 / 5, score: diagnosisResult.domain1 },
+    { domain: "domain2", label: domainLabels.domain2, avg: diagnosisResult.domain2 / 5, score: diagnosisResult.domain2 },
+    { domain: "domain3", label: domainLabels.domain3, avg: diagnosisResult.domain3 / 5, score: diagnosisResult.domain3 },
+    { domain: "domain4", label: domainLabels.domain4, avg: diagnosisResult.domain4 / 5, score: diagnosisResult.domain4 },
+    { domain: "domain5", label: domainLabels.domain5, avg: diagnosisResult.domain5 / 5, score: diagnosisResult.domain5 },
+    { domain: "domain6", label: domainLabels.domain6, avg: diagnosisResult.domain6 / 5, score: diagnosisResult.domain6 },
   ];
 
   // 사후일 때 사전·사후 겹친 방사형용 데이터 및 향상된 영역
   const preAverages = preResult
     ? [
-        { domain: "domain1", label: DOMAIN_LABELS.domain1, avg: preResult.domain1 / 5 },
-        { domain: "domain2", label: DOMAIN_LABELS.domain2, avg: preResult.domain2 / 5 },
-        { domain: "domain3", label: DOMAIN_LABELS.domain3, avg: preResult.domain3 / 5 },
-        { domain: "domain4", label: DOMAIN_LABELS.domain4, avg: preResult.domain4 / 5 },
-        { domain: "domain5", label: DOMAIN_LABELS.domain5, avg: preResult.domain5 / 5 },
-        { domain: "domain6", label: DOMAIN_LABELS.domain6, avg: preResult.domain6 / 5 },
+        { domain: "domain1", label: domainLabels.domain1, avg: preResult.domain1 / 5 },
+        { domain: "domain2", label: domainLabels.domain2, avg: preResult.domain2 / 5 },
+        { domain: "domain3", label: domainLabels.domain3, avg: preResult.domain3 / 5 },
+        { domain: "domain4", label: domainLabels.domain4, avg: preResult.domain4 / 5 },
+        { domain: "domain5", label: domainLabels.domain5, avg: preResult.domain5 / 5 },
+        { domain: "domain6", label: domainLabels.domain6, avg: preResult.domain6 / 5 },
       ]
     : [];
   const radarCompareData =
@@ -375,7 +426,7 @@ function DiagnosisResultContent() {
     isPost && preResult
       ? (["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const)
           .filter((key) => diagnosisResult[key] > preResult[key])
-          .map((key) => DOMAIN_LABELS[key])
+          .map((key) => domainLabels[key])
       : [];
 
   // 총점 100점 환산 (30문항×100점 = 3000 만점 → /30)
@@ -421,7 +472,9 @@ function DiagnosisResultContent() {
             </div>
             <div className="text-center">
               <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-                {isPost ? "(사후) 나의 교원 역량 진단 결과" : "나의 교원 역량 사전 진단 결과"}
+                {diagnosisTitle
+                  ? (isPost ? `(사후) ${diagnosisTitle} 결과` : `(사전) ${diagnosisTitle} 결과`)
+                  : (isPost ? "(사후) 나의 교원 역량 진단 결과" : "나의 교원 역량 사전 진단 결과")}
               </h1>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -454,67 +507,29 @@ function DiagnosisResultContent() {
             </div>
           </header>
 
-        {/* 방사형 그래프 및 점수 */}
+        {/* 방사형 그래프 및 점수 (Recharts lazy) */}
         <div className="-mt-3 flex flex-col gap-4">
           {isPost && radarCompareData && barChartData ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 shadow-sm">
-                <h2 className="text-base font-semibold text-slate-800 mb-1">역량 진단 결과 (사전·사후 비교)</h2>
-                <div className="-mt-[1cm] h-96 w-full print:min-h-[21rem] print:h-[21rem]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart outerRadius="70%" data={radarCompareData}>
-                      <PolarGrid stroke="#e5e7eb" />
-                      <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 14, fontWeight: 600 }} />
-                      <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
-                      <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#6366f1" strokeWidth={2} fill="transparent" fillOpacity={0} />
-                      <Legend />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-              <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 shadow-sm flex flex-col">
-                <h2 className="text-base font-semibold text-slate-800 mb-2">향상된 영역</h2>
-                <p className="text-xs text-slate-700 mb-4 leading-relaxed">
-                  {improvedDomains.length > 0 ? improvedDomains.join(" / ") : "향상된 영역 없음"}
-                </p>
-                <h2 className="text-base font-semibold text-slate-800 mb-1">총점 비교</h2>
-                <div className="flex-1 min-h-[100px] w-full print:min-h-[6rem]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barChartData} layout="vertical" margin={{ top: 4, right: 20, left: 36, bottom: 4 }} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
-                      <YAxis type="category" dataKey="name" width={32} tick={{ fontSize: 10 }} />
-                      <Tooltip
-                        formatter={(value: number | undefined): [string, string] => [
-                          value != null ? `${Number(value).toFixed(1)}점` : "-",
-                          "총점(100점 환산)",
-                        ]}
-                      />
-                      <Bar name="총점(100점 환산)" dataKey="점수" radius={[0, 4, 4, 0]} barSize={24}>
-                        {barChartData?.map((entry) => (
-                          <Cell key={entry.name} fill={entry.name === "사전" ? "#9ca3af" : "#6366f1"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            </div>
+            <DiagnosisResultCharts
+              isPost
+              radarCompareData={radarCompareData}
+              barChartData={barChartData}
+              domainAverages={[]}
+              preDateStr={preDateStr}
+              postDateStr={postDateStr}
+              improvedDomains={improvedDomains}
+            />
           ) : (
             <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-1 shadow-sm">
               <h2 className="text-base font-semibold text-slate-800 mb-0">역량 진단 결과</h2>
-              <div className="h-72 w-full mb-0 print:min-h-[16rem] print:h-[16rem]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart
-                    outerRadius="70%"
-                    data={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
-                  >
-                    <PolarGrid stroke="#e5e7eb" />
-                    <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 19, fontWeight: 700 }} />
-                    <Radar name="역량 진단" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
+              <DiagnosisResultCharts
+                isPost={false}
+                radarCompareData={null}
+                barChartData={null}
+                domainAverages={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
+                preDateStr=""
+                postDateStr=""
+              />
               <div className="mt-0.5 pt-0.5 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-600">총점</span>

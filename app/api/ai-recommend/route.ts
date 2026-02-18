@@ -76,10 +76,14 @@ export async function POST(req: Request) {
       const post = (body as any)?.postScores || {};
       const preTotal = Number((body as any)?.preTotal) || 0;
       const postTotal = Number((body as any)?.postTotal) || 0;
-      const domainLabels: Record<string, string> = {
+      const DEFAULT_DOMAIN_LABELS: Record<string, string> = {
         domain1: "수업 설계·운영", domain2: "학생 이해·생활지도", domain3: "평가·피드백",
         domain4: "학급경영·안전", domain5: "전문성 개발·성찰", domain6: "소통·협력 및 포용적 교육",
       };
+      const domainLabels: Record<string, string> =
+        typeof (body as any)?.domainLabels === "object" && (body as any).domainLabels !== null
+          ? { ...DEFAULT_DOMAIN_LABELS, ...(body as any).domainLabels }
+          : DEFAULT_DOMAIN_LABELS;
       const preText = Object.keys(domainLabels).map((k) => `${domainLabels[k]}: ${Number(pre[k]) ?? 0}점`).join(", ");
       const postText = Object.keys(domainLabels).map((k) => `${domainLabels[k]}: ${Number(post[k]) ?? 0}점`).join(", ");
       prompt = `[역할] 너는 교원 역량 개발을 지원하는 전문 컨설턴트이다.

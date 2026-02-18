@@ -11,173 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/lib/supabaseClient";
+import { domainsToQuestions, DEFAULT_DIAGNOSIS_DOMAINS, type Question } from "@/lib/diagnosisQuestions";
 import { ClipboardCheck } from "lucide-react";
-
-type Question = {
-  id: string;
-  text: string;
-  domain: string;
-};
-
-const QUESTIONS: Question[] = [
-  // 1영역: 수업 설계·운영
-  {
-    id: "1",
-    text: "학습 목표를 학생 수준에 맞게 구체적 행동 목표로 제시한다.",
-    domain: "domain1",
-  },
-  {
-    id: "2",
-    text: "성취기준과 수업 활동이 일관되게 연결되도록 수업을 설계한다.",
-    domain: "domain1",
-  },
-  {
-    id: "3",
-    text: "학생 참여를 높이기 위해 질문, 토의, 활동을 균형 있게 운영한다.",
-    domain: "domain1",
-  },
-  {
-    id: "4",
-    text: "수업 중 학생 반응에 따라 설명·활동을 조정(즉각적 수정)한다.",
-    domain: "domain1",
-  },
-  {
-    id: "5",
-    text: "다양한 교수·학습 자료(교구/매체/실물 등)를 목적에 맞게 선택·활용한다.",
-    domain: "domain1",
-  },
-  // 2영역: 학생 이해·생활지도
-  {
-    id: "6",
-    text: "학생의 발달 특성(인지·정서·사회성)을 고려하여 지도한다.",
-    domain: "domain2",
-  },
-  {
-    id: "7",
-    text: "학생의 강점과 어려움을 파악하기 위해 관찰·대화·기록을 지속한다.",
-    domain: "domain2",
-  },
-  {
-    id: "8",
-    text: "문제행동을 다룰 때 원인(상황/욕구)을 먼저 파악하고 지도한다.",
-    domain: "domain2",
-  },
-  {
-    id: "9",
-    text: "갈등 상황에서 학생이 감정을 조절하고 관계를 회복하도록 돕는다.",
-    domain: "domain2",
-  },
-  {
-    id: "10",
-    text: "학생의 다양성(가정·문화·개별차)을 존중하며 차별 없이 지도한다.",
-    domain: "domain2",
-  },
-  // 3영역: 평가·피드백
-  {
-    id: "11",
-    text: "평가 계획을 수업 목표와 연계하여 사전에 안내한다.",
-    domain: "domain3",
-  },
-  {
-    id: "12",
-    text: "수행평가에서 평가기준(루브릭 등)을 명확히 제시한다.",
-    domain: "domain3",
-  },
-  {
-    id: "13",
-    text: "학생의 학습 과정을 평가에 반영하기 위해 형성평가를 활용한다.",
-    domain: "domain3",
-  },
-  {
-    id: "14",
-    text: "피드백을 \"잘함/보완점/다음 전략\"처럼 구체적으로 제공한다.",
-    domain: "domain3",
-  },
-  {
-    id: "15",
-    text: "평가 결과를 다음 수업 개선과 개별 지도에 실제로 반영한다.",
-    domain: "domain3",
-  },
-  // 4영역: 학급경영·안전
-  {
-    id: "16",
-    text: "학급 규칙과 기대 행동을 학생과 함께 정하고 일관되게 적용한다.",
-    domain: "domain4",
-  },
-  {
-    id: "17",
-    text: "수업 전환(활동 이동, 정리, 모둠 전환 등)을 효율적으로 운영한다.",
-    domain: "domain4",
-  },
-  {
-    id: "18",
-    text: "교실 환경(자리 배치, 자료 동선 등)을 학습에 도움이 되게 구성한다.",
-    domain: "domain4",
-  },
-  {
-    id: "19",
-    text: "안전사고 예방을 위해 위험요소를 점검하고 예방지도를 실시한다.",
-    domain: "domain4",
-  },
-  {
-    id: "20",
-    text: "위기 상황(사고·응급·폭력·재난 등) 발생 시 절차에 따라 침착하게 대응한다.",
-    domain: "domain4",
-  },
-  // 5영역: 전문성 개발·성찰
-  {
-    id: "21",
-    text: "수업 후 성찰(기록/회고)을 통해 개선점을 구체화한다.",
-    domain: "domain5",
-  },
-  {
-    id: "22",
-    text: "학생 학습자료, 평가 결과 등을 근거로 수업을 점검·개선한다.",
-    domain: "domain5",
-  },
-  {
-    id: "23",
-    text: "연수·독서·연구회 등으로 새로운 교수법을 지속적으로 학습한다.",
-    domain: "domain5",
-  },
-  {
-    id: "24",
-    text: "동료의 수업을 관찰하거나 피드백을 주고받으며 공동 성장한다.",
-    domain: "domain5",
-  },
-  {
-    id: "25",
-    text: "교육 정책/지침 변화가 수업과 학급 운영에 미치는 영향을 파악하고 반영한다.",
-    domain: "domain5",
-  },
-  // 6영역: 소통·협력 및 포용적 교육
-  {
-    id: "26",
-    text: "학부모와의 소통에서 학생의 강점과 성장 중심으로 신뢰를 형성한다.",
-    domain: "domain6",
-  },
-  {
-    id: "27",
-    text: "민감한 사안(생활/평가/갈등)을 전달할 때 사실·근거·대안을 갖추어 설명한다.",
-    domain: "domain6",
-  },
-  {
-    id: "28",
-    text: "담임·전담·특수/상담 등과 협력하여 학생 지원을 연계한다.",
-    domain: "domain6",
-  },
-  {
-    id: "29",
-    text: "학습에 어려움이 있는 학생을 위해 지원(조정, 보조자료, 추가 지도)을 계획적으로 제공한다.",
-    domain: "domain6",
-  },
-  {
-    id: "30",
-    text: "교실에서 모든 학생이 참여할 수 있도록 포용적 활동(역할, 수준, 참여 방식)을 설계한다.",
-    domain: "domain6",
-  },
-];
-
 
 function DiagnosisContent() {
   const router = useRouter();
@@ -186,10 +21,13 @@ function DiagnosisContent() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userSchool, setUserSchool] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const [questions, setQuestions] = useState<Question[]>(() => domainsToQuestions(DEFAULT_DIAGNOSIS_DOMAINS));
+  const [domainNames, setDomainNames] = useState<string[]>(() => DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
+  const [diagnosisTitle, setDiagnosisTitle] = useState("");
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 보호된 라우트: 로그인하지 않은 사용자 또는 교사가 아니면 / 로 리다이렉트
+  // 보호된 라우트 + 학교별 사전/사후검사 문항 로드
   useEffect(() => {
     const checkSession = async () => {
       const {
@@ -205,7 +43,6 @@ function DiagnosisContent() {
         | { role?: string; schoolName?: string }
         | undefined;
 
-      // 관리자는 교원 권한도 가집니다
       if (metadata?.role !== "teacher" && metadata?.role !== "admin") {
         router.replace("/");
         return;
@@ -219,13 +56,41 @@ function DiagnosisContent() {
     checkSession();
   }, [router]);
 
+  // 학교별 문항 로드 (관리자가 설정한 문항 반영)
+  useEffect(() => {
+    if (isChecking) return;
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      try {
+        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        if (res.ok) {
+          const j = await res.json();
+          if (Array.isArray(j.domains) && j.domains.length === 6) {
+            setQuestions(domainsToQuestions(j.domains));
+            setDomainNames(
+              j.domains.map((d: { name?: string }, i: number) =>
+                (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "")
+              )
+            );
+          }
+          if (typeof j.title === "string") setDiagnosisTitle(j.title.trim());
+        }
+      } catch {
+        // 실패 시 기본 문항 유지
+      }
+    };
+    load();
+  }, [isChecking]);
+
   // 진행률 계산
   const progress = useMemo(() => {
+    if (questions.length === 0) return 0;
     const answeredCount = Object.keys(answers).filter(
       (key) => answers[key] !== undefined && answers[key] !== null && answers[key] >= 0
     ).length;
-    return (answeredCount / QUESTIONS.length) * 100;
-  }, [answers]);
+    return (answeredCount / questions.length) * 100;
+  }, [answers, questions.length]);
 
   // 영역별 점수 계산
   const domainScores = useMemo(() => {
@@ -238,7 +103,7 @@ function DiagnosisContent() {
       domain6: { sum: 0, count: 0 },
     };
 
-    QUESTIONS.forEach((q) => {
+    questions.forEach((q) => {
       const answer = answers[q.id];
       if (answer !== undefined && answer !== null && answer >= 0) {
         scores[q.domain].sum += answer;
@@ -268,7 +133,7 @@ function DiagnosisContent() {
     }
 
     // 모든 문항에 응답했는지 확인
-    const unanswered = QUESTIONS.filter((q) => answers[q.id] === undefined || answers[q.id] === null);
+    const unanswered = questions.filter((q) => answers[q.id] === undefined || answers[q.id] === null);
     if (unanswered.length > 0) {
       alert("모든 문항에 응답해 주세요.");
       return;
@@ -309,23 +174,11 @@ function DiagnosisContent() {
         },
       };
 
-      // 디버깅: payload 확인
-      console.log("저장할 진단 결과:", {
-        domain1: payload.domain1,
-        domain2: payload.domain2,
-        domain3: payload.domain3,
-        domain4: payload.domain4,
-        domain5: payload.domain5,
-        domain6: payload.domain6,
-        total_score: payload.total_score,
-      });
-
       const { error, data } = await supabase.from("diagnosis_results").insert([
         payload,
       ]).select();
 
       if (error) {
-        console.error("Supabase insert error:", error);
         alert(
           `진단 결과 저장 중 오류가 발생했습니다.\n\n에러 내용: ${error.message}\n\nSupabase 테이블 설정을 확인해 주세요.`
         );
@@ -336,15 +189,15 @@ function DiagnosisContent() {
       const savedResultId = data?.[0]?.id;
       if (savedResultId) {
         try {
-          // 영역별 점수 계산 (평균)
-          const domainAverages = [
-            { domain: "domain1", label: "수업 설계·운영", avg: domainScores.domain1 / 5, score: domainScores.domain1 },
-            { domain: "domain2", label: "학생 이해·생활지도", avg: domainScores.domain2 / 5, score: domainScores.domain2 },
-            { domain: "domain3", label: "평가·피드백", avg: domainScores.domain3 / 5, score: domainScores.domain3 },
-            { domain: "domain4", label: "학급경영·안전", avg: domainScores.domain4 / 5, score: domainScores.domain4 },
-            { domain: "domain5", label: "전문성 개발·성찰", avg: domainScores.domain5 / 5, score: domainScores.domain5 },
-            { domain: "domain6", label: "소통·협력 및 포용적 교육", avg: domainScores.domain6 / 5, score: domainScores.domain6 },
-          ];
+          // 영역별 점수 계산 (평균) — 관리자 설정 역량명(domainNames) 반영
+          const domainAverages = (
+            ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const
+          ).map((domain, i) => ({
+            domain,
+            label: domainNames[i] ?? DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "",
+            avg: (domainScores[domain] ?? 0) / 5,
+            score: domainScores[domain] ?? 0,
+          }));
 
           // 강점/약점 정렬
           const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
@@ -379,19 +232,11 @@ function DiagnosisContent() {
                 .eq("id", savedResultId);
               
               if (updateError) {
-                console.error("AI 분석 결과 DB 저장 실패:", updateError);
-              } else {
-                console.log("AI 분석 결과가 성공적으로 저장되었습니다.");
+                // AI 분석 결과 저장 실패 (무시하고 진행)
               }
-            } else {
-              console.error("AI 분석 응답에 recommendation이 없습니다:", result);
             }
-          } else {
-            const errorData = await analysisRes.json().catch(() => ({}));
-            console.error("AI 분석 API 호출 실패:", analysisRes.status, errorData);
           }
-        } catch (analysisError) {
-          console.error("AI 분석 생성 중 오류:", analysisError);
+        } catch {
           // AI 분석 실패해도 진단 결과 저장은 성공했으므로 계속 진행
         }
       }
@@ -402,8 +247,7 @@ function DiagnosisContent() {
       } else {
         router.push("/dashboard");
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       alert("진단 결과 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
@@ -425,57 +269,70 @@ function DiagnosisContent() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <CardPageHeader
           icon={<ClipboardCheck className="h-6 w-6" />}
-          title={isPost ? "(사후) 나의 교원 역량 진단" : "나의 교원 역량 사전 진단"}
+          title={
+            diagnosisTitle
+              ? (isPost ? `(사후) ${diagnosisTitle}` : `(사전) ${diagnosisTitle}`)
+              : (isPost ? "(사후) 나의 교원 역량 진단" : "나의 교원 역량 사전 진단")
+          }
           subtitle="각 문항에 대해 현재 나의 수준에 가장 가까운 응답을 선택해 주세요."
         />
 
-        {/* 진행률 바 */}
-        <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between text-xs">
+        {/* 진행률 바 — 높이 낮게, 푸른 계열 */}
+        <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-2.5 shadow-sm">
+          <div className="mb-1 flex items-center justify-between text-xs">
             <span className="text-slate-600">진행률</span>
             <span className="font-semibold text-slate-800">
-              {Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== null).length} / {QUESTIONS.length}
+              {Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== null).length} / {questions.length}
             </span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress
+            value={progress}
+            className="h-1.5 bg-blue-200/70 [&_[data-slot=progress-indicator]]:bg-blue-500"
+          />
         </Card>
 
-        {/* 문항 리스트 - 2개씩 병렬 배치 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {QUESTIONS.map((question) => (
+        {/* 문항 리스트 - 2개씩 병렬 배치, 카드 낮게·진행바 하단 정렬·슬라이더 짧게·낮게, 완료 카드 푸른 계열 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-stretch">
+          {questions.map((question) => {
+            const isAnswered = answers[question.id] !== undefined && answers[question.id] !== null;
+            return (
             <Card
               key={question.id}
-              className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-5 shadow-sm"
+              className={`flex flex-col h-full min-h-0 rounded-xl border p-2 shadow-sm transition-colors ${
+                isAnswered
+                  ? "border-blue-300/90 bg-gradient-to-br from-blue-100 via-blue-50/90 to-indigo-100/90"
+                  : "border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50"
+              }`}
             >
-              <div className="mb-4">
-                <Label className="text-sm font-semibold text-slate-800">
+              <div className="flex-1 min-h-0 mb-2">
+                <Label className={`text-xs font-semibold leading-tight line-clamp-3 ${isAnswered ? "text-slate-800" : "text-slate-800"}`}>
                   {question.id}. {question.text}
                 </Label>
               </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-2">
-                  <span className="text-xs font-medium text-slate-600">매우 그렇지 않다</span>
-                  <span className="text-xs font-medium text-slate-600">매우 그렇다</span>
-                </div>
-                <div className="px-2">
-                  <Slider
-                    value={[answers[question.id] !== undefined && answers[question.id] !== null ? answers[question.id] : 0]}
-                    onValueChange={(value) => {
-                      setAnswers((prev) => ({ ...prev, [question.id]: value[0] }));
-                    }}
-                    min={0}
-                    max={100}
-                    step={1}
-                    className={`w-full [&_[data-slot=slider-track]]:h-6 [&_[data-slot=slider-thumb]]:size-6 ${
-                      answers[question.id] !== undefined && answers[question.id] !== null
-                        ? "[&_[data-slot=slider-thumb]]:bg-gradient-to-r [&_[data-slot=slider-thumb]]:from-[#8B5CF6] [&_[data-slot=slider-thumb]]:to-[#3B82F6] [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:shadow-md"
-                        : "[&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:pointer-events-none"
-                    }`}
-                  />
+              <div className="mt-auto w-full min-w-[33%] shrink-0">
+                <div className="flex items-center gap-2 w-full">
+                  <span className="shrink-0 text-[10px] font-medium text-slate-500 ml-[5mm]">매우 아니다</span>
+                  <div className="min-w-0 flex-1">
+                    <Slider
+                      value={[isAnswered ? answers[question.id]! : 0]}
+                      onValueChange={(value) => {
+                        setAnswers((prev) => ({ ...prev, [question.id]: value[0] }));
+                      }}
+                      min={0}
+                      max={100}
+                      step={1}
+                      className={`w-full [&_[data-slot=slider-track]]:h-[30px] [&_[data-slot=slider-thumb]]:h-5 [&_[data-slot=slider-thumb]]:w-3 [&_[data-slot=slider-thumb]]:!rounded-sm ${
+                        isAnswered
+                          ? "[&_[data-slot=slider-thumb]]:bg-gradient-to-r [&_[data-slot=slider-thumb]]:from-blue-400/80 [&_[data-slot=slider-thumb]]:to-indigo-400/80 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:shadow-sm"
+                          : "[&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:pointer-events-none"
+                      }`}
+                    />
+                  </div>
+                  <span className="shrink-0 text-[10px] font-medium text-slate-500 mr-[5mm]">매우 그렇다</span>
                 </div>
               </div>
             </Card>
-          ))}
+          );})}
         </div>
 
         {/* 하단 버튼 */}

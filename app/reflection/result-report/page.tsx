@@ -4,10 +4,15 @@ import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
-import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from "recharts";
 import { Printer, FileDown, X } from "lucide-react";
+
+const ReflectionRadarCharts = dynamic(
+  () => import("@/components/charts/ReflectionRadarCharts"),
+  { ssr: false }
+);
 
 const DOMAIN_LABELS: Record<string, string> = {
   domain1: "수업 설계·운영",
@@ -334,22 +339,11 @@ function ResultReportContent() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               {domainAverages.length > 0 && (
                 <div className="w-full min-w-[280px] max-w-[320px] shrink-0 ml-0 sm:ml-[1cm] print:ml-[1cm] overflow-visible pr-2">
-                  <ResponsiveContainer width="100%" height={220}>
-                    {radarCompareData && preResult && postResult ? (
-                      <RadarChart data={radarCompareData} outerRadius="62%" margin={{ top: 24, right: 80, bottom: 24, left: 36 }}>
-                        <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis dataKey="name" tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} />
-                        <Radar name="사전" dataKey="사전" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.25} strokeWidth={1} />
-                        <Radar name="사후" dataKey="사후" stroke="#6366f1" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
-                      </RadarChart>
-                    ) : (
-                      <RadarChart data={domainAverages} outerRadius="62%" margin={{ top: 24, right: 80, bottom: 24, left: 36 }}>
-                        <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis dataKey="name" tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} />
-                        <Radar name="역량" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
-                      </RadarChart>
-                    )}
-                  </ResponsiveContainer>
+                  <ReflectionRadarCharts
+                    radarCompareData={radarCompareData ?? null}
+                    domainAverages={domainAverages}
+                    hasPrePost={!!(radarCompareData && preResult && postResult)}
+                  />
                   {radarCompareData && preResult && postResult && (
                     <div className="-mt-[7mm] flex justify-center gap-6 text-xs text-slate-600">
                       <span className="inline-flex items-center gap-1.5">

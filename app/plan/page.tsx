@@ -42,13 +42,12 @@ import {
   MessageCircle,
   ClipboardList,
 } from "lucide-react";
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
-  ResponsiveContainer,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+const PlanRadarChart = dynamic(
+  () => import("@/components/charts/PlanRadarChart"),
+  { ssr: false }
+);
 
 type TrainingPlanRow = {
   id: string;
@@ -1373,77 +1372,19 @@ export default function PlanPage() {
                 </div>
                 </div>
 
-                {/* 방사형 그래프 */}
+                {/* 방사형 그래프 (Recharts lazy) */}
                 <div className="rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-1 flex items-center justify-center">
                 <div className="h-44 w-full">
-                  {(() => {
-                    const radarData = [
+                  <PlanRadarChart
+                    data={[
                       { name: "수업 설계·운영", score: diagnosisSummary.domain1 },
                       { name: "학생 이해·생활지도", score: diagnosisSummary.domain2 },
                       { name: "평가·피드백", score: diagnosisSummary.domain3 },
                       { name: "학급경영·안전", score: diagnosisSummary.domain4 },
                       { name: "전문성 개발·성찰", score: diagnosisSummary.domain5 },
                       { name: "소통·협력 및 포용", score: diagnosisSummary.domain6 },
-                    ];
-                    const sorted = [...radarData].sort((a, b) => b.score - a.score);
-                    const strengthNames = new Set(sorted.slice(0, 3).map((d) => d.name));
-                    const weaknessNames = new Set(sorted.slice(-3).map((d) => d.name));
-                    return (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart outerRadius="64%" data={radarData}>
-                      <PolarGrid stroke="#e5e7eb" />
-                      <PolarAngleAxis
-                        dataKey="name"
-                        tick={(props) => {
-                          const p = props as { x?: number; y?: number; cx?: number; cy?: number; payload?: { value?: string } };
-                          const { x, y, cx, cy, payload } = p;
-                          const pushOut = 1.25;
-                          const numX = typeof x === "number" ? x : 0;
-                          const numY = typeof y === "number" ? y : 0;
-                          const dx = numX - (cx ?? numX);
-                          const dy = numY - (cy ?? numY);
-                          const outX = (cx ?? numX) + dx * pushOut;
-                          const outY = (cy ?? numY) + dy * pushOut;
-                          const name = payload?.value ?? "";
-                          const isStrength = strengthNames.has(name);
-                          const isWeakness = weaknessNames.has(name);
-                          const color = isStrength ? "#1d4ed8" : isWeakness ? "#c2410c" : "#6b7280";
-                          return (
-                            <g transform={`translate(${outX}, ${outY})`}>
-                              <foreignObject
-                                x={-48}
-                                y={-8}
-                                width={96}
-                                height={20}
-                                style={{ overflow: "visible" }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    color,
-                                    fontWeight: 700,
-                                    textAlign: "center",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {name}
-                                </div>
-                              </foreignObject>
-                            </g>
-                          );
-                        }}
-                      />
-                      <Radar
-                        name="역량 진단"
-                        dataKey="score"
-                        stroke="#6366f1"
-                        fill="#6366f1"
-                        fillOpacity={0.35}
-                      />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                    );
-                  })()}
+                    ]}
+                  />
                 </div>
                 </div>
               </div>

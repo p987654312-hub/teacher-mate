@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, startTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -21,6 +21,7 @@ import {
   getDifficultyStars,
   getRelativeDifficultyStars,
 } from "@/lib/mileageDifficulty";
+import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
 import {
   ClipboardCheck,
   Flag,
@@ -34,17 +35,19 @@ import {
   Minimize2,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
 } from "recharts";
 import { Progress } from "@/components/ui/progress";
+
+const DashboardDiagnosisRadar = dynamic(
+  () => import("@/components/charts/DashboardDiagnosisRadar"),
+  { ssr: false }
+);
 
 type PlanRow = {
   development_goal?: string | null;
@@ -130,6 +133,8 @@ export default function DashboardPage() {
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
   const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("createdAt");
+  const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(20);
+  const TEACHER_PAGE_SIZE = 20;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [teachersError, setTeachersError] = useState<string | null>(null);
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
@@ -159,6 +164,13 @@ export default function DashboardPage() {
   const [showMileageDetail, setShowMileageDetail] = useState(false);
   const [reflectionDone, setReflectionDone] = useState(false);
   const [showPointSettings, setShowPointSettings] = useState(false);
+  const [showDiagnosisSettings, setShowDiagnosisSettings] = useState(false);
+  const [diagnosisTitle, setDiagnosisTitle] = useState("");
+  const [diagnosisTitleSaved, setDiagnosisTitleSaved] = useState("");
+  const [diagnosisDomains, setDiagnosisDomains] = useState<DiagnosisDomainConfig[]>(() => [...DEFAULT_DIAGNOSIS_DOMAINS]);
+  const [diagnosisDomainsSaved, setDiagnosisDomainsSaved] = useState<DiagnosisDomainConfig[]>(() => [...DEFAULT_DIAGNOSIS_DOMAINS]);
+  const [diagnosisRadarLabels, setDiagnosisRadarLabels] = useState<string[]>(() => DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
+  const [savingDiagnosisSettings, setSavingDiagnosisSettings] = useState(false);
   const [planMissingGoals, setPlanMissingGoals] = useState<string[]>([]); // 계획서 누락된 연간 목표
   const [pointSettings, setPointSettings] = useState<Record<string, number>>({
     training: 1,
@@ -256,171 +268,116 @@ export default function DashboardPage() {
       setCurrentUserEmail(user.email ?? null);
       setIsChecking(false);
 
-      // 교사용 진단 결과 요약 불러오기 (관리자도 교원 권한을 가지므로 포함)
+      // 관리자: 교원 목록은 교사용 데이터와 병렬 요청 (체감 속도 개선)
+      const adminTeachersPromise =
+        role === "admin" && schoolName
+          ? fetch("/api/admin/teacher-summaries", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ schoolName }),
+            }).then(async (res) => ({ ok: res.ok, json: await res.json() }))
+          : null;
+
+      // 교사용: 초기 로드 시 병렬 요청으로 체감 속도 개선 (getSession 1회, DB/API 병렬)
       if ((role === "teacher" || role === "admin") && user.email) {
         try {
           setIsLoadingDiagnosis(true);
-          const { data, error } = await supabase
-            .from("diagnosis_results")
-            .select("domain1,domain2,domain3,domain4,domain5,domain6,total_score")
-            .eq("user_email", user.email)
-            .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token ?? null;
 
-          if (error) {
-            console.error("Error fetching diagnosis summary:", error);
-          } else if (data) {
-            // 각 영역의 평균 점수 계산 (각 영역당 5문항, 10점 척도이므로 5로 나눔)
-            const domain1Avg = ((data.domain1 as number) ?? 0) / 5;
-            const domain2Avg = ((data.domain2 as number) ?? 0) / 5;
-            const domain3Avg = ((data.domain3 as number) ?? 0) / 5;
-            const domain4Avg = ((data.domain4 as number) ?? 0) / 5;
-            const domain5Avg = ((data.domain5 as number) ?? 0) / 5;
-            const domain6Avg = ((data.domain6 as number) ?? 0) / 5;
+          const [preRes, postRes, planRes, mileageRes, catRes, diagnosisSettingsRes, diffRes, pointsRes] = await Promise.all([
+            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,total_score").eq("user_email", user.email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("diagnosis_results").select("id").eq("user_email", user.email).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("development_plans").select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal").eq("user_email", user.email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("mileage_entries").select("id, content, category").eq("user_email", user.email),
+            token ? fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : { categories: null }).catch(() => ({ categories: null })) : Promise.resolve({ categories: null }),
+            token ? fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : Promise.resolve({}),
+            token ? fetch("/api/mileage-relative-difficulty", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
+            token ? fetch("/api/points/me", { headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
+          ]);
 
+          const data = preRes.data;
+          const { data: planRow } = planRes;
+          const mileageRows = mileageRes.data ?? [];
+          const catJson = catRes as { categories?: CategoryConfigItem[] };
+
+          if (!preRes.error && data) {
             setDiagnosisSummary({
-              domain1: domain1Avg,
-              domain2: domain2Avg,
-              domain3: domain3Avg,
-              domain4: domain4Avg,
-              domain5: domain5Avg,
-              domain6: domain6Avg,
+              domain1: ((data.domain1 as number) ?? 0) / 5,
+              domain2: ((data.domain2 as number) ?? 0) / 5,
+              domain3: ((data.domain3 as number) ?? 0) / 5,
+              domain4: ((data.domain4 as number) ?? 0) / 5,
+              domain5: ((data.domain5 as number) ?? 0) / 5,
+              domain6: ((data.domain6 as number) ?? 0) / 5,
               totalScore: (data.total_score as number) ?? 0,
             });
           }
+          setHasPostDiagnosis(!!postRes.data);
 
-          // 사후 진단 실시 여부
-          const { data: postData } = await supabase
-            .from("diagnosis_results")
-            .select("id")
-            .eq("user_email", user.email)
-            .eq("diagnosis_type", "post")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          setHasPostDiagnosis(!!postData);
+          const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
+          if (Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6) {
+            setDiagnosisRadarLabels(
+              diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
+            );
+          }
 
-          // 계획서 저장 여부 확인: 빈칸 70% 이상 채워져야 실시완료
-          const { data: planRow } = await supabase
-            .from("development_plans")
-            .select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal")
-            .eq("user_email", user.email)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
           const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
           setPlanCompleted(planFilledRatio >= 0.7);
-
-          // 연간 목표량 검증 (초기 로드 시)
-          const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = {
-            training: "연수(직무·자율)",
-            class_open: "수업 공개",
-            community: "교원학습 공동체",
-            book_edutech: "전문 서적/에듀테크",
-            health: "건강/체력",
-            other: "기타 계획",
-          };
-          const missingItemsInit: string[] = [];
           const planGoalsRowInit = planRow as Record<string, string | null | undefined> | null | undefined;
+          const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "연수(직무·자율)", class_open: "수업 공개", community: "교원학습 공동체", book_edutech: "전문 서적/에듀테크", health: "건강/체력", other: "기타 계획" };
           const goalsInit = [
-            { key: "training", value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
-            { key: "class_open", value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
-            { key: "community", value: String(planGoalsRowInit?.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.community },
-            { key: "book_edutech", value: String(planGoalsRowInit?.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.book_edutech },
-            { key: "health", value: String(planGoalsRowInit?.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.health },
-            { key: "other", value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
+            { value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
+            { value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
+            { value: String(planGoalsRowInit?.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.community },
+            { value: String(planGoalsRowInit?.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.book_edutech },
+            { value: String(planGoalsRowInit?.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.health },
+            { value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
           ];
-          goalsInit.forEach((goal) => {
-            if (!goal.value) {
-              missingItemsInit.push(goal.label);
-            }
-          });
-          setPlanMissingGoals(missingItemsInit);
+          setPlanMissingGoals(goalsInit.filter((g) => !g.value).map((g) => g.label));
+          if (mileageRows.length > 0) setMileageStarted(true);
 
-          // 목적지 마일리지 요약: 목표 단위(시간/회/권/km/건) 기준 합산 진행률
-          const { data: mileageRows } = await supabase
-            .from("mileage_entries")
-            .select("id, content, category")
-            .eq("user_email", user.email);
-          // 마일리지 데이터가 있으면 무조건 실시중으로 표시
-          const hasMileageData = (mileageRows ?? []).length > 0;
-          if (hasMileageData) {
-            setMileageStarted(true);
-          }
-          // 첫 로드 시 관리자 설정 영역명을 먼저 불러와서 기본 영역명이 잠깐 보이는 현상 방지
           let categoriesForMileage: CategoryConfigItem[] | undefined;
-          const { data: { session: sessionForCategories } } = await supabase.auth.getSession();
-          if (sessionForCategories?.access_token) {
-            try {
-              const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${sessionForCategories.access_token}` } });
-              if (catRes.ok) {
-                const catJson = await catRes.json();
-                if (Array.isArray(catJson.categories) && catJson.categories.length === 6) {
-                  categoriesForMileage = catJson.categories as CategoryConfigItem[];
-                  setSchoolCategories(categoriesForMileage);
-                  if (schoolName) {
-                    localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(categoriesForMileage));
-                  }
-                }
-              }
-            } catch {
-              // ignore
-            }
+          if (Array.isArray(catJson.categories) && catJson.categories.length === 6) {
+            categoriesForMileage = catJson.categories;
+            setSchoolCategories(catJson.categories);
+            if (schoolName) localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(catJson.categories));
           }
-          // planGoalsRowInit은 위에서 이미 정의됨
+
           const planGoals: Record<string, number> = {};
           MILEAGE_CATEGORIES.forEach((c) => {
             const key = PLAN_GOAL_KEYS[c.key];
             const raw = String(planGoalsRowInit?.[key] ?? "").trim();
             planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
           });
-          // healthGoalUnit은 관리자 설정 단위를 우선 사용, 없으면 plan에서 가져옴
           let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
           if (categoriesForMileage?.length === 6) {
-            const healthCat = categoriesForMileage.find(c => c.key === "health");
-            if (healthCat?.unit === "km") {
-              healthGoalUnit = "거리";
-            } else if (healthCat?.unit === "시간") {
-              healthGoalUnit = "시간";
-            }
+            const healthCat = categoriesForMileage.find((c) => c.key === "health");
+            if (healthCat?.unit === "km") healthGoalUnit = "거리";
+            else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
           }
           const { categories, overallProgress } = computeMileageProgress(
-            (mileageRows ?? []) as { content: string; category: string }[],
+            mileageRows as { content: string; category: string }[],
             planGoals,
             healthGoalUnit,
             categoriesForMileage
           );
           setMileageSummary({ overallProgress, categories });
 
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token;
-          if (token) {
+          if (token && diffRes) {
             try {
-              const diffRes = await fetch("/api/mileage-relative-difficulty", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              });
-              if (diffRes.ok) {
-                const diff = await diffRes.json();
-                setRelativeDifficulty(diff);
-              }
+              if (diffRes.ok) setRelativeDifficulty(await diffRes.json());
+              else setRelativeDifficulty(null);
             } catch {
               setRelativeDifficulty(null);
             }
+          }
+          if (token && pointsRes) {
             try {
-              const pointsRes = await fetch("/api/points/me", { headers: { Authorization: `Bearer ${token}` } });
               if (pointsRes.ok) {
                 const pointsJ = await pointsRes.json();
                 if (typeof pointsJ.total === "number") {
                   setTotalPoints(pointsJ.total);
-                  setPointsDetail({
-                    base: pointsJ.base ?? 100,
-                    login: pointsJ.login ?? 0,
-                    mileage: pointsJ.mileage ?? 0,
-                    total: pointsJ.total,
-                  });
+                  setPointsDetail({ base: pointsJ.base ?? 100, login: pointsJ.login ?? 0, mileage: pointsJ.mileage ?? 0, total: pointsJ.total });
                   setMileagePointItems(Array.isArray(pointsJ.mileageBreakdown) ? pointsJ.mileageBreakdown : []);
                 }
               }
@@ -433,35 +390,24 @@ export default function DashboardPage() {
         }
       }
 
-      if (role === "admin" && schoolName) {
-        try {
-          setIsLoadingTeachers(true);
-          setTeachersError(null);
-
-          const res = await fetch("/api/admin/teacher-summaries", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ schoolName }),
-          });
-
-          const json = await res.json();
-
-          if (!res.ok) {
-            throw new Error(json.error || "교원 목록을 불러오지 못했습니다.");
-          }
-
-          setTeacherSummaries(json.teachers ?? []);
-        } catch (error) {
-          console.error(error);
-          setTeachersError(
-            error instanceof Error
-              ? error.message
-              : "교원 목록을 불러오지 못했습니다."
-          );
-          setTeacherSummaries([]);
-        } finally {
-          setIsLoadingTeachers(false);
-        }
+      if (adminTeachersPromise) {
+        setIsLoadingTeachers(true);
+        setTeachersError(null);
+        adminTeachersPromise
+          .then(({ ok, json }: { ok: boolean; json: { error?: string; teachers?: typeof teacherSummaries } }) => {
+            if (!ok) throw new Error(json.error || "교원 목록을 불러오지 못했습니다.");
+            setTeacherSummaries(Array.isArray(json.teachers) ? json.teachers : []);
+          })
+          .catch((error) => {
+            console.error(error);
+            setTeachersError(
+              error instanceof Error
+                ? error.message
+                : "교원 목록을 불러오지 못했습니다."
+            );
+            setTeacherSummaries([]);
+          })
+          .finally(() => setIsLoadingTeachers(false));
       }
     };
 
@@ -535,13 +481,14 @@ export default function DashboardPage() {
         }
       }
     };
-    
-    loadSchoolCategories();
-    
-    // 5초마다 다시 로드하여 실시간 반영
-    const interval = setInterval(loadSchoolCategories, 5000);
-    
-    return () => clearInterval(interval);
+
+    // 초기 데이터는 checkSession에서 이미 로드하므로, 즉시 재요청 대신 15초 후·이후 60초마다 재조회 (가벼운 폴링)
+    const timeout = setTimeout(loadSchoolCategories, 15000);
+    const interval = setInterval(loadSchoolCategories, 60000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [userSchool, currentUserEmail]);
 
   // 관리자: 포인트·영역 설정 열었을 때 API에서 로드 (없으면 localStorage fallback)
@@ -612,21 +559,47 @@ export default function DashboardPage() {
     load();
   }, [showPointSettings, userRole, userSchool]);
 
+  // 관리자: 사전/사후검사 설정 열었을 때 API에서 로드
+  useEffect(() => {
+    if (!showDiagnosisSettings || !showAdminView || !userSchool) return;
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      try {
+        const res = await fetch("/api/admin/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const j = await res.json();
+          if (Array.isArray(j.domains) && j.domains.length === 6) {
+            setDiagnosisDomains(j.domains);
+            setDiagnosisDomainsSaved(j.domains);
+          }
+          setDiagnosisTitle(typeof j.title === "string" ? j.title : "");
+          setDiagnosisTitleSaved(typeof j.title === "string" ? j.title : "");
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load();
+  }, [showDiagnosisSettings, showAdminView, userSchool]);
+
   // 외부 클릭 시 설정 닫기
   const settingsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showPointSettings && settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+      if ((showPointSettings || showDiagnosisSettings) && settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
         setShowPointSettings(false);
+        setShowDiagnosisSettings(false);
       }
     };
-    if (showPointSettings) {
+    if (showPointSettings || showDiagnosisSettings) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showPointSettings]);
+  }, [showPointSettings, showDiagnosisSettings]);
 
   const savePointAndCategorySettings = async (overrides?: { settings?: Record<string, number>; categories?: CategoryConfigItem[] }) => {
     const settings = overrides?.settings ?? pointSettings;
@@ -1074,50 +1047,16 @@ export default function DashboardPage() {
                       시작해 보세요.
                     </p>
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart
-                        outerRadius="84%"
-                        data={[
-                          {
-                            name: "수업 설계·운영",
-                            score: diagnosisSummary.domain1,
-                          },
-                          {
-                            name: "학생 이해·생활지도",
-                            score: diagnosisSummary.domain2,
-                          },
-                          {
-                            name: "평가·피드백",
-                            score: diagnosisSummary.domain3,
-                          },
-                          {
-                            name: "학급경영·안전",
-                            score: diagnosisSummary.domain4,
-                          },
-                          {
-                            name: "전문성 개발·성찰",
-                            score: diagnosisSummary.domain5,
-                          },
-                          {
-                            name: "소통·협력 및 포용",
-                            score: diagnosisSummary.domain6,
-                          },
-                        ]}
-                      >
-                        <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis
-                          dataKey="name"
-                          tick={{ fill: "#6b7280", fontSize: 11 }}
-                        />
-                        <Radar
-                          name="역량 진단"
-                          dataKey="score"
-                          stroke="#6366f1"
-                          fill="#6366f1"
-                          fillOpacity={0.35}
-                        />
-                      </RadarChart>
-                    </ResponsiveContainer>
+                    <DashboardDiagnosisRadar
+                      data={[
+                        { name: diagnosisRadarLabels[0], score: diagnosisSummary.domain1 },
+                        { name: diagnosisRadarLabels[1], score: diagnosisSummary.domain2 },
+                        { name: diagnosisRadarLabels[2], score: diagnosisSummary.domain3 },
+                        { name: diagnosisRadarLabels[3], score: diagnosisSummary.domain4 },
+                        { name: diagnosisRadarLabels[4], score: diagnosisSummary.domain5 },
+                        { name: diagnosisRadarLabels[5], score: diagnosisSummary.domain6 },
+                      ]}
+                    />
                   )}
                 </div>
 
@@ -1562,11 +1501,29 @@ export default function DashboardPage() {
                         variant="outline"
                         size="sm"
                         className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
-                        onClick={() => setShowPointSettings((v) => !v)}
+                        onClick={() => {
+                          setShowDiagnosisSettings(false);
+                          setShowPointSettings((v) => !v);
+                        }}
                       >
                         <span className="inline-flex items-center gap-1.5">
                           <Settings className="h-3.5 w-3.5" />
                           설정 (영역 / 포인트&마일리지)
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
+                        onClick={() => {
+                          setShowPointSettings(false);
+                          setShowDiagnosisSettings((v) => !v);
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <ClipboardCheck className="h-3.5 w-3.5" />
+                          사전/사후검사 설정
                         </span>
                       </Button>
                     </div>
@@ -1586,8 +1543,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {showAdminView && showPointSettings && (
+              {showAdminView && (showPointSettings || showDiagnosisSettings) && (
                 <div ref={settingsRef} className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                  {showPointSettings && (
+                  <>
                   {/* 1) 교사 활동 영역(6가지) 설정: 영역명/단위 */}
                   <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-4 shadow-sm">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -1826,6 +1785,115 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </Card>
+                  </>
+                  )}
+                  {showDiagnosisSettings && (
+                  <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-4 shadow-sm">
+                    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">사전/사후검사 설정</p>
+                        <p className="mt-0.5 text-xs text-slate-500">검사 제목과 6개 역량·역량당 5문항을 수정합니다. (저장 버튼을 눌러 반영)</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          disabled={savingDiagnosisSettings || (diagnosisTitle === diagnosisTitleSaved && JSON.stringify(diagnosisDomains) === JSON.stringify(diagnosisDomainsSaved))}
+                          onClick={async () => {
+                            if (diagnosisTitle === diagnosisTitleSaved && JSON.stringify(diagnosisDomains) === JSON.stringify(diagnosisDomainsSaved)) return;
+                            const domainsChanged = JSON.stringify(diagnosisDomains) !== JSON.stringify(diagnosisDomainsSaved);
+                            if (domainsChanged && !confirm("구성원들의 기존 검사결과에 심각한 오류가 발생할 수 있습니다. 그래도 저장하시겠습니까?")) return;
+                            setSavingDiagnosisSettings(true);
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const token = session?.access_token;
+                              if (!token) return;
+                              const res = await fetch("/api/admin/diagnosis-settings", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ title: diagnosisTitle, domains: diagnosisDomains }),
+                              });
+                              if (!res.ok) {
+                                const j = await res.json().catch(() => ({}));
+                                alert(j.error || "저장에 실패했습니다.");
+                                return;
+                              }
+                              setDiagnosisTitleSaved(diagnosisTitle);
+                              setDiagnosisDomainsSaved(diagnosisDomains);
+                              setShowDiagnosisSettings(false);
+                            } finally {
+                              setSavingDiagnosisSettings(false);
+                            }
+                          }}
+                        >
+                          {savingDiagnosisSettings ? "저장 중..." : "저장"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          onClick={() => setShowDiagnosisSettings(false)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      <div className="rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
+                        <p className="mb-2 text-xs font-semibold text-slate-600">검사 제목 작성</p>
+                        <Input
+                          className="border-violet-200/60 bg-white text-slate-800 placeholder:text-slate-400 focus-visible:ring-violet-300"
+                          value={diagnosisTitle}
+                          onChange={(e) => setDiagnosisTitle(e.target.value)}
+                          placeholder="예: 나의 교원 역량 진단"
+                        />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-600">6개의 역량 및 하위 문항 5가지 작성</p>
+                      {diagnosisDomains.map((domain, di) => (
+                        <div key={di} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="shrink-0 text-xs font-semibold text-slate-500 w-14">역량 {di + 1} :</span>
+                            <Input
+                              className="min-w-0 flex-1 border-amber-200/80 bg-amber-50/50 font-medium text-slate-800 placeholder:text-slate-400 focus-visible:ring-amber-300"
+                              value={domain.name}
+                              onChange={(e) => {
+                                const next = diagnosisDomains.map((d, i) =>
+                                  i === di ? { ...d, name: e.target.value } : d
+                                );
+                                setDiagnosisDomains(next);
+                              }}
+                              placeholder="역량 영역명"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            {(domain.items ?? []).slice(0, 5).map((item, ii) => (
+                              <div key={ii} className="flex items-center gap-2">
+                                <span className="shrink-0 text-xs font-medium text-slate-400 w-14">문항 {ii + 1} :</span>
+                                <Input
+                                  className="min-w-0 flex-1 text-xs"
+                                  value={item}
+                                  onChange={(e) => {
+                                    const items = [...(domain.items ?? [])];
+                                    while (items.length < 5) items.push("");
+                                    items[ii] = e.target.value;
+                                    const next = diagnosisDomains.map((d, i) =>
+                                      i === di ? { ...d, items } : d
+                                    );
+                                    setDiagnosisDomains(next);
+                                  }}
+                                  placeholder={`문항 ${ii + 1} 입력`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                  )}
                 </div>
               )}
 
@@ -1847,6 +1915,7 @@ export default function DashboardPage() {
                       }
                       return (a.gradeClass || "").localeCompare(b.gradeClass || "", "ko");
                     })
+                    .slice(0, teacherDisplayLimit)
                     .map((t) => {
                       const expanded = !!expandedTeacherCards[t.id];
                       return (
@@ -2101,6 +2170,19 @@ export default function DashboardPage() {
                       </Card>
                     );
                     })}
+                  {teacherSummaries.length > teacherDisplayLimit && (
+                    <div className="py-3 text-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => setTeacherDisplayLimit((prev) => prev + TEACHER_PAGE_SIZE)}
+                      >
+                        더 보기 ({Math.min(TEACHER_PAGE_SIZE, teacherSummaries.length - teacherDisplayLimit)}명)
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

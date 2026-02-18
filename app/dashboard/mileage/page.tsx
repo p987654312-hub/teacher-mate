@@ -212,7 +212,7 @@ export default function MileagePage() {
   const [editDailyContent, setEditDailyContent] = useState<string>("");
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 5000);
+    const id = setInterval(() => setTick((t) => t + 1), 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -357,11 +357,9 @@ export default function MileagePage() {
       }
     };
     
-    // 초기 로드
     reloadSchoolCategories();
-    
-    // 2초마다 다시 로드하여 실시간 반영 (더 빠른 반영)
-    const interval = setInterval(reloadSchoolCategories, 2000);
+    // 60초마다 재조회 (가벼운 폴링, 관리자 설정 변경 반영)
+    const interval = setInterval(reloadSchoolCategories, 60000);
     
     // storage 이벤트 리스너 추가 (다른 탭에서 저장한 경우 즉시 반영)
     const handleStorageChange = (e: StorageEvent) => {
@@ -722,8 +720,8 @@ export default function MileagePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white px-4 py-4">
-      <div className="mx-auto flex min-h-0 flex-1 flex-col gap-3" style={{ width: '60vw', maxWidth: '60vw' }}>
+    <div className="flex min-h-screen flex-col bg-white px-3 py-4 sm:px-4">
+      <div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 md:w-[60vw] md:max-w-[60vw]">
         <header className="flex items-center gap-4">
           <Link
             href="/dashboard"
@@ -787,11 +785,9 @@ export default function MileagePage() {
             </div>
           </div>
 
-          {/* 날짜 선택:
-              - AI 어시스트 ON이면 날짜 아이콘 숨김
-              - 활동기록(수동) / 일일성찰은 날짜를 먼저 선택해야 입력 가능 */}
+          {/* 날짜 선택: AI 어시스트가 꺼져 있을 때만 표시 (활동기록 + 일일성찰 공통) */}
           <div className="mt-2 mb-[-4mm] flex items-start gap-2 w-full overflow-hidden" style={{ width: '100%', maxWidth: '100%' }}>
-            {!aiAssistOn && !dailyReflectionOn && (
+            {!aiAssistOn && (
               <div className="shrink-0 flex flex-col items-center gap-0.5" style={{ flexShrink: 0 }}>
                 <button
                   type="button"
@@ -816,9 +812,9 @@ export default function MileagePage() {
                 >
                   <Calendar className="h-4 w-4" />
                 </button>
-                {dailyReflectionOn && dailyReflectionDate ? (
+                {(dailyReflectionOn ? dailyReflectionDate : addDate) ? (
                   <span className="text-[10px] font-medium text-slate-600 whitespace-nowrap leading-tight">
-                    {formatYyMmDdWithWeekday(dailyReflectionDate)}
+                    {formatYyMmDdWithWeekday(dailyReflectionOn ? dailyReflectionDate : addDate)}
                   </span>
                 ) : null}
                 <input
@@ -894,9 +890,8 @@ export default function MileagePage() {
                         el.click();
                       }}
                       className="absolute inset-0 flex items-center justify-center rounded-lg text-xs font-semibold text-slate-500"
-                    >
-                      날짜를 먼저 선택해 주세요
-                    </button>
+                      aria-label="날짜 선택"
+                    />
                   )}
                 </div>
               );
