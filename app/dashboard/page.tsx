@@ -291,7 +291,7 @@ export default function DashboardPage() {
             supabase.from("development_plans").select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal").eq("user_email", user.email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
             supabase.from("mileage_entries").select("id, content, category").eq("user_email", user.email),
             token ? fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : { categories: null }).catch(() => ({ categories: null })) : Promise.resolve({ categories: null }),
-            token ? fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : Promise.resolve({}),
+            token ? fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : Promise.resolve({}),
             token ? fetch("/api/mileage-relative-difficulty", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
             token ? fetch("/api/points/me", { headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
           ]);
@@ -301,67 +301,69 @@ export default function DashboardPage() {
           const mileageRows = mileageRes.data ?? [];
           const catJson = catRes as { categories?: CategoryConfigItem[] };
 
-          if (!preRes.error && data) {
-            setDiagnosisSummary({
-              domain1: ((data.domain1 as number) ?? 0) / 5,
-              domain2: ((data.domain2 as number) ?? 0) / 5,
-              domain3: ((data.domain3 as number) ?? 0) / 5,
-              domain4: ((data.domain4 as number) ?? 0) / 5,
-              domain5: ((data.domain5 as number) ?? 0) / 5,
-              domain6: ((data.domain6 as number) ?? 0) / 5,
-              totalScore: (data.total_score as number) ?? 0,
+          startTransition(() => {
+            if (!preRes.error && data) {
+              setDiagnosisSummary({
+                domain1: ((data.domain1 as number) ?? 0) / 5,
+                domain2: ((data.domain2 as number) ?? 0) / 5,
+                domain3: ((data.domain3 as number) ?? 0) / 5,
+                domain4: ((data.domain4 as number) ?? 0) / 5,
+                domain5: ((data.domain5 as number) ?? 0) / 5,
+                domain6: ((data.domain6 as number) ?? 0) / 5,
+                totalScore: (data.total_score as number) ?? 0,
+              });
+            }
+            setHasPostDiagnosis(!!postRes.data);
+
+            const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
+            if (Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6) {
+              setDiagnosisRadarLabels(
+                diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
+              );
+            }
+
+            const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
+            setPlanCompleted(planFilledRatio >= 0.7);
+            const planGoalsRowInit = planRow as Record<string, string | null | undefined> | null | undefined;
+            const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "연수(직무·자율)", class_open: "수업 공개", community: "교원학습 공동체", book_edutech: "전문 서적/에듀테크", health: "건강/체력", other: "기타 계획" };
+            const goalsInit = [
+              { value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
+              { value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
+              { value: String(planGoalsRowInit?.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.community },
+              { value: String(planGoalsRowInit?.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.book_edutech },
+              { value: String(planGoalsRowInit?.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.health },
+              { value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
+            ];
+            setPlanMissingGoals(goalsInit.filter((g) => !g.value).map((g) => g.label));
+            if (mileageRows.length > 0) setMileageStarted(true);
+
+            let categoriesForMileage: CategoryConfigItem[] | undefined;
+            if (Array.isArray(catJson.categories) && catJson.categories.length === 6) {
+              categoriesForMileage = catJson.categories;
+              setSchoolCategories(catJson.categories);
+              if (schoolName) localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(catJson.categories));
+            }
+
+            const planGoals: Record<string, number> = {};
+            MILEAGE_CATEGORIES.forEach((c) => {
+              const key = PLAN_GOAL_KEYS[c.key];
+              const raw = String(planGoalsRowInit?.[key] ?? "").trim();
+              planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
             });
-          }
-          setHasPostDiagnosis(!!postRes.data);
-
-          const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
-          if (Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6) {
-            setDiagnosisRadarLabels(
-              diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
+            let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
+            if (categoriesForMileage?.length === 6) {
+              const healthCat = categoriesForMileage.find((c) => c.key === "health");
+              if (healthCat?.unit === "km") healthGoalUnit = "거리";
+              else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
+            }
+            const { categories, overallProgress } = computeMileageProgress(
+              mileageRows as { content: string; category: string }[],
+              planGoals,
+              healthGoalUnit,
+              categoriesForMileage
             );
-          }
-
-          const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
-          setPlanCompleted(planFilledRatio >= 0.7);
-          const planGoalsRowInit = planRow as Record<string, string | null | undefined> | null | undefined;
-          const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "연수(직무·자율)", class_open: "수업 공개", community: "교원학습 공동체", book_edutech: "전문 서적/에듀테크", health: "건강/체력", other: "기타 계획" };
-          const goalsInit = [
-            { value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
-            { value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
-            { value: String(planGoalsRowInit?.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.community },
-            { value: String(planGoalsRowInit?.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.book_edutech },
-            { value: String(planGoalsRowInit?.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.health },
-            { value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
-          ];
-          setPlanMissingGoals(goalsInit.filter((g) => !g.value).map((g) => g.label));
-          if (mileageRows.length > 0) setMileageStarted(true);
-
-          let categoriesForMileage: CategoryConfigItem[] | undefined;
-          if (Array.isArray(catJson.categories) && catJson.categories.length === 6) {
-            categoriesForMileage = catJson.categories;
-            setSchoolCategories(catJson.categories);
-            if (schoolName) localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(catJson.categories));
-          }
-
-          const planGoals: Record<string, number> = {};
-          MILEAGE_CATEGORIES.forEach((c) => {
-            const key = PLAN_GOAL_KEYS[c.key];
-            const raw = String(planGoalsRowInit?.[key] ?? "").trim();
-            planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
+            setMileageSummary({ overallProgress, categories });
           });
-          let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
-          if (categoriesForMileage?.length === 6) {
-            const healthCat = categoriesForMileage.find((c) => c.key === "health");
-            if (healthCat?.unit === "km") healthGoalUnit = "거리";
-            else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
-          }
-          const { categories, overallProgress } = computeMileageProgress(
-            mileageRows as { content: string; category: string }[],
-            planGoals,
-            healthGoalUnit,
-            categoriesForMileage
-          );
-          setMileageSummary({ overallProgress, categories });
 
           if (token && diffRes) {
             try {

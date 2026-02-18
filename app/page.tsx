@@ -34,6 +34,7 @@ export default function Home() {
   const [teacherBetaCode, setTeacherBetaCode] = useState("");
   const [saveEmail, setSaveEmail] = useState(true);
   const [saveAdminEmail, setSaveAdminEmail] = useState(true);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -66,6 +67,7 @@ export default function Home() {
       const adminEmailVal = localStorage.getItem("teacher_mate_admin_email");
       if (adminEmailVal) setAdminEmail(adminEmailVal);
     }
+    setKeepLoggedIn(localStorage.getItem("teacher-mate-remember") === "1");
   }, []);
 
   // 구글 로그인 처리
@@ -73,7 +75,9 @@ export default function Home() {
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("teacher-mate-remember", keepLoggedIn ? "1" : "0");
+      }
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -422,6 +426,15 @@ export default function Home() {
                         <span className="bg-white px-2 text-slate-500">또는</span>
                       </div>
                     </div>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={keepLoggedIn}
+                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                      />
+                      <span>로그인 유지 (브라우저를 닫아도 로그인 상태 유지)</span>
+                    </label>
                     <Button
                       type="button"
                       onClick={handleGoogleSignIn}

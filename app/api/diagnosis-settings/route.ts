@@ -27,7 +27,9 @@ export async function GET(req: Request) {
 
     const schoolName = (meta.schoolName ?? "").trim();
     if (!schoolName) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" });
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     const { data: row } = await supabase
@@ -37,20 +39,26 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     if (!row?.settings_json) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" });
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+        headers: { "Cache-Control": "no-store" },
+      });
     }
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(row.settings_json as string) as Record<string, unknown>;
-    } catch {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS });
-    }
+  } catch {
+    return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS }, { headers: { "Cache-Control": "no-store" } });
+  }
     if (!Array.isArray(parsed.diagnosisDomains) || parsed.diagnosisDomains.length !== 6) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" });
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+        headers: { "Cache-Control": "no-store" },
+      });
     }
     const domains = parsed.diagnosisDomains as { name: string; items: string[] }[];
     const title = typeof parsed.diagnosisTitle === "string" ? String(parsed.diagnosisTitle).trim() : "";
-    return NextResponse.json({ domains, title });
+    return NextResponse.json({ domains, title }, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   } catch (e) {
     console.error("diagnosis-settings GET:", e);
     return NextResponse.json({ error: "처리 중 오류가 발생했습니다." }, { status: 500 });

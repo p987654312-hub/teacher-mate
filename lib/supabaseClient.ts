@@ -1,5 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+const REMEMBER_KEY = "teacher-mate-remember";
+
 // 빌드 시 env가 없을 수 있어서, 실제 사용 시점에만 클라이언트 생성
 let cached: SupabaseClient | null = null;
 
@@ -13,7 +15,10 @@ function getSupabase(): SupabaseClient {
   cached = createClient(url, key, {
     auth: {
       ...(typeof window !== "undefined" && {
-        storage: window.sessionStorage,
+        storage:
+          window.localStorage.getItem(REMEMBER_KEY) === "1"
+            ? window.localStorage
+            : window.sessionStorage,
         storageKey: "teacher-mate-auth",
       }),
     },
@@ -21,7 +26,7 @@ function getSupabase(): SupabaseClient {
   return cached;
 }
 
-// sessionStorage 사용 → 브라우저/탭을 닫으면 로그인 해제됨
+// 로그인 유지 시 localStorage, 아니면 sessionStorage(탭 닫으면 로그아웃)
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) {
     return (getSupabase() as unknown as Record<string, unknown>)[prop as string];

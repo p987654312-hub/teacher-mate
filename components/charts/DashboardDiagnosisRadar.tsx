@@ -14,7 +14,7 @@ type Props = {
 
 export default function DashboardDiagnosisRadar({ data }: Props) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%" minHeight={176} minWidth={200}>
       <RadarChart outerRadius="84%" data={data}>
         <PolarGrid stroke="#e5e7eb" />
         <PolarAngleAxis

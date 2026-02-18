@@ -63,7 +63,7 @@ function DiagnosisContent() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       try {
-        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
         if (res.ok) {
           const j = await res.json();
           if (Array.isArray(j.domains) && j.domains.length === 6) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
+import { DEFAULT_DIAGNOSIS_DOMAINS } from "@/lib/diagnosisQuestions";
 import {
   Target,
   Calendar,
@@ -44,8 +45,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
-const PlanRadarChart = dynamic(
-  () => import("@/components/charts/PlanRadarChart"),
+const DashboardDiagnosisRadar = dynamic(
+  () => import("@/components/charts/DashboardDiagnosisRadar"),
   { ssr: false }
 );
 
@@ -549,6 +550,7 @@ export default function PlanPage() {
     domain5: number;
     domain6: number;
     createdAt: string;
+    labels: string[];
   } | null>(null);
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
 
@@ -579,6 +581,7 @@ export default function PlanPage() {
   ]);
   const [mentoringFeedback, setMentoringFeedback] = useState<string | null>(null);
   const [isMentoringLoading, setIsMentoringLoading] = useState(false);
+  const sessionTokenRef = useRef<string | null>(null);
 
   // 보호된 라우트: 교사만 접근 가능
   useEffect(() => {
@@ -607,35 +610,64 @@ export default function PlanPage() {
       setIsChecking(false);
 
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
+      sessionTokenRef.current = session?.access_token ?? null;
+      const token = session?.access_token ?? null;
+
+      // 병렬 로드: 카테고리 설정 + 진단(결과·역량명) + 계획서 한 번에
+      const email = user.email;
+      if (email && token) {
         try {
-          const res = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
-          if (res.ok) {
-            const j = await res.json();
-            if (Array.isArray(j.categories)) setSchoolCategories(j.categories);
+          const [catRes, preRes, diagnosisSettingsRes, planRes] = await Promise.all([
+            fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,created_at").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+            supabase.from("development_plans").select("*").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          ]);
+
+          const catJson = catRes as { categories?: { key: string; label: string; unit: string }[] };
+          if (Array.isArray(catJson.categories)) setSchoolCategories(catJson.categories);
+
+          const data = preRes.data;
+          const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
+          const labels: string[] =
+            Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6
+              ? diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
+              : DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name);
+          if (!preRes.error && data) {
+            const d1 = ((data.domain1 as number) ?? 0) / 5;
+            const d2 = ((data.domain2 as number) ?? 0) / 5;
+            const d3 = ((data.domain3 as number) ?? 0) / 5;
+            const d4 = ((data.domain4 as number) ?? 0) / 5;
+            const d5 = ((data.domain5 as number) ?? 0) / 5;
+            const d6 = ((data.domain6 as number) ?? 0) / 5;
+            const domainAverages = [
+              { label: labels[0], avg: d1 },
+              { label: labels[1], avg: d2 },
+              { label: labels[2], avg: d3 },
+              { label: labels[3], avg: d4 },
+              { label: labels[4], avg: d5 },
+              { label: labels[5], avg: d6 },
+            ];
+            const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
+            const strengths = sorted.slice(0, 3).map((x) => x.label);
+            const weaknesses = sorted.slice(-3).map((x) => x.label);
+            const date = new Date(data.created_at as string);
+            const formattedDate = `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+            setDiagnosisSummary({
+              strengths,
+              weaknesses,
+              domain1: d1,
+              domain2: d2,
+              domain3: d3,
+              domain4: d4,
+              domain5: d5,
+              domain6: d6,
+              createdAt: formattedDate,
+              labels,
+            });
           }
-        } catch {
-          // ignore
-        }
-      }
 
-      // AI 추천 사용 여부 (localStorage - 한번 받았으면 '다시 받기' 표시)
-      if (typeof window !== "undefined") {
-        setHasUsedAIGoal(localStorage.getItem("plan_ai_goal_used") === "true");
-        setHasUsedAIEffect(localStorage.getItem("plan_ai_effect_used") === "true");
-      }
-
-      // 최신 계획서 불러오기 (한번 쓰인 내용 다시 열어도 유지)
-      if (user.email) {
-        try {
-          const { data: planData } = await supabase
-            .from("development_plans")
-            .select("*")
-            .eq("user_email", user.email)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
+          const planData = planRes.data;
           if (planData) {
             setDevelopmentGoal((planData.development_goal as string) ?? "");
             setExpectedOutcome((planData.expected_outcome as string) ?? "");
@@ -664,96 +696,15 @@ export default function PlanPage() {
             if (Array.isArray(op) && op.length > 0) setOtherPlans(op);
           }
         } catch (e) {
-          console.error("Error loading latest plan:", e);
+          console.error("Error loading plan/diagnosis:", e);
         }
       }
 
-      // 진단 결과 가져오기
-      if (user.email) {
-        try {
-          const { data, error } = await supabase
-            .from("diagnosis_results")
-            .select("domain1,domain2,domain3,domain4,domain5,domain6,created_at")
-            .eq("user_email", user.email)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (!error && data) {
-            // 영역 이름 매핑
-            const domainLabels: Record<string, string> = {
-              domain1: "수업 설계·운영",
-              domain2: "학생 이해·생활지도",
-              domain3: "평가·피드백",
-              domain4: "학급경영·안전",
-              domain5: "전문성 개발·성찰",
-              domain6: "소통·협력 및 포용적 교육",
-            };
-
-            // 각 영역의 평균 점수 계산 (각 영역당 5문항이므로 5로 나눔)
-            const domainAverages = [
-              {
-                domain: "domain1",
-                label: domainLabels.domain1,
-                avg: ((data.domain1 as number) ?? 0) / 5,
-              },
-              {
-                domain: "domain2",
-                label: domainLabels.domain2,
-                avg: ((data.domain2 as number) ?? 0) / 5,
-              },
-              {
-                domain: "domain3",
-                label: domainLabels.domain3,
-                avg: ((data.domain3 as number) ?? 0) / 5,
-              },
-              {
-                domain: "domain4",
-                label: domainLabels.domain4,
-                avg: ((data.domain4 as number) ?? 0) / 5,
-              },
-              {
-                domain: "domain5",
-                label: domainLabels.domain5,
-                avg: ((data.domain5 as number) ?? 0) / 5,
-              },
-              {
-                domain: "domain6",
-                label: domainLabels.domain6,
-                avg: ((data.domain6 as number) ?? 0) / 5,
-              },
-            ];
-
-            // 평균 점수 기준으로 정렬
-            const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
-
-            // 상위 3개 (강점)
-            const strengths = sorted.slice(0, 3).map((item) => item.label);
-
-            // 하위 3개 (약점)
-            const weaknesses = sorted.slice(-3).map((item) => item.label);
-
-            // 날짜 포맷팅 (24.06.03 형태)
-            const createdAt = data.created_at as string;
-            const date = new Date(createdAt);
-            const formattedDate = `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-
-            setDiagnosisSummary({
-              strengths,
-              weaknesses,
-              domain1: domainAverages.find((d) => d.domain === "domain1")?.avg ?? 0,
-              domain2: domainAverages.find((d) => d.domain === "domain2")?.avg ?? 0,
-              domain3: domainAverages.find((d) => d.domain === "domain3")?.avg ?? 0,
-              domain4: domainAverages.find((d) => d.domain === "domain4")?.avg ?? 0,
-              domain5: domainAverages.find((d) => d.domain === "domain5")?.avg ?? 0,
-              domain6: domainAverages.find((d) => d.domain === "domain6")?.avg ?? 0,
-              createdAt: formattedDate,
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching diagnosis summary:", error);
-        }
+      if (typeof window !== "undefined") {
+        setHasUsedAIGoal(localStorage.getItem("plan_ai_goal_used") === "true");
+        setHasUsedAIEffect(localStorage.getItem("plan_ai_effect_used") === "true");
       }
+
     };
 
     checkSession();
@@ -1372,17 +1323,17 @@ export default function PlanPage() {
                 </div>
                 </div>
 
-                {/* 방사형 그래프 (Recharts lazy) */}
-                <div className="rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-1 flex items-center justify-center">
-                <div className="h-44 w-full">
-                  <PlanRadarChart
+                {/* 방사형 그래프 — 대시보드 사전진단 카드와 동일 컴포넌트·동일 데이터 소스 */}
+                <div className="rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-1 flex items-center justify-center min-h-[11rem] min-w-[200px]">
+                <div className="h-44 w-full min-h-[176px] min-w-[200px]">
+                  <DashboardDiagnosisRadar
                     data={[
-                      { name: "수업 설계·운영", score: diagnosisSummary.domain1 },
-                      { name: "학생 이해·생활지도", score: diagnosisSummary.domain2 },
-                      { name: "평가·피드백", score: diagnosisSummary.domain3 },
-                      { name: "학급경영·안전", score: diagnosisSummary.domain4 },
-                      { name: "전문성 개발·성찰", score: diagnosisSummary.domain5 },
-                      { name: "소통·협력 및 포용", score: diagnosisSummary.domain6 },
+                      { name: diagnosisSummary.labels[0], score: diagnosisSummary.domain1 },
+                      { name: diagnosisSummary.labels[1], score: diagnosisSummary.domain2 },
+                      { name: diagnosisSummary.labels[2], score: diagnosisSummary.domain3 },
+                      { name: diagnosisSummary.labels[3], score: diagnosisSummary.domain4 },
+                      { name: diagnosisSummary.labels[4], score: diagnosisSummary.domain5 },
+                      { name: diagnosisSummary.labels[5], score: diagnosisSummary.domain6 },
                     ]}
                   />
                 </div>

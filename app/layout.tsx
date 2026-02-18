@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NAVi로 찾아가는 목적지 | 교원성장메이트",
+  title: "NAVi로 찾아가는 목적지",
   description: "교사를 위한 맞춤형 역량 개발 서비스. 사전·사후 역량 진단, 자기역량개발계획, 목적지 마일리지, 성찰 기록장을 한곳에서 관리합니다.",
   icons: { icon: "/icon.png" },
 };

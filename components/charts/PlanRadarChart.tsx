@@ -18,7 +18,7 @@ export default function PlanRadarChart({ data }: Props) {
   const weaknessNames = new Set(sorted.slice(-3).map((d) => d.name));
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%" minHeight={176} minWidth={200}>
       <RadarChart outerRadius="64%" data={data}>
         <PolarGrid stroke="#e5e7eb" />
         <PolarAngleAxis

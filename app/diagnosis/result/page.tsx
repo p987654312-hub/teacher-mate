@@ -113,7 +113,7 @@ function DiagnosisResultContent() {
         let { data: { session } } = await supabase.auth.getSession();
         token = session?.access_token ?? null;
         if (!token) {
-          await new Promise((r) => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 50));
           await supabase.auth.refreshSession();
           const next = await supabase.auth.getSession();
           session = next.data.session;
@@ -303,7 +303,7 @@ function DiagnosisResultContent() {
         return;
       }
       try {
-        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
         if (res.ok) {
           const j = await res.json();
           if (typeof j.title === "string" && j.title.trim()) setDiagnosisTitle(j.title.trim());
