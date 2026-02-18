@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { parseStored } from "@/app/api/points/school-settings/route";
 import { DEFAULT_DIAGNOSIS_DOMAINS } from "@/lib/diagnosisQuestions";
 
 function getSupabaseAdmin() {
@@ -33,8 +32,20 @@ export async function GET(req: Request) {
       .eq("school_name", schoolName)
       .maybeSingle();
 
-    const { diagnosis_domains } = parseStored(row);
-    return NextResponse.json({ domains: diagnosis_domains });
+    if (!row?.settings_json) {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS });
+    }
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(row.settings_json as string) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS });
+    }
+    if (!Array.isArray(parsed.diagnosisDomains) || parsed.diagnosisDomains.length !== 6) {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS });
+    }
+    const domains = parsed.diagnosisDomains as { name: string; items: string[] }[];
+    return NextResponse.json({ domains });
   } catch (e) {
     console.error("school-diagnosis-settings GET:", e);
     return NextResponse.json({ error: "처리 중 오류가 발생했습니다." }, { status: 500 });
