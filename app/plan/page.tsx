@@ -29,6 +29,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
 import { DEFAULT_DIAGNOSIS_DOMAINS } from "@/lib/diagnosisQuestions";
+import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
+import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import {
   Target,
   Calendar,
@@ -543,6 +545,8 @@ export default function PlanPage() {
   const [diagnosisSummary, setDiagnosisSummary] = useState<{
     strengths: string[];
     weaknesses: string[];
+    strengthsDetail: { label: string; domainKey: string; avg: number; subDomains: { name: string; avg: number }[] }[];
+    weaknessesDetail: { label: string; domainKey: string; avg: number; subDomains: { name: string; avg: number }[] }[];
     domain1: number;
     domain2: number;
     domain3: number;
@@ -619,7 +623,7 @@ export default function PlanPage() {
         try {
           const [catRes, preRes, diagnosisSettingsRes, planRes] = await Promise.all([
             fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
-            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,created_at").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,created_at,raw_answers,category_scores").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
             fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
             supabase.from("development_plans").select("*").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           ]);
@@ -629,33 +633,72 @@ export default function PlanPage() {
 
           const data = preRes.data;
           const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
+          const domainCount = Math.min(6, Math.max(2, Array.isArray(diagSettings?.domains) ? diagSettings.domains.length : 6));
           const labels: string[] =
-            Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6
+            Array.isArray(diagSettings?.domains) && diagSettings.domains.length >= 2 && diagSettings.domains.length <= 6
               ? diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
               : DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name);
           if (!preRes.error && data) {
-            const d1 = ((data.domain1 as number) ?? 0) / 5;
-            const d2 = ((data.domain2 as number) ?? 0) / 5;
-            const d3 = ((data.domain3 as number) ?? 0) / 5;
-            const d4 = ((data.domain4 as number) ?? 0) / 5;
-            const d5 = ((data.domain5 as number) ?? 0) / 5;
-            const d6 = ((data.domain6 as number) ?? 0) / 5;
+            const cat = data.category_scores as Record<string, { count?: number }> | undefined;
+            const getCount = (key: string) => (cat?.[key]?.count ?? 5);
+            const avg = (key: string, val: number) => val / (getCount(key) || 1);
+            const d1 = avg("domain1", (data.domain1 as number) ?? 0);
+            const d2 = avg("domain2", (data.domain2 as number) ?? 0);
+            const d3 = avg("domain3", (data.domain3 as number) ?? 0);
+            const d4 = avg("domain4", (data.domain4 as number) ?? 0);
+            const d5 = domainCount >= 5 ? avg("domain5", (data.domain5 as number) ?? 0) : 0;
+            const d6 = domainCount >= 6 ? avg("domain6", (data.domain6 as number) ?? 0) : 0;
+            const domainKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
             const domainAverages = [
-              { label: labels[0], avg: d1 },
-              { label: labels[1], avg: d2 },
-              { label: labels[2], avg: d3 },
-              { label: labels[3], avg: d4 },
-              { label: labels[4], avg: d5 },
-              { label: labels[5], avg: d6 },
+              { label: labels[0], avg: d1, domainKey: domainKeys[0] },
+              { label: labels[1], avg: d2, domainKey: domainKeys[1] },
+              { label: labels[2], avg: d3, domainKey: domainKeys[2] },
+              { label: labels[3], avg: d4, domainKey: domainKeys[3] },
+              ...(domainCount >= 5 ? [{ label: labels[4], avg: d5, domainKey: domainKeys[4] as const }] : []),
+              ...(domainCount >= 6 ? [{ label: labels[5], avg: d6, domainKey: domainKeys[5] as const }] : []),
             ];
             const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
-            const strengths = sorted.slice(0, 3).map((x) => x.label);
-            const weaknesses = sorted.slice(-3).map((x) => x.label);
+            const strengthN = Math.ceil(domainCount / 2);
+            const weaknessN = domainCount - strengthN;
+            const strengths = sorted.slice(0, strengthN).map((x) => x.label);
+            const weaknesses = sorted.slice(-weaknessN).map((x) => x.label);
+
+            const survey = (diagSettings as { useSurvey?: boolean; survey?: DiagnosisSurvey })?.survey;
+            const rawFromDb = (data.raw_answers ?? {}) as Record<string, unknown>;
+            const rawAnswers: Record<string, number> = {};
+            for (const [k, v] of Object.entries(rawFromDb)) {
+              if (k === "_schema") continue;
+              const num = typeof v === "number" ? v : Number(v);
+              if (Number.isFinite(num) && num >= 1 && num <= 5) rawAnswers[String(k)] = num;
+            }
+            const subByDomain =
+              survey?.domains?.length && Array.isArray(survey.questions) && survey.questions.length > 0
+                ? computeSubDomainScores(survey, rawAnswers)
+                : null;
+            const strengthsDetail = sorted.slice(0, strengthN).map((x) => ({
+              label: x.label,
+              domainKey: x.domainKey,
+              avg: x.avg,
+              subDomains: subByDomain?.[x.domainKey]
+                ? [...subByDomain[x.domainKey]].sort((a, b) => b.avg - a.avg)
+                : [],
+            }));
+            const weaknessesDetail = [...sorted.slice(-weaknessN)].reverse().map((x) => ({
+              label: x.label,
+              domainKey: x.domainKey,
+              avg: x.avg,
+              subDomains: subByDomain?.[x.domainKey]
+                ? [...subByDomain[x.domainKey]].sort((a, b) => a.avg - b.avg)
+                : [],
+            }));
+
             const date = new Date(data.created_at as string);
             const formattedDate = `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
             setDiagnosisSummary({
               strengths,
               weaknesses,
+              strengthsDetail,
+              weaknessesDetail,
               domain1: d1,
               domain2: d2,
               domain3: d3,
@@ -950,7 +993,7 @@ export default function PlanPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data?.error || "AI 추천을 불러오는데 실패했습니다.");
+        alert(data?.code === "QUOTA_EXCEEDED" ? data.error : (data?.error || "AI 추천을 불러오는데 실패했습니다."));
         return;
       }
       const filled = (data.rows || []) as Record<string, string>[];
@@ -1068,12 +1111,8 @@ export default function PlanPage() {
       }
 
       if (!res.ok) {
-        const errorMessage = responseData?.error || `AI 추천 생성에 실패했습니다. (상태 코드: ${res.status})`;
-        console.error("API 응답 오류:", {
-          status: res.status,
-          statusText: res.statusText,
-          error: responseData,
-        });
+        const errorMessage = responseData?.code === "QUOTA_EXCEEDED" ? responseData.error : (responseData?.error || `AI 추천 생성에 실패했습니다. (상태 코드: ${res.status})`);
+        console.error("API 응답 오류:", { status: res.status, statusText: res.statusText, error: responseData });
         alert(errorMessage);
         return;
       }
@@ -1135,7 +1174,8 @@ export default function PlanPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "멘토링 요청에 실패했습니다.");
+        const msg = data?.code === "QUOTA_EXCEEDED" ? data.error : (data?.error || "멘토링 요청에 실패했습니다.");
+        throw new Error(msg);
       }
       const text = (data.recommendation ?? "").trim();
       setMentoringFeedback(text || "피드백을 생성하지 못했습니다.");
@@ -1268,73 +1308,67 @@ export default function PlanPage() {
                   [참고] 나의 역량 진단 결과는? ({diagnosisSummary.createdAt} 시행)
                 </h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* 강점 영역 */}
-                <div className="rounded-xl border-l-2 border-l-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 p-2.5">
-                <div className="mb-1.5 flex items-center gap-1.5">
-                  <div className="rounded-full bg-blue-500 p-1">
-                    <Target className="h-4 w-4 text-white" />
-                  </div>
-                  <h3 className="text-[15px] font-semibold text-blue-700">
-                    강점 영역 (상위 3)
-                  </h3>
-                </div>
-                <div className="space-y-1">
-                  {diagnosisSummary.strengths.map((strength, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-1.5 rounded-md bg-white/80 px-2 py-1 shadow-sm"
-                    >
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-[13px] font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <span className="text-[15px] leading-tight" style={{ color: "#1d4ed8", fontWeight: 700 }}>
-                        {strength}
-                      </span>
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_2fr_4fr] gap-3">
+                {/* 강점 영역: 2/7 너비 */}
+                <div className="rounded-xl border-l-2 border-l-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 p-2.5 min-w-0">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <div className="rounded-full bg-blue-500 p-1 shrink-0">
+                      <Target className="h-4 w-4 text-white" />
                     </div>
-                  ))}
+                    <h3 className="text-[15px] font-semibold text-blue-700 shrink-0">강점 영역</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {(diagnosisSummary.strengthsDetail ?? diagnosisSummary.strengths.map((label, i) => ({ label, domainKey: `domain${i + 1}`, avg: 0, subDomains: [] as { name: string; avg: number }[] }))).map((item, index) => (
+                      <div key={item.domainKey ?? index} className="min-w-[120px] max-w-[220px] rounded-md bg-white/80 px-2 py-1 shadow-sm">
+                        <div className="text-[13px] font-bold text-blue-700 break-words" title={item.label}>{item.label}</div>
+                        {item.subDomains?.length ? (
+                          <ul className="mt-0.5 space-y-0.5 text-[12px] text-slate-600">
+                            {item.subDomains.map((s) => (
+                              <li key={s.name} className="break-words">{s.name} ({s.avg.toFixed(1)})</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-0.5 text-[12px] text-slate-500">평균 {item.avg.toFixed(1)}점</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-                {/* 개발 우선 영역 */}
-                <div className="rounded-xl border-l-2 border-l-orange-500 bg-gradient-to-br from-orange-50 to-red-50 p-2.5">
-                <div className="mb-1.5 flex items-center gap-1.5">
-                  <div className="rounded-full bg-orange-500 p-1">
-                    <Target className="h-4 w-4 text-white" />
-                  </div>
-                  <h3 className="text-[15px] font-semibold text-orange-700">
-                    개발 우선 영역 (하위 3)
-                  </h3>
-                </div>
-                <div className="space-y-1">
-                  {diagnosisSummary.weaknesses.map((weakness, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-1.5 rounded-md bg-white/80 px-2 py-1 shadow-sm"
-                    >
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-[13px] font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <span className="text-[15px] leading-tight" style={{ color: "#c2410c", fontWeight: 700 }}>
-                        {weakness}
-                      </span>
+                {/* 개발 우선 영역: 대영역 가로 나열, 아래 소영역(낮은 순) + 점수 */}
+                <div className="rounded-xl border-l-2 border-l-orange-500 bg-gradient-to-br from-orange-50 to-red-50 p-2.5 min-w-0">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <div className="rounded-full bg-orange-500 p-1 shrink-0">
+                      <Target className="h-4 w-4 text-white" />
                     </div>
-                  ))}
-                </div>
+                    <h3 className="text-[15px] font-semibold text-orange-700 shrink-0">개발 우선 영역</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {(diagnosisSummary.weaknessesDetail ?? diagnosisSummary.weaknesses.map((label, i) => ({ label, domainKey: `domain${i + 1}`, avg: 0, subDomains: [] as { name: string; avg: number }[] }))).map((item, index) => (
+                      <div key={item.domainKey ?? index} className="min-w-[120px] max-w-[220px] rounded-md bg-white/80 px-2 py-1 shadow-sm">
+                        <div className="text-[13px] font-bold text-orange-700 break-words" title={item.label}>{item.label}</div>
+                        {item.subDomains?.length ? (
+                          <ul className="mt-0.5 space-y-0.5 text-[12px] text-slate-600">
+                            {item.subDomains.map((s) => (
+                              <li key={s.name} className="break-words">{s.name} ({s.avg.toFixed(1)})</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-0.5 text-[12px] text-slate-500">평균 {item.avg.toFixed(1)}점</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* 방사형 그래프 — 대시보드 사전진단 카드와 동일 컴포넌트·동일 데이터 소스 */}
                 <div className="rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-1 flex items-center justify-center min-h-[11rem] min-w-[200px]">
                 <div className="h-44 w-full min-h-[176px] min-w-[200px]">
                   <DashboardDiagnosisRadar
-                    data={[
-                      { name: diagnosisSummary.labels[0], score: diagnosisSummary.domain1 },
-                      { name: diagnosisSummary.labels[1], score: diagnosisSummary.domain2 },
-                      { name: diagnosisSummary.labels[2], score: diagnosisSummary.domain3 },
-                      { name: diagnosisSummary.labels[3], score: diagnosisSummary.domain4 },
-                      { name: diagnosisSummary.labels[4], score: diagnosisSummary.domain5 },
-                      { name: diagnosisSummary.labels[5], score: diagnosisSummary.domain6 },
-                    ]}
+                    data={diagnosisSummary.labels.map((name, i) => ({
+                      name,
+                      score: [diagnosisSummary.domain1, diagnosisSummary.domain2, diagnosisSummary.domain3, diagnosisSummary.domain4, diagnosisSummary.domain5, diagnosisSummary.domain6][i] ?? 0,
+                    }))}
                   />
                 </div>
                 </div>

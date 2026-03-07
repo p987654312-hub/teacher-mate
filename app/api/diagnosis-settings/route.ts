@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { DEFAULT_DIAGNOSIS_DOMAINS } from "@/lib/diagnosisQuestions";
+import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,7 +10,7 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
-/** 로그인한 사용자 소속 학교의 사전/사후검사 문항 조회 (교사·관리자 공통) */
+/** 로그인한 사용자 소속 학교의 사전/사후검사 설정 조회. CSV 설문(diagnosisSurvey) 우선, 없으면 (양식)자기역량진단(신구).csv 기준 기본 6영역 */
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 
     const schoolName = (meta.schoolName ?? "").trim();
     if (!schoolName) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "", useSurvey: false }, {
         headers: { "Cache-Control": "no-store" },
       });
     }
@@ -39,24 +40,40 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     if (!row?.settings_json) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "", useSurvey: false }, {
         headers: { "Cache-Control": "no-store" },
       });
     }
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(row.settings_json as string) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS }, { headers: { "Cache-Control": "no-store" } });
-  }
+    } catch {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "", useSurvey: false }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    // CSV 업로드 설문(2~6대영역)이 있으면 우선 사용
+    const survey = parsed.diagnosisSurvey as DiagnosisSurvey | undefined;
+    const domainCount = survey?.domains?.length ?? 0;
+    if (domainCount >= 2 && domainCount <= 6 && Array.isArray(survey?.questions) && survey.questions.length > 0) {
+      const title = (survey.title ?? parsed.diagnosisTitle) as string;
+      const domains = survey.domains.map((d) => ({ name: d.name, items: [] }));
+      return NextResponse.json({
+        domains,
+        title: typeof title === "string" ? title.trim() : "",
+        useSurvey: true,
+        survey,
+      }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
+    }
+
+    // 기존 6역량 설정
     if (!Array.isArray(parsed.diagnosisDomains) || parsed.diagnosisDomains.length !== 6) {
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "" }, {
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, title: "", useSurvey: false }, {
         headers: { "Cache-Control": "no-store" },
       });
     }
     const domains = parsed.diagnosisDomains as { name: string; items: string[] }[];
     const title = typeof parsed.diagnosisTitle === "string" ? String(parsed.diagnosisTitle).trim() : "";
-    return NextResponse.json({ domains, title }, {
+    return NextResponse.json({ domains, title, useSurvey: false }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     });
   } catch (e) {

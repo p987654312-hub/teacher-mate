@@ -4,6 +4,7 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
+  PolarRadiusAxis,
   Radar,
   ResponsiveContainer,
 } from "recharts";
@@ -21,6 +22,7 @@ export default function DashboardDiagnosisRadar({ data }: Props) {
           dataKey="name"
           tick={{ fill: "#6b7280", fontSize: 11 }}
         />
+        <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} />
         <Radar
           name="역량 진단"
           dataKey="score"

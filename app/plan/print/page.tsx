@@ -5,16 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
+import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 
-const DOMAIN_LABELS: Record<string, string> = {
-  domain1: "수업 설계·운영",
-  domain2: "학생 이해·생활지도",
-  domain3: "평가·피드백",
-  domain4: "학급경영·안전",
-  domain5: "전문성 개발·성찰",
-  domain6: "소통·협력 및 포용",
+const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
+  domain1: "영역1",
+  domain2: "영역2",
+  domain3: "영역3",
+  domain4: "영역4",
+  domain5: "영역5",
+  domain6: "영역6",
 };
 
 type TrainingPlanRow = { id: string; name: string; period: string; duration: string; remarks: string };
@@ -43,6 +45,12 @@ type PlanData = {
 };
 
 type DiagnosisRow = { domain: string; label: string; avg: number };
+type DiagnosisSummaryDetail = {
+  strengths: string[];
+  weaknesses: string[];
+  strengthsDetail?: { label: string; subDomains: { name: string; avg: number }[] }[];
+  weaknessesDetail?: { label: string; subDomains: { name: string; avg: number }[] }[];
+};
 
 function PlanPrintContent() {
   const router = useRouter();
@@ -52,7 +60,7 @@ function PlanPrintContent() {
   const [userName, setUserName] = useState<string>("");
   const [userSchool, setUserSchool] = useState<string>("");
   const [plan, setPlan] = useState<PlanData | null>(null);
-  const [diagnosisSummary, setDiagnosisSummary] = useState<{ strengths: string[]; weaknesses: string[] } | null>(null);
+  const [diagnosisSummary, setDiagnosisSummary] = useState<DiagnosisSummaryDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -184,7 +192,7 @@ function PlanPrintContent() {
 
       const { data: diag } = await supabase
         .from("diagnosis_results")
-        .select("domain1,domain2,domain3,domain4,domain5,domain6")
+        .select("domain1,domain2,domain3,domain4,domain5,domain6,raw_answers,category_scores")
         .eq("user_email", targetEmail)
         .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
         .order("created_at", { ascending: false })
@@ -192,18 +200,76 @@ function PlanPrintContent() {
         .maybeSingle();
 
       if (diag) {
-        const rows: DiagnosisRow[] = [
-          { domain: "domain1", label: DOMAIN_LABELS.domain1, avg: ((diag.domain1 as number) ?? 0) / 5 },
-          { domain: "domain2", label: DOMAIN_LABELS.domain2, avg: ((diag.domain2 as number) ?? 0) / 5 },
-          { domain: "domain3", label: DOMAIN_LABELS.domain3, avg: ((diag.domain3 as number) ?? 0) / 5 },
-          { domain: "domain4", label: DOMAIN_LABELS.domain4, avg: ((diag.domain4 as number) ?? 0) / 5 },
-          { domain: "domain5", label: DOMAIN_LABELS.domain5, avg: ((diag.domain5 as number) ?? 0) / 5 },
-          { domain: "domain6", label: DOMAIN_LABELS.domain6, avg: ((diag.domain6 as number) ?? 0) / 5 },
-        ];
-        const sorted = [...rows].sort((a, b) => b.avg - a.avg);
+        const defKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
+        let domainLabels: Record<string, string> = { ...FALLBACK_DOMAIN_LABELS };
+        let survey: DiagnosisSurvey | null = null;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          try {
+            const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
+            if (res.ok) {
+              const j = await res.json();
+              if (Array.isArray(j.domains)) {
+                const labels: Record<string, string> = { ...FALLBACK_DOMAIN_LABELS };
+                for (let i = 0; i < j.domains.length && i < 6; i++) {
+                  const key = defKeys[i];
+                  const name = (j.domains[i]?.name ?? "").trim() || FALLBACK_DOMAIN_LABELS[key];
+                  if (key) labels[key] = name;
+                }
+                domainLabels = labels;
+              }
+              if (j.useSurvey && j.survey?.domains?.length && Array.isArray(j.survey?.questions)) {
+                survey = j.survey as DiagnosisSurvey;
+              }
+            }
+          } catch {
+            // keep fallback labels
+          }
+        }
+
+        const domainCount = survey?.domains?.length ?? 6;
+        const cat = (diag.category_scores ?? {}) as Record<string, { count?: number }>;
+        const getCount = (key: string) => (cat?.[key]?.count ?? 5);
+        const rows: DiagnosisRow[] = defKeys.map((key) => ({
+          domain: key,
+          label: domainLabels[key],
+          avg: ((diag[key] as number) ?? 0) / (getCount(key) || 1),
+        }));
+        const activeRows = rows.slice(0, Math.min(domainCount, 6));
+        const sorted = [...activeRows].sort((a, b) => b.avg - a.avg);
+        const strengthN = Math.ceil(domainCount / 2);
+        const weaknessN = domainCount - strengthN;
+        const strengths = sorted.slice(0, strengthN).map((r) => r.label);
+        const weaknesses = sorted.slice(-weaknessN).reverse().map((r) => r.label);
+
+        let strengthsDetail: { label: string; subDomains: { name: string; avg: number }[] }[] | undefined;
+        let weaknessesDetail: { label: string; subDomains: { name: string; avg: number }[] }[] | undefined;
+
+        if (survey?.domains?.length && Array.isArray(survey.questions)) {
+          const rawFromDb = (diag.raw_answers ?? {}) as Record<string, unknown>;
+          const rawAnswers: Record<string, number> = {};
+          for (const [k, v] of Object.entries(rawFromDb)) {
+            if (k === "_schema") continue;
+            const num = typeof v === "number" ? v : Number(v);
+            if (Number.isFinite(num) && num >= 1 && num <= 5) rawAnswers[String(k)] = num;
+          }
+          const subByDomain = computeSubDomainScores(survey, rawAnswers);
+          strengthsDetail = sorted.slice(0, strengthN).map((x) => ({
+            label: x.label,
+            subDomains: (subByDomain[x.domain] ?? []).sort((a, b) => b.avg - a.avg),
+          }));
+          weaknessesDetail = [...sorted.slice(-weaknessN)].reverse().map((x) => ({
+            label: x.label,
+            subDomains: (subByDomain[x.domain] ?? []).sort((a, b) => a.avg - b.avg),
+          }));
+        }
+
         setDiagnosisSummary({
-          strengths: sorted.slice(0, 3).map((r) => r.label),
-          weaknesses: sorted.slice(-3).reverse().map((r) => r.label),
+          strengths,
+          weaknesses,
+          strengthsDetail,
+          weaknessesDetail,
         });
       }
 
@@ -395,11 +461,35 @@ function PlanPrintContent() {
                 <tbody>
                   <tr>
                     <td className="w-40 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">강점 영역</td>
-                    <td className="border border-slate-300 px-2 py-1.5">{diagnosisSummary?.strengths?.join(", ") || "—"}</td>
+                    <td className="border border-slate-300 px-2 py-1.5">
+                      {diagnosisSummary?.strengthsDetail?.length ? (
+                        <span className="text-sm">
+                          {diagnosisSummary.strengthsDetail.map((d, i) => (
+                            <span key={i}>
+                              {i > 0 && " · "}
+                              <strong>{d.label}</strong>
+                              {d.subDomains?.length ? ` (${d.subDomains.map((s) => `${s.name} ${s.avg.toFixed(1)}`).join(", ")})` : ""}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (diagnosisSummary?.strengths?.join(", ") || "—")}
+                    </td>
                   </tr>
                   <tr>
                     <td className="border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">개발 우선 영역</td>
-                    <td className="border border-slate-300 px-2 py-1.5">{diagnosisSummary?.weaknesses?.join(", ") || "—"}</td>
+                    <td className="border border-slate-300 px-2 py-1.5">
+                      {diagnosisSummary?.weaknessesDetail?.length ? (
+                        <span className="text-sm">
+                          {diagnosisSummary.weaknessesDetail.map((d, i) => (
+                            <span key={i}>
+                              {i > 0 && " · "}
+                              <strong>{d.label}</strong>
+                              {d.subDomains?.length ? ` (${d.subDomains.map((s) => `${s.name} ${s.avg.toFixed(1)}`).join(", ")})` : ""}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (diagnosisSummary?.weaknesses?.join(", ") || "—")}
+                    </td>
                   </tr>
                 </tbody>
               </table>

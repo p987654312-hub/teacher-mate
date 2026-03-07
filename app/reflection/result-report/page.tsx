@@ -14,13 +14,13 @@ const ReflectionRadarCharts = dynamic(
   { ssr: false }
 );
 
-const DOMAIN_LABELS: Record<string, string> = {
-  domain1: "수업 설계·운영",
-  domain2: "학생 이해·생활지도",
-  domain3: "평가·피드백",
-  domain4: "학급경영·안전",
-  domain5: "전문성 개발·성찰",
-  domain6: "소통·협력 및 포용",
+const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
+  domain1: "영역1",
+  domain2: "영역2",
+  domain3: "영역3",
+  domain4: "영역4",
+  domain5: "영역5",
+  domain6: "영역6",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -44,6 +44,8 @@ type DiagnosisRow = {
   total_score: number;
   created_at: string;
   diagnosis_type?: string | null;
+  raw_answers?: Record<string, unknown> & { _schema?: string };
+  category_scores?: Record<string, { score?: number; count?: number }>;
 };
 
 type MileageEntry = { id: string; content: string; category: string; created_at: string };
@@ -64,6 +66,8 @@ function ResultReportContent() {
   const [nextYearGoalText, setNextYearGoalText] = useState("");
   const [loading, setLoading] = useState(true);
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>(CATEGORY_LABELS);
+  const [domainLabels, setDomainLabels] = useState<Record<string, string>>(FALLBACK_DOMAIN_LABELS);
+  const [domainCount, setDomainCount] = useState<number>(6);
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -130,6 +134,21 @@ function ResultReportContent() {
                 setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
               }
             }
+            const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` }, cache: "no-store" });
+            if (diagRes.ok) {
+              const diagJ = await diagRes.json();
+              if (Array.isArray(diagJ.domains) && diagJ.domains.length >= 2 && diagJ.domains.length <= 6) {
+                const defKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
+                const labels: Record<string, string> = { ...FALLBACK_DOMAIN_LABELS };
+                for (let i = 0; i < diagJ.domains.length; i++) {
+                  const key = defKeys[i];
+                  const name = (diagJ.domains[i]?.name ?? "").trim() || FALLBACK_DOMAIN_LABELS[key];
+                  if (key) labels[key] = name;
+                }
+                setDomainLabels(labels);
+                setDomainCount(diagJ.domains.length);
+              }
+            }
           } catch {
             // ignore
           }
@@ -188,6 +207,21 @@ function ResultReportContent() {
               setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
             }
           }
+          const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
+          if (diagRes.ok) {
+            const diagJ = await diagRes.json();
+            if (Array.isArray(diagJ.domains) && diagJ.domains.length >= 2 && diagJ.domains.length <= 6) {
+              const defKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
+              const labels: Record<string, string> = { ...FALLBACK_DOMAIN_LABELS };
+              for (let i = 0; i < diagJ.domains.length; i++) {
+                const key = defKeys[i];
+                const name = (diagJ.domains[i]?.name ?? "").trim() || FALLBACK_DOMAIN_LABELS[key];
+                if (key) labels[key] = name;
+              }
+              setDomainLabels(labels);
+              setDomainCount(diagJ.domains.length);
+            }
+          }
         } catch {
           // ignore
         }
@@ -198,25 +232,32 @@ function ResultReportContent() {
   }, [router, searchParams]);
 
   const result = postResult ?? preResult;
+  const is4Domain = result?.raw_answers?._schema === "v4";
+  const cat = result?.category_scores;
+  const getCount = (key: string) => (cat?.[key]?.count ?? 5);
+  const domainKeys = is4Domain
+    ? ["domain1", "domain2", "domain3", "domain4"]
+    : (["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const).slice(0, Math.min(domainCount, 6));
+  const totalQuestionCount = result
+    ? domainKeys.reduce((sum, key) => sum + (getCount(key) || 5), 0)
+    : 30;
   const domainAverages = result
-    ? [
-        { name: DOMAIN_LABELS.domain1, score: result.domain1 / 5 },
-        { name: DOMAIN_LABELS.domain2, score: result.domain2 / 5 },
-        { name: DOMAIN_LABELS.domain3, score: result.domain3 / 5 },
-        { name: DOMAIN_LABELS.domain4, score: result.domain4 / 5 },
-        { name: DOMAIN_LABELS.domain5, score: result.domain5 / 5 },
-        { name: DOMAIN_LABELS.domain6, score: result.domain6 / 5 },
-      ]
+    ? domainKeys.map((key) => ({
+        name: domainLabels[key] ?? FALLBACK_DOMAIN_LABELS[key as keyof typeof FALLBACK_DOMAIN_LABELS],
+        score: (result[key as keyof DiagnosisRow] as number) / (getCount(key) || 1),
+      }))
     : [];
   const radarCompareData =
     preResult && postResult
-      ? domainAverages.map((d, i) => {
-          const key = `domain${i + 1}` as keyof DiagnosisRow;
-          return { name: d.name, 사전: (preResult[key] as number) / 5, 사후: (postResult[key] as number) / 5 };
+      ? domainKeys.map((key) => {
+          const preVal = (preResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
+          const postVal = (postResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
+          return { name: domainLabels[key] ?? FALLBACK_DOMAIN_LABELS[key as keyof typeof FALLBACK_DOMAIN_LABELS], 사전: preVal, 사후: postVal };
         })
       : null;
-  const totalNorm = result ? (result.total_score / (30 * 100)) * 100 : 0;
-  const preTotalNorm = preResult ? (preResult.total_score / (30 * 100)) * 100 : 0;
+  const maxTotal = totalQuestionCount * 5;
+  const totalNorm = result && maxTotal > 0 ? (result.total_score / maxTotal) * 100 : 0;
+  const preTotalNorm = preResult && maxTotal > 0 ? (preResult.total_score / maxTotal) * 100 : 0;
   const categoryOrder = ["training", "class_open", "community", "book_edutech", "health", "other"];
 
   function toShortYear(text: string): string {
@@ -371,12 +412,13 @@ function ResultReportContent() {
                   <tbody>
                     {preResult && postResult
                       ? domainAverages.map((d, i) => {
-                          const key = `domain${i + 1}` as keyof DiagnosisRow;
+                          const key = domainKeys[i];
+                          const div = getCount(key) || 1;
                           return (
                             <tr key={d.name}>
                               <td className="border border-slate-300 px-2 py-1">{d.name}</td>
-                              <td className="border border-slate-300 px-2 py-1 text-center">{((preResult[key] as number) / 5).toFixed(1)}</td>
-                              <td className="border border-slate-300 px-2 py-1 text-center">{((postResult[key] as number) / 5).toFixed(1)}</td>
+                              <td className="border border-slate-300 px-2 py-1 text-center">{(((preResult[key as keyof DiagnosisRow] as number) ?? 0) / div).toFixed(1)}</td>
+                              <td className="border border-slate-300 px-2 py-1 text-center">{(((postResult[key as keyof DiagnosisRow] as number) ?? 0) / div).toFixed(1)}</td>
                             </tr>
                           );
                         })
@@ -455,7 +497,7 @@ function ResultReportContent() {
             </div>
           </div>
           <div>
-            <h2 className="mb-2 text-sm font-bold text-slate-800">증빙서류</h2>
+            <h2 className="mb-2 text-sm font-bold text-slate-800">(구)자기실적 평가서</h2>
             <div className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700">
               {(evidenceText ?? "").trim() ? evidenceText : "별첨"}
             </div>

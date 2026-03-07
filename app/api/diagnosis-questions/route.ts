@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { DEFAULT_DIAGNOSIS_DOMAINS, domainsToQuestions, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
+import { surveyToFlatQuestions, type DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,7 +30,7 @@ function parseDomainsJson(json: string | null): DiagnosisDomainConfig[] {
   }
 }
 
-/** 로그인한 사용자 소속 학교의 사전/사후검사 문항 조회 (교사·관리자) */
+/** 로그인한 사용자 소속 학교의 사전/사후검사 문항 조회. 엑셀 설문 우선 → school_point_settings.diagnosisSurvey */
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -48,18 +49,38 @@ export async function GET(req: Request) {
     const schoolName = (meta.schoolName ?? "").trim();
     if (!schoolName) {
       const questions = domainsToQuestions(DEFAULT_DIAGNOSIS_DOMAINS);
-      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, questions });
+      return NextResponse.json({ domains: DEFAULT_DIAGNOSIS_DOMAINS, questions, useSurvey: false });
     }
 
     const { data: row } = await supabase
+      .from("school_point_settings")
+      .select("settings_json")
+      .eq("school_name", schoolName)
+      .maybeSingle();
+
+    if (row?.settings_json) {
+      try {
+        const parsed = JSON.parse(row.settings_json as string) as Record<string, unknown>;
+        const survey = parsed.diagnosisSurvey as DiagnosisSurvey | undefined;
+        if (survey?.domains?.length === 4 && Array.isArray(survey.questions) && survey.questions.length > 0) {
+          const questions = surveyToFlatQuestions(survey);
+          const domains = survey.domains.map((d) => ({ name: d.name, items: [] }));
+          return NextResponse.json({ domains, questions, useSurvey: true, survey });
+        }
+      } catch {
+        // ignore, fall through to legacy
+      }
+    }
+
+    const { data: legacyRow } = await supabase
       .from("school_diagnosis_settings")
       .select("domains_json")
       .eq("school_name", schoolName)
       .maybeSingle();
 
-    const domains = parseDomainsJson(row?.domains_json ?? null);
+    const domains = parseDomainsJson(legacyRow?.domains_json ?? null);
     const questions = domainsToQuestions(domains);
-    return NextResponse.json({ domains, questions });
+    return NextResponse.json({ domains, questions, useSurvey: false });
   } catch (e) {
     console.error("diagnosis-questions GET:", e);
     return NextResponse.json({ error: "처리 중 오류가 발생했습니다." }, { status: 500 });

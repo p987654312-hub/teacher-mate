@@ -123,14 +123,31 @@ export default function Home() {
 
       if (isLogin) {
         // 로그인 모드
-        const { data, error: signInError } =
-          await supabase.auth.signInWithPassword({
+        let data: { user?: { user_metadata?: { name?: string }; email?: string }; session?: { access_token?: string } };
+        let signInError: { message: string } | null = null;
+        try {
+          const result = await supabase.auth.signInWithPassword({
             email,
             password,
           });
+          data = result.data;
+          signInError = result.error;
+        } catch (fetchErr) {
+          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+          if (msg === "Failed to fetch" || msg.includes("fetch") || msg.includes("network")) {
+            alert("서버에 연결할 수 없습니다. 인터넷 연결과 환경 변수(NEXT_PUBLIC_SUPABASE_URL)를 확인해 주세요.");
+          } else {
+            alert(`로그인 요청 중 오류: ${msg}`);
+          }
+          return;
+        }
 
         if (signInError) {
           alert(signInError.message);
+          return;
+        }
+        if (!data?.user) {
+          alert("로그인 응답을 받지 못했습니다. 다시 시도해 주세요.");
           return;
         }
 
@@ -403,6 +420,15 @@ export default function Home() {
                     이메일 저장
                   </label>
                 )}
+                {isLogin && (
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
+                  >
+                    {isLoading ? "처리 중..." : "로그인하기"}
+                  </Button>
+                )}
                 {!isLogin && (
                   <div className="space-y-1.5">
                     <Label htmlFor="teacher-beta-code">베타버전 이용코드</Label>
@@ -426,15 +452,6 @@ export default function Home() {
                         <span className="bg-white px-2 text-slate-500">또는</span>
                       </div>
                     </div>
-                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={keepLoggedIn}
-                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
-                      />
-                      <span>로그인 유지 (브라우저를 닫아도 로그인 상태 유지)</span>
-                    </label>
                     <Button
                       type="button"
                       onClick={handleGoogleSignIn}
@@ -461,20 +478,27 @@ export default function Home() {
                       </svg>
                       구글로 로그인 (@shingu.sen.es.kr)
                     </Button>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={keepLoggedIn}
+                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
+                      />
+                      <span>로그인 유지 (브라우저를 닫아도 로그인 상태 유지)</span>
+                    </label>
                   </>
                 )}
 
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
-                >
-                  {isLoading
-                    ? "처리 중..."
-                    : isLogin
-                    ? "로그인하기"
-                    : "회원가입하기"}
-                </Button>
+                {!isLogin && (
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
+                  >
+                    {isLoading ? "처리 중..." : "회원가입하기"}
+                  </Button>
+                )}
 
                 <p className="mt-3 text-center text-xs text-slate-400">
                   {isLogin ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}

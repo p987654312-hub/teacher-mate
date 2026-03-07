@@ -12,7 +12,13 @@ import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/lib/supabaseClient";
 import { domainsToQuestions, DEFAULT_DIAGNOSIS_DOMAINS, type Question } from "@/lib/diagnosisQuestions";
-import { ClipboardCheck } from "lucide-react";
+import {
+  type DiagnosisSurvey,
+  scoreForQuestion,
+  computeDomainScores,
+  totalScoreFromDomainScores,
+} from "@/lib/diagnosisSurvey";
+import { Check, ClipboardCheck } from "lucide-react";
 
 function DiagnosisContent() {
   const router = useRouter();
@@ -26,74 +32,102 @@ function DiagnosisContent() {
   const [diagnosisTitle, setDiagnosisTitle] = useState("");
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [useSurvey, setUseSurvey] = useState(false);
+  const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
 
-  // 보호된 라우트 + 학교별 사전/사후검사 문항 로드
+  // 보호된 라우트 + 학교별 설문 로드 (설정 로드 후에만 폼 표시 → 깜빡임 없음)
   useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.replace("/");
         return;
       }
-
-      const metadata = user.user_metadata as
-        | { role?: string; schoolName?: string }
-        | undefined;
-
+      const metadata = user.user_metadata as { role?: string; schoolName?: string } | undefined;
       if (metadata?.role !== "teacher" && metadata?.role !== "admin") {
         router.replace("/");
         return;
       }
-
       setUserEmail(user.email ?? null);
       setUserSchool(metadata?.schoolName ?? null);
-      setIsChecking(false);
-    };
 
-    checkSession();
-  }, [router]);
-
-  // 학교별 문항 로드 (관리자가 설정한 문항 반영)
-  useEffect(() => {
-    if (isChecking) return;
-    const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
       try {
-        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
-        if (res.ok) {
+        const res = session?.access_token
+          ? await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" })
+          : null;
+        if (res?.ok) {
           const j = await res.json();
-          if (Array.isArray(j.domains) && j.domains.length === 6) {
-            setQuestions(domainsToQuestions(j.domains));
-            setDomainNames(
-              j.domains.map((d: { name?: string }, i: number) =>
-                (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "")
-              )
+          if (j.useSurvey && j.survey?.domains?.length >= 2 && j.survey?.domains?.length <= 6 && Array.isArray(j.survey.questions) && j.survey.questions.length > 0) {
+            setUseSurvey(true);
+            setSurvey(j.survey);
+            setDomainNames(j.survey.domains.map((d: { name: string }) => d.name));
+            setQuestions(
+              j.survey.questions.map((q: { id: string; text: string; domainKey: string }) => ({
+                id: q.id,
+                text: q.text,
+                domain: q.domainKey,
+              }))
             );
+          } else {
+            setUseSurvey(false);
+            setSurvey(null);
+            const domains = Array.isArray(j.domains) && j.domains.length === 6 ? j.domains : DEFAULT_DIAGNOSIS_DOMAINS;
+            setQuestions(domainsToQuestions(domains));
+            setDomainNames(domains.map((d: { name?: string }, i: number) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "")));
           }
           if (typeof j.title === "string") setDiagnosisTitle(j.title.trim());
+        } else {
+          setUseSurvey(false);
+          setSurvey(null);
+          setQuestions(domainsToQuestions(DEFAULT_DIAGNOSIS_DOMAINS));
+          setDomainNames(DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
         }
       } catch {
-        // 실패 시 기본 문항 유지
+        setUseSurvey(false);
+        setSurvey(null);
+        setQuestions(domainsToQuestions(DEFAULT_DIAGNOSIS_DOMAINS));
+        setDomainNames(DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
       }
+      setIsChecking(false);
     };
-    load();
-  }, [isChecking]);
+    init();
+  }, [router]);
 
-  // 진행률 계산
+  // 진행률 계산 (엑셀 설문은 1~5 선택 시에만 완료)
   const progress = useMemo(() => {
     if (questions.length === 0) return 0;
-    const answeredCount = Object.keys(answers).filter(
-      (key) => answers[key] !== undefined && answers[key] !== null && answers[key] >= 0
-    ).length;
+    const answeredCount = useSurvey
+      ? questions.filter((q) => {
+          const v = answers[q.id];
+          return v !== undefined && v !== null && v >= 1 && v <= 5;
+        }).length
+      : Object.keys(answers).filter(
+          (key) => answers[key] !== undefined && answers[key] !== null && answers[key] >= 0
+        ).length;
     return (answeredCount / questions.length) * 100;
-  }, [answers, questions.length]);
+  }, [answers, questions.length, useSurvey]);
 
-  // 영역별 점수 계산
+  // 영역별 점수 계산 (엑셀 설문 시 방향 반영 후 4영역, 기존은 6영역)
   const domainScores = useMemo(() => {
+    if (useSurvey && survey) {
+      const scoreByQ: Record<string, number> = {};
+      survey.questions.forEach((q) => {
+        const raw = answers[q.id];
+        if (raw !== undefined && raw !== null && raw >= 1 && raw <= 5) {
+          scoreByQ[q.id] = scoreForQuestion(raw, q.direction);
+        }
+      });
+      const byDomain = computeDomainScores(survey, scoreByQ);
+      return {
+        domain1: byDomain.domain1 ?? 0,
+        domain2: byDomain.domain2 ?? 0,
+        domain3: byDomain.domain3 ?? 0,
+        domain4: byDomain.domain4 ?? 0,
+        domain5: byDomain.domain5 ?? 0,
+        domain6: byDomain.domain6 ?? 0,
+      };
+    }
     const scores: Record<string, { sum: number; count: number }> = {
       domain1: { sum: 0, count: 0 },
       domain2: { sum: 0, count: 0 },
@@ -102,7 +136,6 @@ function DiagnosisContent() {
       domain5: { sum: 0, count: 0 },
       domain6: { sum: 0, count: 0 },
     };
-
     questions.forEach((q) => {
       const answer = answers[q.id];
       if (answer !== undefined && answer !== null && answer >= 0) {
@@ -110,7 +143,6 @@ function DiagnosisContent() {
         scores[q.domain].count += 1;
       }
     });
-
     return {
       domain1: scores.domain1.sum,
       domain2: scores.domain2.sum,
@@ -119,12 +151,17 @@ function DiagnosisContent() {
       domain5: scores.domain5.sum,
       domain6: scores.domain6.sum,
     };
-  }, [answers]);
+  }, [answers, useSurvey, survey, questions]);
 
-  // 총점 계산
+  // 총점 계산 (설문 시 해당 영역만 합산)
   const totalScore = useMemo(() => {
+    if (useSurvey && survey?.domains?.length) {
+      let sum = 0;
+      for (let i = 0; i < survey.domains.length; i++) sum += domainScores[`domain${i + 1}` as keyof typeof domainScores] ?? 0;
+      return sum;
+    }
     return Object.values(domainScores).reduce((sum, score) => sum + score, 0);
-  }, [domainScores]);
+  }, [domainScores, useSurvey, survey?.domains?.length]);
 
   const handleSubmit = async () => {
     if (!userEmail || !userSchool) {
@@ -132,8 +169,13 @@ function DiagnosisContent() {
       return;
     }
 
-    // 모든 문항에 응답했는지 확인
-    const unanswered = questions.filter((q) => answers[q.id] === undefined || answers[q.id] === null);
+    // 모든 문항에 응답했는지 확인 (엑셀 설문은 1~5 선택 필수)
+    const unanswered = useSurvey
+      ? questions.filter((q) => {
+          const v = answers[q.id];
+          return v === undefined || v === null || v < 1 || v > 5;
+        })
+      : questions.filter((q) => answers[q.id] === undefined || answers[q.id] === null);
     if (unanswered.length > 0) {
       alert("모든 문항에 응답해 주세요.");
       return;
@@ -151,6 +193,7 @@ function DiagnosisContent() {
       const domain6Value = domainScores.domain6 ?? 0;
       const totalScoreValue = totalScore ?? 0;
 
+      const is4Domain = useSurvey && (survey?.domains?.length ?? 0) === 4;
       const payload = {
         user_email: userEmail,
         school_name: userSchool,
@@ -158,20 +201,28 @@ function DiagnosisContent() {
         domain2: Number.isInteger(domain2Value) ? domain2Value : Math.floor(Number(domain2Value)),
         domain3: Number.isInteger(domain3Value) ? domain3Value : Math.floor(Number(domain3Value)),
         domain4: Number.isInteger(domain4Value) ? domain4Value : Math.floor(Number(domain4Value)),
-        domain5: Number.isInteger(domain5Value) ? domain5Value : Math.floor(Number(domain5Value)),
-        domain6: Number.isInteger(domain6Value) ? domain6Value : Math.floor(Number(domain6Value)),
+        domain5: is4Domain ? 0 : (Number.isInteger(domain5Value) ? domain5Value : Math.floor(Number(domain5Value))),
+        domain6: is4Domain ? 0 : (Number.isInteger(domain6Value) ? domain6Value : Math.floor(Number(domain6Value))),
         total_score: Number.isInteger(totalScoreValue) ? totalScoreValue : Math.floor(Number(totalScoreValue)),
-        raw_answers: answers,
+        raw_answers: is4Domain ? { ...answers, _schema: "v4" } : answers,
         diagnosis_type: isPost ? "post" : "pre",
-        // 기존 구조와의 호환성을 위해 category_scores도 함께 저장
-        category_scores: {
-          domain1: { score: Number.isInteger(domain1Value) ? domain1Value : Math.floor(Number(domain1Value)), count: 5 },
-          domain2: { score: Number.isInteger(domain2Value) ? domain2Value : Math.floor(Number(domain2Value)), count: 5 },
-          domain3: { score: Number.isInteger(domain3Value) ? domain3Value : Math.floor(Number(domain3Value)), count: 5 },
-          domain4: { score: Number.isInteger(domain4Value) ? domain4Value : Math.floor(Number(domain4Value)), count: 5 },
-          domain5: { score: Number.isInteger(domain5Value) ? domain5Value : Math.floor(Number(domain5Value)), count: 5 },
-          domain6: { score: Number.isInteger(domain6Value) ? domain6Value : Math.floor(Number(domain6Value)), count: 5 },
-        },
+        category_scores: (useSurvey && survey)
+          ? {
+              domain1: { score: Number.isInteger(domain1Value) ? domain1Value : Math.floor(Number(domain1Value)), count: survey.questions.filter((q) => q.domainKey === "domain1").length || 1 },
+              domain2: { score: Number.isInteger(domain2Value) ? domain2Value : Math.floor(Number(domain2Value)), count: survey.questions.filter((q) => q.domainKey === "domain2").length || 1 },
+              domain3: { score: Number.isInteger(domain3Value) ? domain3Value : Math.floor(Number(domain3Value)), count: survey.questions.filter((q) => q.domainKey === "domain3").length || 1 },
+              domain4: { score: Number.isInteger(domain4Value) ? domain4Value : Math.floor(Number(domain4Value)), count: survey.questions.filter((q) => q.domainKey === "domain4").length || 1 },
+              domain5: { score: Number.isInteger(domain5Value) ? domain5Value : Math.floor(Number(domain5Value)), count: is4Domain ? 0 : (survey.questions.filter((q) => q.domainKey === "domain5").length || 1) },
+              domain6: { score: Number.isInteger(domain6Value) ? domain6Value : Math.floor(Number(domain6Value)), count: is4Domain ? 0 : (survey.questions.filter((q) => q.domainKey === "domain6").length || 1) },
+            }
+          : {
+              domain1: { score: Number.isInteger(domain1Value) ? domain1Value : Math.floor(Number(domain1Value)), count: 5 },
+              domain2: { score: Number.isInteger(domain2Value) ? domain2Value : Math.floor(Number(domain2Value)), count: 5 },
+              domain3: { score: Number.isInteger(domain3Value) ? domain3Value : Math.floor(Number(domain3Value)), count: 5 },
+              domain4: { score: Number.isInteger(domain4Value) ? domain4Value : Math.floor(Number(domain4Value)), count: 5 },
+              domain5: { score: Number.isInteger(domain5Value) ? domain5Value : Math.floor(Number(domain5Value)), count: 5 },
+              domain6: { score: Number.isInteger(domain6Value) ? domain6Value : Math.floor(Number(domain6Value)), count: 5 },
+            },
       };
 
       const { error, data } = await supabase.from("diagnosis_results").insert([
@@ -189,25 +240,34 @@ function DiagnosisContent() {
       const savedResultId = data?.[0]?.id;
       if (savedResultId) {
         try {
-          // 영역별 점수 계산 (평균) — 관리자 설정 역량명(domainNames) 반영
-          const domainAverages = (
-            ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const
-          ).map((domain, i) => ({
+          const domainKeys = survey?.domains?.length
+            ? (survey.domains.map((_, i) => `domain${i + 1}`) as readonly string[])
+            : (is4Domain
+              ? (["domain1", "domain2", "domain3", "domain4"] as const)
+              : (["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const));
+          const counts = survey
+            ? domainKeys.map((key) => survey.questions.filter((q) => q.domainKey === key).length || 1)
+            : [5, 5, 5, 5, 5, 5];
+          const domainAverages = domainKeys.map((domain, i) => ({
             domain,
             label: domainNames[i] ?? DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "",
-            avg: (domainScores[domain] ?? 0) / 5,
+            avg: counts[i] ? (domainScores[domain] ?? 0) / counts[i] : 0,
             score: domainScores[domain] ?? 0,
           }));
 
-          // 강점/약점 정렬
           const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
-          const strengths = sorted.slice(0, 3).map((d) => d.label);
-          const weaknesses = sorted.slice(-3).map((d) => d.label);
+          const domainCount = domainKeys.length;
+          const strengthN = Math.ceil(domainCount / 2);
+          const weaknessN = domainCount - strengthN;
+          const strengths = sorted.slice(0, strengthN).map((d) => d.label);
+          const weaknesses = sorted.slice(-weaknessN).map((d) => d.label);
 
-          // 전체 영역 점수 정보
+          // 전체 영역 점수 정보 (역량별 1~5점 척도 평균)
           const domainScoresText = domainAverages
             .map((d) => `${d.label}: ${d.avg.toFixed(1)}점`)
             .join(", ");
+          const maxTotal = counts.reduce((sum, c) => sum + c * 5, 0) || 1;
+          const totalScoreNorm100 = Math.round((totalScore / maxTotal) * 100);
 
           // AI 분석 요청 (전체 분석)
           const analysisRes = await fetch("/api/ai-recommend", {
@@ -218,23 +278,23 @@ function DiagnosisContent() {
               strongDomains: strengths,
               weakDomains: weaknesses,
               domainScores: domainScoresText,
-              totalScore: totalScore,
+              totalScore: totalScoreNorm100,
+              domainCount: domainCount,
             }),
           });
 
           if (analysisRes.ok) {
             const result = await analysisRes.json();
             if (result.recommendation && result.recommendation.trim()) {
-              // AI 분석 결과를 Supabase에 저장
               const { error: updateError } = await supabase
                 .from("diagnosis_results")
                 .update({ ai_analysis: result.recommendation.trim() })
                 .eq("id", savedResultId);
-              
-              if (updateError) {
-                // AI 분석 결과 저장 실패 (무시하고 진행)
-              }
+              if (updateError) { /* 무시 */ }
             }
+          } else {
+            const err = await analysisRes.json().catch(() => ({}));
+            if (err?.code === "QUOTA_EXCEEDED") alert(err.error);
           }
         } catch {
           // AI 분석 실패해도 진단 결과 저장은 성공했으므로 계속 진행
@@ -257,9 +317,7 @@ function DiagnosisContent() {
   if (isChecking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm text-slate-500">
-          사용자 정보를 확인하는 중입니다...
-        </p>
+        <p className="text-sm text-slate-500">준비 중...</p>
       </div>
     );
   }
@@ -291,48 +349,78 @@ function DiagnosisContent() {
           />
         </Card>
 
-        {/* 문항 리스트 - 2개씩 병렬 배치, 카드 낮게·진행바 하단 정렬·슬라이더 짧게·낮게, 완료 카드 푸른 계열 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-stretch">
-          {questions.map((question) => {
-            const isAnswered = answers[question.id] !== undefined && answers[question.id] !== null;
-            return (
-            <Card
-              key={question.id}
-              className={`flex flex-col h-full min-h-0 rounded-xl border p-2 shadow-sm transition-colors ${
-                isAnswered
-                  ? "border-blue-300/90 bg-gradient-to-br from-blue-100 via-blue-50/90 to-indigo-100/90"
-                  : "border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50"
-              }`}
-            >
-              <div className="flex-1 min-h-0 mb-2">
-                <Label className={`text-xs font-semibold leading-tight line-clamp-3 ${isAnswered ? "text-slate-800" : "text-slate-800"}`}>
-                  {question.id}. {question.text}
-                </Label>
-              </div>
-              <div className="mt-auto w-full min-w-[33%] shrink-0">
-                <div className="flex items-center gap-2 w-full">
-                  <span className="shrink-0 text-[10px] font-medium text-slate-500 ml-[5mm]">매우 아니다</span>
-                  <div className="min-w-0 flex-1">
-                    <Slider
-                      value={[isAnswered ? answers[question.id]! : 0]}
-                      onValueChange={(value) => {
-                        setAnswers((prev) => ({ ...prev, [question.id]: value[0] }));
-                      }}
-                      min={0}
-                      max={100}
-                      step={1}
-                      className={`w-full [&_[data-slot=slider-track]]:h-[30px] [&_[data-slot=slider-thumb]]:h-5 [&_[data-slot=slider-thumb]]:w-3 [&_[data-slot=slider-thumb]]:!rounded-sm ${
-                        isAnswered
-                          ? "[&_[data-slot=slider-thumb]]:bg-gradient-to-r [&_[data-slot=slider-thumb]]:from-blue-400/80 [&_[data-slot=slider-thumb]]:to-indigo-400/80 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:shadow-sm"
-                          : "[&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:pointer-events-none"
-                      }`}
-                    />
-                  </div>
-                  <span className="shrink-0 text-[10px] font-medium text-slate-500 mr-[5mm]">매우 그렇다</span>
+        {/* 문항: 왼쪽 문항, 오른쪽 점수 체크 (한 페이지, 가독성·공간 절약) */}
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+          {useSurvey ? (
+            <>
+              <div className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <span>문항</span>
+                <div className="w-[180px] shrink-0 flex justify-between items-center text-[10px] font-normal text-slate-400">
+                  <span>매우 그렇지 않다</span>
+                  <span>~</span>
+                  <span>매우 그렇다</span>
                 </div>
               </div>
-            </Card>
-          );})}
+              {questions.map((question) => {
+                const raw = answers[question.id];
+                const isAnswered = raw !== undefined && raw !== null && raw >= 1 && raw <= 5;
+                return (
+                  <div
+                    key={question.id}
+                    className={`grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 items-center border-b border-slate-100 last:border-b-0 ${
+                      isAnswered ? "bg-blue-50/60" : "bg-white"
+                    }`}
+                  >
+                    <p className="text-sm text-slate-800 leading-snug min-w-0">
+                      <span className="font-medium text-slate-500 mr-1.5">{question.id}.</span>
+                      {question.text}
+                    </p>
+                    <div className="flex items-center justify-between shrink-0 w-[180px] gap-0">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: n }))}
+                          className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center transition-colors ${
+                            raw === n
+                              ? "bg-blue-600 text-white ring-1 ring-blue-600"
+                              : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                          }`}
+                          title={`선택 ${n}`}
+                        >
+                          {raw === n ? <Check className="h-4 w-4" strokeWidth={2.5} /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {questions.map((question) => {
+                const raw = answers[question.id];
+                const isAnswered = raw !== undefined && raw !== null;
+                return (
+                  <div key={question.id} className="px-3 py-2.5 flex flex-col gap-2">
+                    <Label className="text-sm text-slate-800">{question.id}. {question.text}</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-[10px] text-slate-500">매우 아니다</span>
+                      <Slider
+                        value={[isAnswered ? answers[question.id]! : 0]}
+                        onValueChange={(value) => setAnswers((prev) => ({ ...prev, [question.id]: value[0] }))}
+                        min={0}
+                        max={100}
+                        step={1}
+                        className="flex-1 max-w-[200px] [&_[data-slot=slider-thumb]]:h-4 [&_[data-slot=slider-thumb]]:w-3"
+                      />
+                      <span className="shrink-0 text-[10px] text-slate-500">매우 그렇다</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* 하단 버튼 */}

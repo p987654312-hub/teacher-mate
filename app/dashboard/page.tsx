@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   getRelativeDifficultyStars,
 } from "@/lib/mileageDifficulty";
 import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
+import { DIAGNOSIS_SAMPLE_CSV } from "@/lib/diagnosisSampleCsv";
 import {
   ClipboardCheck,
   Flag,
@@ -34,6 +36,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  Trash2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import {
@@ -171,6 +174,12 @@ export default function DashboardPage() {
   const [diagnosisDomainsSaved, setDiagnosisDomainsSaved] = useState<DiagnosisDomainConfig[]>(() => [...DEFAULT_DIAGNOSIS_DOMAINS]);
   const [diagnosisRadarLabels, setDiagnosisRadarLabels] = useState<string[]>(() => DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
   const [savingDiagnosisSettings, setSavingDiagnosisSettings] = useState(false);
+  const [diagnosisExcelFile, setDiagnosisExcelFile] = useState<File | null>(null);
+  const [diagnosisUploadTitle, setDiagnosisUploadTitle] = useState("");
+  const [diagnosisUploading, setDiagnosisUploading] = useState(false);
+  const [diagnosisSurveyCurrent, setDiagnosisSurveyCurrent] = useState<{ questionCount: number; domains: string[]; title: string } | null>(null);
+  const [diagnosisSurveyTitle, setDiagnosisSurveyTitle] = useState("");
+  const [resettingAllData, setResettingAllData] = useState(false);
   const [planMissingGoals, setPlanMissingGoals] = useState<string[]>([]); // 계획서 누락된 연간 목표
   const [pointSettings, setPointSettings] = useState<Record<string, number>>({
     training: 1,
@@ -286,7 +295,7 @@ export default function DashboardPage() {
           const token = session?.access_token ?? null;
 
           const [preRes, postRes, planRes, mileageRes, catRes, diagnosisSettingsRes, diffRes, pointsRes] = await Promise.all([
-            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,total_score").eq("user_email", user.email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,total_score,raw_answers,category_scores").eq("user_email", user.email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
             supabase.from("diagnosis_results").select("id").eq("user_email", user.email).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
             supabase.from("development_plans").select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal").eq("user_email", user.email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
             supabase.from("mileage_entries").select("id, content, category").eq("user_email", user.email),
@@ -301,25 +310,31 @@ export default function DashboardPage() {
           const mileageRows = mileageRes.data ?? [];
           const catJson = catRes as { categories?: CategoryConfigItem[] };
 
+          const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[]; useSurvey?: boolean };
+          const domainCount = Math.min(6, Math.max(2, Array.isArray(diagSettings?.domains) ? diagSettings.domains.length : 6));
+
           startTransition(() => {
+            const cat = data?.category_scores as Record<string, { count?: number }> | undefined;
+            const getCount = (key: string) => (cat?.[key]?.count ?? 5);
+            const avg = (key: string, val: number) => (domainCount <= 6 && cat ? val / (getCount(key) || 1) : val / 5);
             if (!preRes.error && data) {
               setDiagnosisSummary({
-                domain1: ((data.domain1 as number) ?? 0) / 5,
-                domain2: ((data.domain2 as number) ?? 0) / 5,
-                domain3: ((data.domain3 as number) ?? 0) / 5,
-                domain4: ((data.domain4 as number) ?? 0) / 5,
-                domain5: ((data.domain5 as number) ?? 0) / 5,
-                domain6: ((data.domain6 as number) ?? 0) / 5,
+                domain1: avg("domain1", (data.domain1 as number) ?? 0),
+                domain2: avg("domain2", (data.domain2 as number) ?? 0),
+                domain3: avg("domain3", (data.domain3 as number) ?? 0),
+                domain4: avg("domain4", (data.domain4 as number) ?? 0),
+                domain5: domainCount >= 5 ? avg("domain5", (data.domain5 as number) ?? 0) : 0,
+                domain6: domainCount >= 6 ? avg("domain6", (data.domain6 as number) ?? 0) : 0,
                 totalScore: (data.total_score as number) ?? 0,
               });
             }
             setHasPostDiagnosis(!!postRes.data);
 
-            const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[] };
-            if (Array.isArray(diagSettings?.domains) && diagSettings.domains.length === 6) {
-              setDiagnosisRadarLabels(
-                diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
-              );
+            if (Array.isArray(diagSettings?.domains) && diagSettings.domains.length >= 2 && diagSettings.domains.length <= 6) {
+              const labels = diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""));
+              setDiagnosisRadarLabels(labels);
+            } else {
+              setDiagnosisRadarLabels(DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
             }
 
             const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
@@ -561,7 +576,7 @@ export default function DashboardPage() {
     load();
   }, [showPointSettings, userRole, userSchool]);
 
-  // 관리자: 사전/사후검사 설정 열었을 때 API에서 로드
+  // 관리자: 사전/사후검사 설정 열었을 때 API에서 로드 (설문 제목 포함)
   useEffect(() => {
     if (!showDiagnosisSettings || !showAdminView || !userSchool) return;
     const load = async () => {
@@ -569,15 +584,35 @@ export default function DashboardPage() {
       const token = session?.access_token;
       if (!token) return;
       try {
-        const res = await fetch("/api/admin/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         if (res.ok) {
           const j = await res.json();
-          if (Array.isArray(j.domains) && j.domains.length === 6) {
-            setDiagnosisDomains(j.domains);
-            setDiagnosisDomainsSaved(j.domains);
+          if (j.useSurvey && j.survey?.domains?.length === 4) {
+            const title = typeof j.title === "string" ? j.title : "";
+            setDiagnosisSurveyCurrent({
+              questionCount: j.survey.questions?.length ?? 0,
+              domains: j.survey.domains.map((d: { name: string }) => d.name),
+              title,
+            });
+            setDiagnosisSurveyTitle(title);
+          } else {
+            setDiagnosisSurveyCurrent(null);
           }
-          setDiagnosisTitle(typeof j.title === "string" ? j.title : "");
-          setDiagnosisTitleSaved(typeof j.title === "string" ? j.title : "");
+          const resAdmin = await fetch("/api/admin/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } });
+          if (resAdmin.ok) {
+            const a = await resAdmin.json();
+            if (Array.isArray(a.domains) && a.domains.length === 6) {
+              setDiagnosisDomains(a.domains);
+              setDiagnosisDomainsSaved(a.domains);
+            }
+            setDiagnosisTitle(typeof a.title === "string" ? a.title : "");
+            setDiagnosisTitleSaved(typeof a.title === "string" ? a.title : "");
+          }
+          const titleRes = await fetch("/api/admin/diagnosis-title", { headers: { Authorization: `Bearer ${token}` } });
+          if (titleRes.ok) {
+            const titleJson = await titleRes.json();
+            if (typeof titleJson.title === "string") setDiagnosisSurveyTitle(titleJson.title);
+          }
         }
       } catch {
         // ignore
@@ -1050,14 +1085,17 @@ export default function DashboardPage() {
                     </p>
                   ) : (
                     <DashboardDiagnosisRadar
-                      data={[
-                        { name: diagnosisRadarLabels[0], score: diagnosisSummary.domain1 },
-                        { name: diagnosisRadarLabels[1], score: diagnosisSummary.domain2 },
-                        { name: diagnosisRadarLabels[2], score: diagnosisSummary.domain3 },
-                        { name: diagnosisRadarLabels[3], score: diagnosisSummary.domain4 },
-                        { name: diagnosisRadarLabels[4], score: diagnosisSummary.domain5 },
-                        { name: diagnosisRadarLabels[5], score: diagnosisSummary.domain6 },
-                      ]}
+                      data={diagnosisRadarLabels.slice(0, 6).map((name, i) => ({
+                        name,
+                        score: [
+                          diagnosisSummary.domain1,
+                          diagnosisSummary.domain2,
+                          diagnosisSummary.domain3,
+                          diagnosisSummary.domain4,
+                          diagnosisSummary.domain5,
+                          diagnosisSummary.domain6,
+                        ][i] ?? 0,
+                      }))}
                     />
                   )}
                 </div>
@@ -1528,6 +1566,45 @@ export default function DashboardPage() {
                           사전/사후검사 설정
                         </span>
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit rounded-lg border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
+                        disabled={resettingAllData}
+                        onClick={async () => {
+                          if (!userSchool) return;
+                          const msg = "해당 학교 모든 구성원의 데이터(진단·계획·마일리지·성찰·포인트 등)가 삭제됩니다. 복구할 수 없습니다. 정말 초기화하시겠습니까?";
+                          if (!confirm(msg)) return;
+                          setResettingAllData(true);
+                          try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const token = session?.access_token;
+                            if (!token) {
+                              alert("로그인 세션이 없습니다.");
+                              return;
+                            }
+                            const res = await fetch("/api/admin/reset-all-data", {
+                              method: "POST",
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            const j = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              alert(j?.error ?? "초기화에 실패했습니다.");
+                              return;
+                            }
+                            alert(`초기화 완료. ${j.memberCount ?? 0}명의 데이터를 삭제했습니다.`);
+                            window.location.reload();
+                          } finally {
+                            setResettingAllData(false);
+                          }
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {resettingAllData ? "처리 중..." : "모든 구성원 데이터 초기화"}
+                        </span>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1793,10 +1870,160 @@ export default function DashboardPage() {
                   <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-4 shadow-sm">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800">사전/사후검사 설정</p>
-                        <p className="mt-0.5 text-xs text-slate-500">검사 제목과 6개 역량·역량당 5문항을 수정합니다. (저장 버튼을 눌러 반영)</p>
+                        <p className="text-sm font-semibold text-slate-800">역량진단 설문 설정</p>
+                        <p className="mt-0.5 text-xs text-slate-500">CSV 파일을 업로드하면 2~6개 대영역·문항이 해당 학교에 적용됩니다. (열: 번호, 대영역, 소영역, 방향, 설문내용)</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        onClick={() => setShowDiagnosisSettings(false)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    {/* 설문 제목 (관리자 입력) */}
+                    <div className="mb-4 rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
+                      <Label className="text-xs font-semibold text-slate-700">설문 제목</Label>
+                      <p className="mt-0.5 mb-2 text-[11px] text-slate-500">진단 화면 상단에 표시됩니다. 업로드 시 입력하거나 여기서 수정 후 저장하세요.</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          className="max-w-md h-9 text-sm"
+                          placeholder="예: 자기역량진단, 임의로 만든 검사지"
+                          value={diagnosisSurveyTitle}
+                          onChange={(e) => setDiagnosisSurveyTitle(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-9 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700"
+                          onClick={async () => {
+                            const titleToSave = diagnosisSurveyTitle.trim();
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const token = session?.access_token;
+                            if (!token) return;
+                            const res = await fetch("/api/admin/diagnosis-title", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ title: titleToSave }),
+                            });
+                            const j = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              alert(j?.error ?? "제목 저장에 실패했습니다.");
+                              return;
+                            }
+                            setDiagnosisSurveyCurrent((prev) => (prev ? { ...prev, title: titleToSave } : { questionCount: 0, domains: [], title: titleToSave }));
+                            alert("설문 제목이 저장되었습니다.");
+                          }}
+                        >
+                          제목 저장
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* CSV 업로드 (2~6대영역 설문) */}
+                    <div className="mb-4 rounded-lg border border-blue-200/80 bg-blue-50/40 p-3">
+                      <p className="mb-2 text-xs font-semibold text-slate-700">CSV로 설문 업로드</p>
+                      <p className="mb-2 text-[11px] text-slate-500">
+                        대영역 2~6개, 소영역은 영역당 4개 이하. 열 순서: 번호, 대영역, 소영역, 방향, 설문내용 (1번 행은 설명이면 자동 제외)
+                      </p>
+                      <p className="mb-2 text-[11px] text-amber-700">
+                        주의: 한글이 깨지지 않도록 엑셀에서 저장 시 <strong>파일 형식을 &quot;CSV UTF-8(쉼표로 분리)&quot;</strong>로 선택해 주세요.
+                      </p>
+                      {diagnosisSurveyCurrent && diagnosisSurveyCurrent.questionCount > 0 && (
+                        <p className="mb-2 text-[11px] text-slate-600">
+                          현재 적용: {diagnosisSurveyCurrent.questionCount}문항, {diagnosisSurveyCurrent.domains.length}영역 ({diagnosisSurveyCurrent.domains.join(", ")})
+                        </p>
+                      )}
+                      <div className="mb-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 rounded-lg border-blue-300 bg-white px-2 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+                          onClick={() => {
+                            const blob = new Blob(["\uFEFF" + DIAGNOSIS_SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
+                            const a = document.createElement("a");
+                            a.href = URL.createObjectURL(blob);
+                            a.download = "자기역량진단_샘플양식.csv";
+                            a.click();
+                            URL.revokeObjectURL(a.href);
+                          }}
+                        >
+                          샘플 양식 파일 다운로드
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Label className="text-[11px] text-slate-500">업로드 시 제목 (선택)</Label>
+                          <Input
+                            className="mt-0.5 h-8 text-xs"
+                            placeholder="예: 자기역량진단"
+                            value={diagnosisUploadTitle}
+                            onChange={(e) => setDiagnosisUploadTitle(e.target.value)}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <Label className="text-[11px] text-slate-500">CSV 파일</Label>
+                          <input
+                            type="file"
+                            accept=".csv"
+                            className="mt-0.5 block w-full max-w-[200px] text-[11px] text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-blue-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-blue-700"
+                            onChange={(e) => setDiagnosisExcelFile(e.target.files?.[0] ?? null)}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 rounded-lg bg-blue-600 px-3 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                          disabled={!diagnosisExcelFile || diagnosisUploading}
+                          onClick={async () => {
+                            if (!diagnosisExcelFile) return;
+                            setDiagnosisUploading(true);
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const token = session?.access_token;
+                              if (!token) return;
+                              const form = new FormData();
+                              form.append("file", diagnosisExcelFile);
+                              if (diagnosisUploadTitle.trim()) form.append("title", diagnosisUploadTitle.trim());
+                              const res = await fetch("/api/admin/diagnosis-upload", {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${token}` },
+                                body: form,
+                              });
+                              const j = await res.json().catch(() => ({}));
+                              if (!res.ok) {
+                                alert(j.error || "업로드에 실패했습니다.");
+                                return;
+                              }
+                              setDiagnosisSurveyCurrent({
+                                questionCount: j.questionCount ?? 0,
+                                domains: j.domains ?? [],
+                                title: j.title ?? diagnosisUploadTitle.trim(),
+                              });
+                              setDiagnosisExcelFile(null);
+                              setDiagnosisUploadTitle("");
+                              alert("설문이 적용되었습니다.");
+                            } finally {
+                              setDiagnosisUploading(false);
+                            }
+                          }}
+                        >
+                          {diagnosisUploading ? "업로드 중..." : "업로드"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* 기존 6역량 수동 설정 (CSV 미사용 시) */}
+                    <details className="group">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-600 list-none">
+                        <span className="inline-flex items-center gap-1">기존 방식: 6개 역량·역량당 5문항 수동 입력</span>
+                      </summary>
+                      <div className="mt-3 flex flex-col gap-4">
+                      <div className="flex justify-end">
                         <Button
                           type="button"
                           size="sm"
@@ -1832,18 +2059,7 @@ export default function DashboardPage() {
                         >
                           {savingDiagnosisSettings ? "저장 중..." : "저장"}
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                          onClick={() => setShowDiagnosisSettings(false)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-4">
                       <div className="rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
                         <p className="mb-2 text-xs font-semibold text-slate-600">검사 제목 작성</p>
                         <Input
@@ -1893,7 +2109,8 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ))}
-                    </div>
+                      </div>
+                    </details>
                   </Card>
                   )}
                 </div>

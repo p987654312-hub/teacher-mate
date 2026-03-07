@@ -63,7 +63,10 @@ function valueFromPatternOnly(
       }
       return parseTimeValue(text);
     case "other":
-      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g);
+      return (
+        collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) +
+        collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g)
+      ) || 1;
     default:
       return 0;
   }
@@ -99,7 +102,8 @@ export function hasValidMileageFormat(
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) > 0 || true; // 기본적으로 허용
     }
     if (categoryUnit === "건") {
-      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) > 0 || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) > 0 || true;
+      // 1개당 1건으로 인식하므로 단위 없어도 유효. N회·N건 있으면 그에 맞춤
+      return true;
     }
     if (categoryUnit === "권") {
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*권/g) > 0 || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) > 0 || true;
@@ -136,8 +140,13 @@ function parseByUnit(text: string, unit: string): number {
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*분/g) || 0;
     case "회":
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 0;
-    case "건":
-      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 0;
+    case "건": {
+      // 시간·거리 무관 1개당 1건. 내용에 N회·N건이 있으면 그 수만큼 건수 합산
+      const from건 = collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g);
+      const from회 = collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g);
+      const sum = from건 + from회;
+      return sum >= 1 ? sum : 1;
+    }
     case "권":
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*권/g) || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 0;
     case "km":
@@ -179,7 +188,11 @@ export function parseValueFromContent(
     case "book_edutech":
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*권/g) || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 1;
     case "other":
-      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 1;
+      // 건 단위: 1개당 1건, 내용에 N회·N건 있으면 그 수만큼
+      return (
+        collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g) +
+        collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g)
+      ) || 1;
     default:
       return 1;
   }

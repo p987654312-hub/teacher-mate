@@ -4,6 +4,7 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
+  PolarRadiusAxis,
   Radar,
   ResponsiveContainer,
   BarChart,
@@ -50,6 +51,7 @@ export default function DiagnosisResultCharts({
             <RadarChart outerRadius="70%" data={radarCompareData}>
               <PolarGrid stroke="#e5e7eb" />
               <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 14, fontWeight: 600 }} />
+              <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} />
               <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
               <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#6366f1" strokeWidth={2} fill="transparent" fillOpacity={0} />
               <Legend />
@@ -97,6 +99,7 @@ export default function DiagnosisResultCharts({
         >
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 19, fontWeight: 700 }} />
+          <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} />
           <Radar name="역량 진단" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
         </RadarChart>
       </ResponsiveContainer>

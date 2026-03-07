@@ -19,6 +19,9 @@ function AuthCallbackContent() {
       }
 
       try {
+        // 로그인 유지 체크값은 로그인 페이지에서 리다이렉트 전에 이미 저장됨.
+        // Supabase 클라이언트는 이 값을 보고 localStorage/sessionStorage를 선택하므로
+        // exchangeCodeForSession 전에 한 번 더 읽어 두면 올바른 저장소에 세션이 저장됨.
         let user = null;
         let session = null;
 

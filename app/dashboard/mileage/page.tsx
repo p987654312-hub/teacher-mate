@@ -187,7 +187,7 @@ export default function MileagePage() {
   const [adding, setAdding] = useState(false);
   const [content, setContent] = useState("");
   const [addDate, setAddDate] = useState<string>("");
-  const [category, setCategory] = useState<string>(MILEAGE_CATEGORIES[0].key);
+  const [category, setCategory] = useState<string>("");
   const [aiAssistOn, setAiAssistOn] = useState(false);
   const [planGoals, setPlanGoals] = useState<Record<string, number>>({});
   const [healthGoalUnit, setHealthGoalUnit] = useState<"시간" | "거리">("시간");
@@ -425,9 +425,13 @@ export default function MileagePage() {
     const trimmed = content.trim();
     if (!trimmed || !userEmail) return;
 
-    // 영역별 수동 기록은 날짜 선택이 필수
+    // 영역별 수동 기록은 날짜·영역 선택 필수
     if (!aiAssistOn && !addDate.trim()) {
       alert("날짜를 먼저 선택해 주세요.");
+      return;
+    }
+    if (!aiAssistOn && !category?.trim()) {
+      alert("영역을 선택하세요.");
       return;
     }
     setAdding(true);
@@ -491,6 +495,7 @@ export default function MileagePage() {
         .single();
       if (data) setEntries((prev) => [data as MileageEntry, ...prev]);
       setContent("");
+      setCategory("");
     }
     setAdding(false);
   };
@@ -902,18 +907,6 @@ export default function MileagePage() {
             <div className="flex flex-wrap items-center gap-2">
             {!dailyReflectionOn && (
               <>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  disabled={aiAssistOn}
-                  className={`rounded-lg border px-2.5 py-1.5 text-xs text-slate-800 ${
-                    aiAssistOn ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500" : "border-slate-200 bg-white"
-                  }`}
-                >
-                  {displayCategories.map((c) => (
-                    <option key={c.key} value={c.key}>{c.label}</option>
-                  ))}
-                </select>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-medium text-slate-600">AI 어시스트</span>
                   <button
@@ -941,6 +934,20 @@ export default function MileagePage() {
                     />
                   </button>
                 </div>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  disabled={aiAssistOn}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs text-slate-800 ${
+                    aiAssistOn ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500" : "border-slate-200 bg-white"
+                  }`}
+                  aria-label="영역 선택"
+                >
+                  <option value="">영역 선택</option>
+                  {displayCategories.map((c) => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
               </>
             )}
             <Button
