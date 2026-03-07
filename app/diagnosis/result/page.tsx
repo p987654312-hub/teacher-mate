@@ -406,7 +406,8 @@ function DiagnosisResultContent() {
       ? (survey.domains.map((_, i) => `domain${i + 1}`) as readonly string[])
       : (["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const);
   const cat = diagnosisResult.category_scores;
-  const getCount = (key: keyof NonNullable<typeof cat>) => (cat?.[key]?.count ?? 5);
+  type CatKey = keyof NonNullable<typeof cat>;
+  const getCount = (key: string) => (cat?.[key as CatKey]?.count ?? 5);
   const getAvg = (key: (typeof domainKeys)[number], score: number) =>
     score / (getCount(key) || 1);
 
