@@ -407,24 +407,31 @@ function DiagnosisResultContent() {
       : (["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const);
   const cat = diagnosisResult.category_scores;
   type CatKey = keyof NonNullable<typeof cat>;
+  type DomainKey = keyof Pick<DiagnosisResult, "domain1" | "domain2" | "domain3" | "domain4" | "domain5" | "domain6">;
   const getCount = (key: string) => (cat?.[key as CatKey]?.count ?? 5);
   const getAvg = (key: (typeof domainKeys)[number], score: number) =>
     score / (getCount(key) || 1);
 
   // 영역별 평균 점수 — 4영역(v4)이면 4개만, 역량명(domainLabels) 반영
-  const domainAverages = domainKeys.map((key) => ({
-    domain: key,
-    label: domainLabels[key],
-    avg: getAvg(key, diagnosisResult[key]),
-    score: diagnosisResult[key],
-  }));
+  const domainAverages = domainKeys.map((key) => {
+    const dk = key as DomainKey;
+    return {
+      domain: key,
+      label: domainLabels[key],
+      avg: getAvg(key, diagnosisResult[dk]),
+      score: diagnosisResult[dk],
+    };
+  });
 
   const preAverages = preResult
-    ? domainKeys.map((key) => ({
-        domain: key,
-        label: domainLabels[key],
-        avg: getAvg(key, preResult[key]),
-      }))
+    ? domainKeys.map((key) => {
+        const dk = key as DomainKey;
+        return {
+          domain: key,
+          label: domainLabels[key],
+          avg: getAvg(key, preResult[dk]),
+        };
+      })
     : [];
   const radarCompareData =
     preResult && isPost
@@ -437,7 +444,7 @@ function DiagnosisResultContent() {
   const improvedDomains =
     isPost && preResult
       ? domainKeys
-          .filter((key) => diagnosisResult[key] > preResult![key])
+          .filter((key) => diagnosisResult[key as DomainKey] > preResult![key as DomainKey])
           .map((key) => domainLabels[key])
       : [];
 
