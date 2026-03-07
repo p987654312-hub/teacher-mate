@@ -248,12 +248,15 @@ function DiagnosisContent() {
           const counts = survey
             ? domainKeys.map((key) => survey.questions.filter((q) => q.domainKey === key).length || 1)
             : [5, 5, 5, 5, 5, 5];
-          const domainAverages = domainKeys.map((domain, i) => ({
-            domain,
-            label: domainNames[i] ?? DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "",
-            avg: counts[i] ? (domainScores[domain] ?? 0) / counts[i] : 0,
-            score: domainScores[domain] ?? 0,
-          }));
+          const domainAverages = domainKeys.map((domain, i) => {
+            const key = domain as keyof typeof domainScores;
+            return {
+              domain,
+              label: domainNames[i] ?? DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? "",
+              avg: counts[i] ? (domainScores[key] ?? 0) / counts[i] : 0,
+              score: domainScores[key] ?? 0,
+            };
+          });
 
           const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
           const domainCount = domainKeys.length;
