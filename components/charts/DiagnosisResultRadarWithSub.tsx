@@ -90,7 +90,6 @@ export default function DiagnosisResultRadarWithSub({
               <PolarAngleAxis
                 dataKey="name"
                 tick={{ fill: "#6b7280", fontSize: 11, fontWeight: 600 }}
-                tickMargin={4}
               />
               <PolarRadiusAxis
                 angle={90}
