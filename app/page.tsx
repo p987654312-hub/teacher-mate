@@ -123,7 +123,7 @@ export default function Home() {
 
       if (isLogin) {
         // 로그인 모드
-        let data: { user?: { user_metadata?: { name?: string }; email?: string }; session?: { access_token?: string } };
+        let data: { user?: { user_metadata?: { name?: string }; email?: string } | null; session?: { access_token?: string } | null };
         let signInError: { message: string } | null = null;
         try {
           const result = await supabase.auth.signInWithPassword({
