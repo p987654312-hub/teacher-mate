@@ -654,8 +654,8 @@ export default function PlanPage() {
               { label: labels[1], avg: d2, domainKey: domainKeys[1] },
               { label: labels[2], avg: d3, domainKey: domainKeys[2] },
               { label: labels[3], avg: d4, domainKey: domainKeys[3] },
-              ...(domainCount >= 5 ? [{ label: labels[4], avg: d5, domainKey: domainKeys[4] as const }] : []),
-              ...(domainCount >= 6 ? [{ label: labels[5], avg: d6, domainKey: domainKeys[5] as const }] : []),
+              ...(domainCount >= 5 ? [{ label: labels[4], avg: d5, domainKey: domainKeys[4] }] : []),
+              ...(domainCount >= 6 ? [{ label: labels[5], avg: d6, domainKey: domainKeys[5] }] : []),
             ];
             const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
             const strengthN = Math.ceil(domainCount / 2);
