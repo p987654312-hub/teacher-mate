@@ -331,9 +331,11 @@ function DiagnosisResultContent() {
           : ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"];
         const preScoresAvg: Record<string, number> = {};
         const postScoresAvg: Record<string, number> = {};
+        type DomainKey = keyof Pick<DiagnosisResult, "domain1" | "domain2" | "domain3" | "domain4" | "domain5" | "domain6">;
         keys.forEach((k) => {
-          preScoresAvg[k] = preResult[k] != null ? (preResult[k] as number) / (getCount(k) || 1) : 0;
-          postScoresAvg[k] = diagnosisResult[k] != null ? (diagnosisResult[k] as number) / (getCount(k) || 1) : 0;
+          const key = k as DomainKey;
+          preScoresAvg[k] = preResult[key] != null ? (preResult[key] as number) / (getCount(k) || 1) : 0;
+          postScoresAvg[k] = diagnosisResult[key] != null ? (diagnosisResult[key] as number) / (getCount(k) || 1) : 0;
         });
         const totalQ = keys.reduce((s, k) => s + (getCount(k) || 5), 0);
         const maxTotal = totalQ * 5;
