@@ -308,7 +308,7 @@ export default function Home() {
         <div className="rounded-3xl bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-8 shadow-xl backdrop-blur-sm border border-slate-200/80">
           <header className="mb-6 space-y-1">
             <h2 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-              로그인 / 회원가입
+              로그인
             </h2>
             <p className="text-sm text-slate-500">
               교사를 위한 맞춤형 역량 개발 서비스를 시작해 보세요.
