@@ -31,7 +31,9 @@ function DiagnosisContent() {
   const [domainNames, setDomainNames] = useState<string[]>(() => DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
   const [diagnosisTitle, setDiagnosisTitle] = useState("");
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [lockedAnswers, setLockedAnswers] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorQuestionIds, setErrorQuestionIds] = useState<Record<string, boolean>>({});
   const [useSurvey, setUseSurvey] = useState(false);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
 
@@ -177,7 +179,19 @@ function DiagnosisContent() {
         })
       : questions.filter((q) => answers[q.id] === undefined || answers[q.id] === null);
     if (unanswered.length > 0) {
-      alert("모든 문항에 응답해 주세요.");
+      const first = unanswered[0];
+      const errMap: Record<string, boolean> = {};
+      unanswered.forEach((q) => {
+        errMap[q.id] = true;
+      });
+      setErrorQuestionIds(errMap);
+      if (typeof document !== "undefined") {
+        const el = document.getElementById(`question-${first.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+      alert("모든 문항에 응답해 주세요. 표시된 문항을 먼저 확인해 주세요.");
       return;
     }
 
@@ -338,12 +352,17 @@ function DiagnosisContent() {
           subtitle="각 문항에 대해 현재 나의 수준에 가장 가까운 응답을 선택해 주세요."
         />
 
-        {/* 진행률 바 — 높이 낮게, 푸른 계열 */}
-        <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-2.5 shadow-sm">
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-slate-600">진행률</span>
-            <span className="font-semibold text-slate-800">
-              {Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== null).length} / {questions.length}
+        {/* 진행률 바 — 스크롤해도 항상 상단에 보이도록 고정 */}
+        <Card className="sticky top-2 z-10 rounded-xl border-slate-200/80 bg-slate-50/80 p-2.5 shadow-sm backdrop-blur-sm">
+          <div className="mb-1 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">진행률</span>
+              <span className="font-semibold text-slate-800">
+                {Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== null).length} / {questions.length}
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500">
+              선생님들의 손목 보호를 위해, 점수 위를 지나가기만 해도 체크됩니다.(클릭하셔도 됩니다.)
             </span>
           </div>
           <Progress
@@ -366,10 +385,13 @@ function DiagnosisContent() {
               </div>
               {questions.map((question) => {
                 const raw = answers[question.id];
+                const isLocked = lockedAnswers[question.id] === true;
+                const hasError = !!errorQuestionIds[question.id];
                 const isAnswered = raw !== undefined && raw !== null && raw >= 1 && raw <= 5;
                 return (
                   <div
                     key={question.id}
+                    id={`question-${question.id}`}
                     className={`grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 items-center border-b border-slate-100 last:border-b-0 ${
                       isAnswered ? "bg-blue-50/60" : "bg-white"
                     }`}
@@ -378,22 +400,52 @@ function DiagnosisContent() {
                       <span className="font-medium text-slate-500 mr-1.5">{question.id}.</span>
                       {question.text}
                     </p>
-                    <div className="flex items-center justify-between shrink-0 w-[180px] gap-0">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: n }))}
-                          className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center transition-colors ${
-                            raw === n
-                              ? "bg-blue-600 text-white ring-1 ring-blue-600"
-                              : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                          }`}
-                          title={`선택 ${n}`}
-                        >
-                          {raw === n ? <Check className="h-4 w-4" strokeWidth={2.5} /> : null}
-                        </button>
-                      ))}
+                    <div
+                      className={`flex items-center justify-between shrink-0 w-[180px] gap-0 ${
+                        hasError ? "rounded-md ring-2 ring-rose-400" : ""
+                      }`}
+                    >
+                      {[1, 2, 3, 4, 5].map((n) => {
+                        const isSelected = raw === n;
+                        const isFixed = isSelected && isLocked;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                          onMouseEnter={() => {
+                            if (isSubmitting || isLocked) return;
+                            setAnswers((prev) => ({ ...prev, [question.id]: n }));
+                            setErrorQuestionIds((prev) => {
+                              if (!prev[question.id]) return prev;
+                              const next = { ...prev };
+                              delete next[question.id];
+                              return next;
+                            });
+                          }}
+                            onClick={() => {
+                              if (isSubmitting) return;
+                              setAnswers((prev) => ({ ...prev, [question.id]: n }));
+                              setLockedAnswers((prev) => ({ ...prev, [question.id]: true }));
+                            setErrorQuestionIds((prev) => {
+                              if (!prev[question.id]) return prev;
+                              const next = { ...prev };
+                              delete next[question.id];
+                              return next;
+                            });
+                            }}
+                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center transition-colors ${
+                              isFixed
+                                ? "bg-blue-600 text-white ring-1 ring-blue-600"
+                                : isSelected
+                                  ? "bg-blue-100 text-blue-700 ring-1 ring-blue-200"
+                                  : "bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                            }`}
+                            title={`선택 ${n}`}
+                          >
+                            {isSelected ? <Check className="h-4 w-4" strokeWidth={2.5} /> : null}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );

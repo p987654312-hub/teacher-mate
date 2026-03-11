@@ -946,12 +946,17 @@ export default function DashboardPage() {
                 {viewMode === "admin" ? "교원 모드로 전환" : "관리자 모드로 전환"}
               </Button>
             )}
-            <span>
+            <button
+              type="button"
+              onClick={() => router.push("/account")}
+              title="회원 정보 보기 / 변경"
+              className="text-left hover:text-slate-900"
+            >
               {userSchool && <span>{userSchool}</span>}
               {userSchool && userName && <span className="mx-1">|</span>}
               {userName && <span className="font-medium text-blue-600">{userName}</span>}
               {userName && <span> 님</span>}
-            </span>
+            </button>
             <button
               type="button"
               onClick={handleLogout}

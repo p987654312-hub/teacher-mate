@@ -290,312 +290,181 @@ export default function Home() {
           )}
 
           <div className="w-full">
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) =>
-                setActiveTab(value as "teacher" | "admin")
-              }
-              className="w-full"
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAuth();
+              }}
+              className="mt-6 space-y-4"
             >
-              <TabsList className="grid w-full grid-cols-2 rounded-full bg-slate-100 p-1">
-                <TabsTrigger
-                  value="teacher"
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900"
+              <>
+                <Button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isLoading}
+                  className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70 flex items-center justify-center gap-2"
                 >
-                  교사
-                </TabsTrigger>
-                <TabsTrigger
-                  value="admin"
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900"
-                >
-                  관리자
-                </TabsTrigger>
-              </TabsList>
-
-              {/* 교사 탭 */}
-              <TabsContent value="teacher" className="mt-6 space-y-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAuth();
-                  }}
-                  className="space-y-4"
-                >
-                {!isLogin && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="teacher-school">학교명 (정식학교명)</Label>
-                      <Input
-                        id="teacher-school"
-                        placeholder="예: 서울00초등학교"
-                        className="rounded-2xl"
-                        value={teacherSchool}
-                        onChange={(e) => setTeacherSchool(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="teacher-grade-class">학년 반 / 교과</Label>
-                      <Input
-                        id="teacher-grade-class"
-                        placeholder="예: 4-1 / 영어교과"
-                        className="rounded-2xl"
-                        value={teacherGradeClass}
-                        onChange={(e) => setTeacherGradeClass(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="teacher-name">성명</Label>
-                      <Input
-                        id="teacher-name"
-                        placeholder="이름을 입력하세요"
-                        className="rounded-2xl"
-                        value={teacherName}
-                        onChange={(e) => setTeacherName(e.target.value)}
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-email">이메일</Label>
-                  <Input
-                    id="teacher-email"
-                    type="email"
-                    placeholder="example@school.kr"
-                    className="rounded-2xl"
-                    value={teacherEmail}
-                    onChange={(e) => setTeacherEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-password">비밀번호</Label>
-                  <Input
-                    id="teacher-password"
-                    type="password"
-                    placeholder="비밀번호를 입력하세요"
-                    className="rounded-2xl"
-                    value={teacherPassword}
-                    onChange={(e) => setTeacherPassword(e.target.value)}
-                  />
-                </div>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                  {isLogin ? "구글로 로그인 (@shingu.sen.es.kr)" : "구글로 가입하기 (@shingu.sen.es.kr)"}
+                </Button>
                 {isLogin && (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={keepLoggedIn}
+                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
+                    />
+                    <span>로그인 유지 (브라우저를 닫아도 로그인 상태 유지)</span>
+                  </label>
+                )}
+                <div className="relative mt-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-300" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-slate-500">또는</span>
+                  </div>
+                </div>
+              </>
+
+              {!isLogin && (
+                <>
+                  <div className="space-y-1.5 mt-4">
+                    <Label htmlFor="teacher-school">학교명 (정식학교명)</Label>
+                    <Input
+                      id="teacher-school"
+                      placeholder="예: 서울00초등학교"
+                      className="rounded-2xl"
+                      value={teacherSchool}
+                      onChange={(e) => setTeacherSchool(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="teacher-grade-class">학년 반 / 교과</Label>
+                    <Input
+                      id="teacher-grade-class"
+                      placeholder="예: 4-1 / 영어교과"
+                      className="rounded-2xl"
+                      value={teacherGradeClass}
+                      onChange={(e) => setTeacherGradeClass(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="teacher-name">성명</Label>
+                    <Input
+                      id="teacher-name"
+                      placeholder="이름을 입력하세요"
+                      className="rounded-2xl"
+                      value={teacherName}
+                      onChange={(e) => setTeacherName(e.target.value)}
+                    />
+                  </div>
                   <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
                     <input
                       type="checkbox"
-                      checked={saveEmail}
-                      onChange={(e) => setSaveEmail(e.target.checked)}
+                      checked={isAdminSignup}
+                      onChange={(e) => setIsAdminSignup(e.target.checked)}
                       className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
                     />
-                    이메일 저장
+                    학교 관리자입니다
                   </label>
-                )}
-                {isLogin && (
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
-                  >
-                    {isLoading ? "처리 중..." : "로그인하기"}
-                  </Button>
-                )}
-                {!isLogin && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="teacher-beta-code">베타버전 이용코드</Label>
-                    <Input
-                      id="teacher-beta-code"
-                      placeholder="발급받은 코드를 입력하세요"
-                      className="rounded-2xl"
-                      value={teacherBetaCode}
-                      onChange={(e) => setTeacherBetaCode(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                {isLogin && (
-                  <>
-                    <div className="relative mt-2">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-slate-300" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-white px-2 text-slate-500">또는</span>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={handleGoogleSignIn}
-                      disabled={isLoading}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-70 flex items-center justify-center gap-2"
-                    >
-                      <svg className="h-5 w-5" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        />
-                      </svg>
-                      구글로 로그인 (@shingu.sen.es.kr)
-                    </Button>
-                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={keepLoggedIn}
-                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
-                      />
-                      <span>로그인 유지 (브라우저를 닫아도 로그인 상태 유지)</span>
-                    </label>
-                  </>
-                )}
-
-                {!isLogin && (
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
-                  >
-                    {isLoading ? "처리 중..." : "회원가입하기"}
-                  </Button>
-                )}
-
-                <p className="mt-3 text-center text-xs text-slate-400">
-                  {isLogin ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}
-                  <button
-                    type="button"
-                    onClick={() => setIsLogin((prev) => !prev)}
-                    className="font-medium text-[#3B82F6] hover:underline"
-                  >
-                    {isLogin ? "회원가입하기" : "로그인하기"}
-                  </button>
-                </p>
-                </form>
-              </TabsContent>
-
-              {/* 관리자 탭 */}
-              <TabsContent value="admin" className="mt-6 space-y-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAuth();
-                  }}
-                  className="space-y-4"
-                >
-                {!isLogin && (
-                  <>
+                  {isAdminSignup && (
                     <div className="space-y-1.5">
-                      <Label htmlFor="admin-school">학교명 (정식학교명)</Label>
+                      <Label htmlFor="admin-code">슈퍼관리자 코드</Label>
                       <Input
-                        id="admin-school"
-                        placeholder="예: 서울00초등학교"
+                        id="admin-code"
+                        placeholder="슈퍼관리자 코드를 입력하세요"
                         className="rounded-2xl"
-                        value={adminSchool}
-                        onChange={(e) => setAdminSchool(e.target.value)}
+                        value={adminCode}
+                        onChange={(e) => setAdminCode(e.target.value)}
+                        maxLength={3}
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="admin-grade-class">학년 반 / 교과</Label>
-                      <Input
-                        id="admin-grade-class"
-                        placeholder="예: 4-1 / 영어교과"
-                        className="rounded-2xl"
-                        value={adminGradeClass}
-                        onChange={(e) => setAdminGradeClass(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="admin-name">관리자 성명</Label>
-                      <Input
-                        id="admin-name"
-                        placeholder="이름을 입력하세요"
-                        className="rounded-2xl"
-                        value={adminName}
-                        onChange={(e) => setAdminName(e.target.value)}
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="space-y-1.5">
-                  <Label htmlFor="admin-email">이메일</Label>
-                  <Input
-                    id="admin-email"
-                    type="email"
-                    placeholder="example@school.kr"
-                    className="rounded-2xl"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
+                  )}
+                </>
+              )}
+
+              <div className="space-y-1.5 mt-4">
+                <Label htmlFor="teacher-email">이메일</Label>
+                <Input
+                  id="teacher-email"
+                  type="email"
+                  placeholder="example@school.kr"
+                  className="rounded-2xl"
+                  value={teacherEmail}
+                  onChange={(e) => setTeacherEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="teacher-password">비밀번호</Label>
+                <Input
+                  id="teacher-password"
+                  type="password"
+                  placeholder="비밀번호를 입력하세요"
+                  className="rounded-2xl"
+                  value={teacherPassword}
+                  onChange={(e) => setTeacherPassword(e.target.value)}
+                />
+              </div>
+              {isLogin && (
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={saveEmail}
+                    onChange={(e) => setSaveEmail(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
                   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="admin-password">비밀번호</Label>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    placeholder="비밀번호를 입력하세요"
-                    className="rounded-2xl"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                  />
-                </div>
-                {isLogin && (
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
-                    <input
-                      type="checkbox"
-                      checked={saveAdminEmail}
-                      onChange={(e) => setSaveAdminEmail(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
-                    />
-                    이메일 저장
-                  </label>
-                )}
-                {!isLogin && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="admin-code">슈퍼관리자 코드</Label>
-                    <Input
-                      id="admin-code"
-                      placeholder="슈퍼관리자 코드를 입력하세요"
-                      className="rounded-2xl"
-                      value={adminCode}
-                      onChange={(e) => setAdminCode(e.target.value)}
-                      maxLength={3}
-                    />
-                  </div>
-                )}
-
+                  이메일 저장
+                </label>
+              )}
+              {isLogin && (
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 transition disabled:opacity-70"
                 >
-                  {isLoading
-                    ? "처리 중..."
-                    : isLogin
-                    ? "로그인하기"
-                    : "회원가입하기"}
+                  {isLoading ? "처리 중..." : "이메일로 로그인하기"}
                 </Button>
+              )}
+              {!isLogin && (
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 transition disabled:opacity-70"
+                >
+                  {isLoading ? "처리 중..." : "이메일로 회원가입하기"}
+                </Button>
+              )}
 
-                <p className="mt-3 text-center text-xs text-slate-400">
-                  {isLogin ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}
-                  <button
-                    type="button"
-                    onClick={() => setIsLogin((prev) => !prev)}
-                    className="font-medium text-[#3B82F6] hover:underline"
-                  >
-                    {isLogin ? "회원가입하기" : "로그인하기"}
-                  </button>
-                </p>
-                </form>
-              </TabsContent>
-            </Tabs>
+              <p className="mt-3 text-center text-xs text-slate-400">
+                {isLogin ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}
+                <button
+                  type="button"
+                  onClick={() => setIsLogin((prev) => !prev)}
+                  className="font-medium text-[#3B82F6] hover:underline"
+                >
+                  {isLogin ? "회원가입하기" : "로그인하기"}
+                </button>
+              </p>
+            </form>
           </div>
         </div>
       </div>

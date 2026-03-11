@@ -5,23 +5,16 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent
-} from "@/components/ui/tabs";
 import { Compass } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function CompleteProfilePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"teacher" | "admin">("teacher");
   const [schoolName, setSchoolName] = useState("");
   const [gradeClass, setGradeClass] = useState("");
   const [name, setName] = useState("");
   const [adminCode, setAdminCode] = useState("");
-  const [teacherBetaCode, setTeacherBetaCode] = useState("");
+  const [isAdminSignup, setIsAdminSignup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -55,13 +48,7 @@ export default function CompleteProfilePage() {
       setErrorMessage("이름과 학교명을 모두 입력해 주세요.");
       return;
     }
-
-    if (activeTab === "teacher" && !teacherBetaCode.trim()) {
-      setErrorMessage("베타버전 이용코드를 입력해 주세요.");
-      return;
-    }
-
-    if (activeTab === "admin" && !adminCode.trim()) {
+    if (isAdminSignup && !adminCode.trim()) {
       setErrorMessage("관리자 인증코드를 입력해 주세요.");
       return;
     }
@@ -70,23 +57,23 @@ export default function CompleteProfilePage() {
       setIsLoading(true);
       setErrorMessage(null);
 
-      // 베타코드/관리자코드 검증
-      const code = activeTab === "teacher" ? teacherBetaCode.trim() : adminCode.trim();
-      const res = await fetch("/api/admin/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        const msg = (json?.error) ?? "인증코드가 올바르지 않습니다.";
-        setErrorMessage(msg);
-        setIsLoading(false);
-        return;
-      }
+      // 관리자 체크 시에만 코드 검증 및 학교당 관리자 수 확인
+      if (isAdminSignup) {
+        const code = adminCode.trim();
+        const res = await fetch("/api/admin/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          const msg = (json?.error) ?? "인증코드가 올바르지 않습니다.";
+          setErrorMessage(msg);
+          setIsLoading(false);
+          return;
+        }
 
-      // 관리자인 경우 학교당 관리자 수 확인
-      if (activeTab === "admin") {
+        // 관리자인 경우 학교당 관리자 수 확인
         try {
           const countRes = await fetch("/api/admin/count-by-school", {
             method: "POST",
@@ -121,7 +108,7 @@ export default function CompleteProfilePage() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          role: activeTab,
+          role: isAdminSignup ? "admin" : "teacher",
           name: name.trim(),
           schoolName: schoolName.trim(),
           gradeClass: gradeClass.trim(),
@@ -207,113 +194,47 @@ export default function CompleteProfilePage() {
           )}
 
           <div className="w-full">
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) =>
-                setActiveTab(value as "teacher" | "admin")
-              }
-              className="w-full"
-            >
-              <TabsList className="grid w-full grid-cols-2 rounded-full bg-slate-100 p-1">
-                <TabsTrigger
-                  value="teacher"
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900"
-                >
-                  교사
-                </TabsTrigger>
-                <TabsTrigger
-                  value="admin"
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900"
-                >
-                  관리자
-                </TabsTrigger>
-              </TabsList>
-
-              {/* 교사 탭 */}
-              <TabsContent value="teacher" className="mt-6 space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-school">학교명 (정식학교명)</Label>
-                  <Input
-                    id="teacher-school"
-                    placeholder="예: 서울00초등학교"
-                    className="rounded-2xl"
-                    value={schoolName}
-                    onChange={(e) => setSchoolName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-grade-class">학년 반 / 교과</Label>
-                  <Input
-                    id="teacher-grade-class"
-                    placeholder="예: 4-1 / 영어교과"
-                    className="rounded-2xl"
-                    value={gradeClass}
-                    onChange={(e) => setGradeClass(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-name">성명</Label>
-                  <Input
-                    id="teacher-name"
-                    placeholder="이름을 입력하세요"
-                    className="rounded-2xl"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="teacher-beta-code">베타버전 이용코드</Label>
-                  <Input
-                    id="teacher-beta-code"
-                    placeholder="발급받은 코드를 입력하세요"
-                    className="rounded-2xl"
-                    value={teacherBetaCode}
-                    onChange={(e) => setTeacherBetaCode(e.target.value)}
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={handleCompleteProfile}
-                  disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
-                >
-                  {isLoading ? "처리 중..." : "가입 완료"}
-                </Button>
-              </TabsContent>
-
-              {/* 관리자 탭 */}
-              <TabsContent value="admin" className="mt-6 space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="admin-school">학교명 (정식학교명)</Label>
-                  <Input
-                    id="admin-school"
-                    placeholder="예: 서울00초등학교"
-                    className="rounded-2xl"
-                    value={schoolName}
-                    onChange={(e) => setSchoolName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="admin-grade-class">학년 반 / 교과</Label>
-                  <Input
-                    id="admin-grade-class"
-                    placeholder="예: 4-1 / 영어교과"
-                    className="rounded-2xl"
-                    value={gradeClass}
-                    onChange={(e) => setGradeClass(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="admin-name">관리자 성명</Label>
-                  <Input
-                    id="admin-name"
-                    placeholder="이름을 입력하세요"
-                    className="rounded-2xl"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
+            <div className="mt-2 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="teacher-school">학교명 (정식학교명)</Label>
+                <Input
+                  id="teacher-school"
+                  placeholder="예: 서울00초등학교"
+                  className="rounded-2xl"
+                  value={schoolName}
+                  onChange={(e) => setSchoolName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="teacher-grade-class">학년 반 / 교과</Label>
+                <Input
+                  id="teacher-grade-class"
+                  placeholder="예: 4-1 / 영어교과"
+                  className="rounded-2xl"
+                  value={gradeClass}
+                  onChange={(e) => setGradeClass(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="teacher-name">성명</Label>
+                <Input
+                  id="teacher-name"
+                  placeholder="이름을 입력하세요"
+                  className="rounded-2xl"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={isAdminSignup}
+                  onChange={(e) => setIsAdminSignup(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-600 focus:ring-slate-400 focus:ring-offset-0"
+                />
+                학교 관리자입니다
+              </label>
+              {isAdminSignup && (
                 <div className="space-y-1.5">
                   <Label htmlFor="admin-code">슈퍼관리자 코드</Label>
                   <Input
@@ -325,17 +246,17 @@ export default function CompleteProfilePage() {
                     maxLength={3}
                   />
                 </div>
+              )}
 
-                <Button
-                  type="button"
-                  onClick={handleCompleteProfile}
-                  disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
-                >
-                  {isLoading ? "처리 중..." : "가입 완료"}
-                </Button>
-              </TabsContent>
-            </Tabs>
+              <Button
+                type="button"
+                onClick={handleCompleteProfile}
+                disabled={isLoading}
+                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
+              >
+                {isLoading ? "처리 중..." : "가입 완료"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
