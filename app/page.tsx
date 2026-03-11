@@ -7,33 +7,20 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent
-} from "@/components/ui/tabs";
 import { Compass } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"teacher" | "admin">("teacher");
   const [isLogin, setIsLogin] = useState(true);
   const [teacherSchool, setTeacherSchool] = useState("");
   const [teacherGradeClass, setTeacherGradeClass] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [teacherEmail, setTeacherEmail] = useState("");
   const [teacherPassword, setTeacherPassword] = useState("");
-  const [adminSchool, setAdminSchool] = useState("");
-  const [adminGradeClass, setAdminGradeClass] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
-  const [teacherBetaCode, setTeacherBetaCode] = useState("");
+  const [isAdminSignup, setIsAdminSignup] = useState(false);
   const [saveEmail, setSaveEmail] = useState(true);
-  const [saveAdminEmail, setSaveAdminEmail] = useState(true);
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -59,13 +46,6 @@ export default function Home() {
     if (wantSave) {
       const email = localStorage.getItem("teacher_mate_email");
       if (email) setTeacherEmail(email);
-    }
-    const adminSaved = localStorage.getItem("teacher_mate_save_admin_email");
-    const wantSaveAdmin = adminSaved !== "0";
-    setSaveAdminEmail(wantSaveAdmin);
-    if (wantSaveAdmin) {
-      const adminEmailVal = localStorage.getItem("teacher_mate_admin_email");
-      if (adminEmailVal) setAdminEmail(adminEmailVal);
     }
     setKeepLoggedIn(localStorage.getItem("teacher-mate-remember") === "1");
   }, []);
@@ -105,13 +85,11 @@ export default function Home() {
   };
 
   const handleAuth = async () => {
-    const email = activeTab === "teacher" ? teacherEmail : adminEmail;
-    const password = activeTab === "teacher" ? teacherPassword : adminPassword;
-    const name = activeTab === "teacher" ? teacherName : adminName;
-    const schoolName =
-      activeTab === "teacher" ? teacherSchool : adminSchool;
-    const gradeClass =
-      activeTab === "teacher" ? teacherGradeClass : adminGradeClass;
+    const email = teacherEmail;
+    const password = teacherPassword;
+    const name = teacherName;
+    const schoolName = teacherSchool;
+    const gradeClass = teacherGradeClass;
 
     if (!email || !password) {
       alert("이메일과 비밀번호를 모두 입력해 주세요.");
@@ -152,22 +130,12 @@ export default function Home() {
         }
 
         if (typeof window !== "undefined") {
-          if (activeTab === "teacher") {
-            if (saveEmail) {
-              localStorage.setItem("teacher_mate_email", email);
-              localStorage.setItem("teacher_mate_save_email", "1");
-            } else {
-              localStorage.removeItem("teacher_mate_email");
-              localStorage.setItem("teacher_mate_save_email", "0");
-            }
+          if (saveEmail) {
+            localStorage.setItem("teacher_mate_email", email);
+            localStorage.setItem("teacher_mate_save_email", "1");
           } else {
-            if (saveAdminEmail) {
-              localStorage.setItem("teacher_mate_admin_email", email);
-              localStorage.setItem("teacher_mate_save_admin_email", "1");
-            } else {
-              localStorage.removeItem("teacher_mate_admin_email");
-              localStorage.setItem("teacher_mate_save_admin_email", "0");
-            }
+            localStorage.removeItem("teacher_mate_email");
+            localStorage.setItem("teacher_mate_save_email", "0");
           }
         }
 
@@ -196,33 +164,33 @@ export default function Home() {
         router.push("/dashboard");
       } else {
         // 회원가입 모드
-        // 교사·관리자 모두 베타 이용을 위한 슈퍼관리자 비번 검증
-        const betaCode = activeTab === "teacher" ? teacherBetaCode.trim() : adminCode.trim();
-        if (!betaCode) {
-          alert(activeTab === "teacher" ? "베타버전 이용코드를 입력해 주세요." : "관리자 인증코드가 올바르지 않습니다.");
-          setIsLoading(false);
-          return;
-        }
-        try {
-          const res = await fetch("/api/admin/verify-code", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: betaCode }),
-          });
-          if (!res.ok) {
-            const json = await res.json().catch(() => null);
-            const msg = (json?.error) ?? "인증코드가 올바르지 않습니다.";
-            alert(msg);
+        // 학교 관리자 체크 시에만 슈퍼관리자 코드 검증 및 관리자 수 제한 확인
+        if (isAdminSignup) {
+          const betaCode = adminCode.trim();
+          if (!betaCode) {
+            alert("학교 관리자용 슈퍼관리자 코드를 입력해 주세요.");
             setIsLoading(false);
             return;
           }
-        } catch (error) {
-          console.error(error);
-          alert("인증코드 확인 중 오류가 발생했습니다.");
-          setIsLoading(false);
-          return;
-        }
-        if (activeTab === "admin") {
+          try {
+            const res = await fetch("/api/admin/verify-code", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code: betaCode }),
+            });
+            if (!res.ok) {
+              const json = await res.json().catch(() => null);
+              const msg = json?.error ?? "인증코드가 올바르지 않습니다.";
+              alert(msg);
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.error(error);
+            alert("인증코드 확인 중 오류가 발생했습니다.");
+            setIsLoading(false);
+            return;
+          }
           try {
             const countRes = await fetch("/api/admin/count-by-school", {
               method: "POST",
@@ -246,7 +214,7 @@ export default function Home() {
           password,
           options: {
             data: {
-              role: activeTab, // teacher / admin 구분 정보 메타데이터로 저장
+              role: isAdminSignup ? "admin" : "teacher", // 관리자 체크 여부로 역할 구분
               name,
               schoolName,
               gradeClass,
