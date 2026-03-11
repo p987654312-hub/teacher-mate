@@ -22,6 +22,10 @@ export async function POST(req: Request) {
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "email이 필요합니다." }, { status: 400 });
     }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return NextResponse.json({ error: "email이 필요합니다." }, { status: 400 });
+    }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -43,17 +47,42 @@ export async function POST(req: Request) {
     }
 
     const admin = getSupabaseAdmin();
-    const { data: listData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const users = (listData?.users ?? []) as Array<{
-      id: string;
-      email?: string;
-      user_metadata?: { role?: string; schoolName?: string; name?: string };
-    }>;
-    const teacher = users.find(
-      (u) => (u.email ?? "").toLowerCase() === email.toLowerCase() && (u.user_metadata?.role ?? "") === "teacher"
-    );
+    type ListedUser = { id: string; email?: string; user_metadata?: { role?: string; schoolName?: string; name?: string } };
+    const findByEmail = async (): Promise<ListedUser | undefined> => {
+      const perPage = 1000;
+      const maxPages = 200;
+      const tryRanges: Array<{ start: number }> = [{ start: 1 }, { start: 0 }];
+      for (const { start } of tryRanges) {
+        for (let i = 0; i < maxPages; i++) {
+          const page = start + i;
+          const { data: listData, error: listError } = await admin.auth.admin.listUsers({ page, perPage });
+          if (listError) {
+            console.error("result-report-by-email listUsers error:", listError);
+            break;
+          }
+          const users = (listData?.users ?? []) as ListedUser[];
+          if (users.length === 0) break;
+          const found = users.find((u) => (u.email ?? "").trim().toLowerCase() === normalizedEmail);
+          if (found) return found;
+          if (users.length < perPage) break;
+        }
+      }
+      return undefined;
+    };
+
+    const teacher = await findByEmail();
     if (!teacher) {
       return NextResponse.json({ error: "해당 교원을 찾을 수 없습니다." }, { status: 404 });
+    }
+    const rawRole = (teacher.user_metadata as any)?.role;
+    const roleNorm = Array.isArray(rawRole)
+      ? rawRole.map((r) => String(r)).join(",").toLowerCase()
+      : String(rawRole ?? "").trim().toLowerCase();
+    const isTeacherRole = roleNorm.includes("teacher");
+    const isAdminRole = roleNorm.includes("admin");
+    // 관리자도 교원 권한을 가집니다.
+    if (roleNorm && !(isTeacherRole || isAdminRole)) {
+      return NextResponse.json({ error: "해당 계정은 교원 계정이 아닙니다." }, { status: 400 });
     }
 
     const teacherSchool = (teacher.user_metadata?.schoolName ?? "").trim();
