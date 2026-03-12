@@ -2476,6 +2476,7 @@ export default function DashboardPage() {
                                             outerRadius="95%"
                                             dataKey="value"
                                             strokeWidth={0}
+                                            cursor="pointer"
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>
