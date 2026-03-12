@@ -16,12 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
 import { computeMileageProgress } from "@/lib/mileageProgress";
-import {
-  getTrainingDifficultyLevel,
-  getClassOpenDifficultyLevel,
-  getDifficultyStars,
-  getRelativeDifficultyStars,
-} from "@/lib/mileageDifficulty";
+// mileageDifficulty 관련 별표 표기는 더 이상 사용하지 않음
 import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
 import { DIAGNOSIS_SAMPLE_CSV } from "@/lib/diagnosisSampleCsv";
 import {
@@ -242,6 +237,14 @@ export default function DashboardPage() {
     other: "건",
   };
   const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#c084fc", "#d8b4fe", "#e9d5ff"];
+  const [pointsDetailOwner, setPointsDetailOwner] = useState<{ name: string; isAdminSelf: boolean } | null>(null);
+  const [isLoadingPointsDetail, setIsLoadingPointsDetail] = useState(false);
+  const [adminMileageDetail, setAdminMileageDetail] = useState<{
+    teacherName: string;
+    categoryLabel: string;
+    entries: { id: string; content: string; created_at: string }[];
+  } | null>(null);
+  const [showAdminMileageDetail, setShowAdminMileageDetail] = useState(false);
 
   // 보호된 라우트: 로그인하지 않은 사용자는 / 로 리다이렉트
   useEffect(() => {
@@ -1027,7 +1030,10 @@ export default function DashboardPage() {
                       {showTeacherView && (
                         <button
                           type="button"
-                          onClick={() => setShowMileageDetail(true)}
+                          onClick={() => {
+                            setPointsDetailOwner({ name: userName ?? "", isAdminSelf: userRole === "admin" });
+                            setShowMileageDetail(true);
+                          }}
                           className="absolute right-0 flex items-baseline justify-end gap-1 cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ bottom: "calc(32px - 1mm)", animation: "dashboard-car-float 1.5s ease-in-out infinite" }}
                         >
@@ -1310,18 +1316,6 @@ export default function DashboardPage() {
                                 const goal = c.goal ?? 0;
                                 const sum = c.sum ?? 0;
                                 const unit = c.unit ?? "";
-                                let stars: string;
-                                if (goal === 0) {
-                                  // 목표가 0이거나 입력 전이면 모든 별 비움
-                                  stars = "☆☆☆☆☆";
-                                } else if (c.key === "training") {
-                                  stars = getDifficultyStars(getTrainingDifficultyLevel(goal));
-                                } else if (c.key === "class_open") {
-                                  stars = getDifficultyStars(getClassOpenDifficultyLevel(goal));
-                                } else {
-                                  const rel = relativeDifficulty?.[c.key] ?? 2;
-                                  stars = getRelativeDifficultyStars(rel as 1 | 2 | 3);
-                                }
                                 const progressText = goal > 0 || sum > 0
                                   ? `${Number(sum).toFixed(sum % 1 === 0 ? 0 : 1)}/${goal}${unit ? ` ${unit}` : ""}`
                                   : "";
@@ -1348,25 +1342,11 @@ export default function DashboardPage() {
                                       </div>
                                     </div>
                                     <span className="text-[10px] font-medium text-slate-600 leading-tight sm:text-xs">{c.label}</span>
-                                    <div className="flex items-center gap-1">
-                                      {progressText && <span className="text-[10px] text-slate-500 sm:text-xs">{progressText}</span>}
-                                      <div className="relative group">
-                                        <span className="text-[15px] text-slate-500 sm:text-[18px] cursor-help">{stars}</span>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                                          <div className="space-y-1.5">
-                                            <p className="text-[11px] leading-relaxed">목표를 설정하고 달성하기 위한 난이도를 시각화 하였습니다. 목표 달성에 많은 노력이 필요한 만큼 난이도가 높아집니다.</p>
-                                            <div className="pt-1.5 border-t border-slate-700">
-                                              <div className="font-semibold mb-1">[목표 달성 난이도]</div>
-                                              <div className="space-y-0.5">
-                                                <div>★☆☆☆☆ 매우 쉬움</div>
-                                                <div>★★★★★ 매우 어려움</div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
-                                        </div>
-                                      </div>
-                                    </div>
+                                    {progressText && (
+                                      <span className="text-[10px] text-slate-500 sm:text-xs">
+                                        {progressText}
+                                      </span>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -2168,17 +2148,59 @@ export default function DashboardPage() {
                                 {t.gradeClass && <span className="truncate text-[10px] leading-tight text-slate-500">{t.gradeClass}</span>}
                                 <div className="flex flex-col gap-0.5">
                                   <p className="truncate text-sm font-semibold text-slate-800">{t.name || "-"}</p>
-                                  {expanded ? (
-                                    <span className="shrink-0 flex items-baseline gap-1">
-                                      <span className="text-[calc(20px*0.75)] font-medium text-slate-600">{(t.totalPoints ?? 0).toLocaleString()}</span>
-                                      <span className="text-[calc(10px*0.75*1.5)] font-medium text-slate-600">P</span>
-                                    </span>
-                                  ) : (
-                                    <span className="shrink-0 flex items-baseline gap-1">
-                                      <span className="text-[calc(0.875rem*0.75)] font-semibold text-slate-800">{(t.totalPoints ?? 0).toLocaleString()}</span>
-                                      <span className="text-[calc(8.4px*0.75*1.5)] font-medium text-slate-600">P</span>
-                                    </span>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        setIsLoadingPointsDetail(true);
+                                        setShowMileageDetail(true);
+                                        setPointsDetailOwner({ name: t.name || t.email || "교사", isAdminSelf: false });
+                                        const { data: { session } } = await supabase.auth.getSession();
+                                        const token = session?.access_token;
+                                        if (!token) {
+                                          throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+                                        }
+                                        const res = await fetch("/api/admin/points-by-email", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            Authorization: `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({ email: t.email }),
+                                        });
+                                        const json = await res.json();
+                                        if (!res.ok) {
+                                          throw new Error(json?.error || "포인트 정보를 불러오지 못했습니다.");
+                                        }
+                                        setPointsDetail({
+                                          base: json.base ?? 0,
+                                          login: json.login ?? 0,
+                                          mileage: json.mileage ?? 0,
+                                          total: json.total ?? 0,
+                                        });
+                                        setMileagePointItems(Array.isArray(json.mileageBreakdown) ? json.mileageBreakdown : []);
+                                      } catch (err: any) {
+                                        console.error(err);
+                                        alert(err?.message || "포인트 정보를 불러오는 중 오류가 발생했습니다.");
+                                      } finally {
+                                        setIsLoadingPointsDetail(false);
+                                      }
+                                    }}
+                                    className="shrink-0 inline-flex items-baseline gap-1 rounded-full px-1.5 py-0.5 hover:bg-violet-50 hover:text-violet-700 transition-colors"
+                                    title="포인트 세부 내역 보기"
+                                  >
+                                    {expanded ? (
+                                      <>
+                                        <span className="text-[calc(20px*0.75)] font-medium text-slate-600">{(t.totalPoints ?? 0).toLocaleString()}</span>
+                                        <span className="text-[calc(10px*0.75*1.5)] font-medium text-slate-600">P</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="text-[calc(0.875rem*0.75)] font-semibold text-slate-800">{(t.totalPoints ?? 0).toLocaleString()}</span>
+                                        <span className="text-[calc(8.4px*0.75*1.5)] font-medium text-slate-600">P</span>
+                                      </>
+                                    )}
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -2227,9 +2249,17 @@ export default function DashboardPage() {
                                             </PieChart>
                                           </ResponsiveContainer>
                                           <span className="w-full truncate text-center text-[8px] text-slate-500 sm:text-[9px]">{c.label}</span>
-                                          {"difficultyStars" in c && (
-                                            <span className="text-[7px] text-slate-400 sm:text-[8px]">{(c as { difficultyStars?: string }).difficultyStars}</span>
-                                          )}
+                                          {(() => {
+                                            const goal = (c as { goal?: number }).goal ?? 0;
+                                            const sum = (c as { sum?: number }).sum ?? 0;
+                                            const unit = (c as { unit?: string }).unit ?? "";
+                                            return (
+                                              <span className="text-[7px] text-slate-400 sm:text-[8px]">
+                                                {Number(sum).toFixed(sum % 1 === 0 ? 0 : 1)} / {goal}
+                                                {unit ? ` ${unit}` : ""}
+                                              </span>
+                                            );
+                                          })()}
                                         </div>
                                       );
                                     })}
@@ -2338,11 +2368,41 @@ export default function DashboardPage() {
                                 const goal = (c as { goal?: number }).goal ?? 0;
                                 const sum = (c as { sum?: number }).sum ?? 0;
                                 const unit = (c as { unit?: string }).unit ?? "";
-                                const progressText = goal > 0 || sum > 0
-                                  ? `${Number(sum).toFixed(sum % 1 === 0 ? 0 : 1)}/${goal}${unit ? ` ${unit}` : ""}`
-                                  : "";
+                                const progressText = `${Number(sum).toFixed(sum % 1 === 0 ? 0 : 1)}/${goal}${unit ? ` ${unit}` : ""}`;
                                 return (
-                                  <div key={c.key} className="flex flex-col items-center gap-1" title={`${c.label} ${Math.round(c.progress)}%`}>
+                                  <button
+                                    key={c.key}
+                                    type="button"
+                                    className="flex flex-col items-center gap-1"
+                                    title={`${c.label} ${Math.round(c.progress)}%`}
+                                    onClick={async () => {
+                                      try {
+                                        setShowAdminMileageDetail(true);
+                                        setAdminMileageDetail({ teacherName: t.name || t.email || "교사", categoryLabel: c.label, entries: [] });
+                                        const { data: { session } } = await supabase.auth.getSession();
+                                        const token = session?.access_token;
+                                        if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+                                        const res = await fetch("/api/admin/mileage-by-email", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            Authorization: `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({ email: t.email, category: c.key }),
+                                        });
+                                        const json = await res.json();
+                                        if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
+                                        setAdminMileageDetail({
+                                          teacherName: t.name || t.email || "교사",
+                                          categoryLabel: c.label,
+                                          entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
+                                        });
+                                      } catch (err: any) {
+                                        console.error(err);
+                                        alert(err?.message || "마일리지 기록을 불러오는 중 오류가 발생했습니다.");
+                                      }
+                                    }}
+                                  >
                                     <div className="relative h-24 w-24">
                                       <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
@@ -2364,28 +2424,8 @@ export default function DashboardPage() {
                                       </div>
                                     </div>
                                     <span className="w-full truncate text-center text-[13px] font-medium text-slate-700">{c.label}</span>
-                                    {"difficultyStars" in c && (
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <div className="relative group">
-                                          <span className="text-[13px] text-slate-500 cursor-help">{(c as { difficultyStars?: string }).difficultyStars}</span>
-                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                                            <div className="space-y-1.5">
-                                              <p className="text-[11px] leading-relaxed">목표를 설정하고 달성하기 위한 난이도를 시각화 하였습니다. 목표 달성에 많은 노력이 필요한 만큼 난이도가 높아집니다.</p>
-                                              <div className="pt-1.5 border-t border-slate-700">
-                                                <div className="font-semibold mb-1">[목표 달성 난이도]</div>
-                                                <div className="space-y-0.5">
-                                                  <div>★☆☆☆☆ 매우 쉬움</div>
-                                                  <div>★★★★★ 매우 어려움</div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
-                                          </div>
-                                        </div>
-                                        {progressText && <span className="text-[11px] text-slate-500">{progressText}</span>}
-                                      </div>
-                                    )}
-                                  </div>
+                                    {progressText && <span className="text-[11px] text-slate-600">{progressText}</span>}
+                                  </button>
                                 );
                               })}
                             </div>
@@ -2414,13 +2454,22 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* 열정 포인트 상세 내역 모달 */}
+      {/* 열정 포인트 상세 내역 모달 (교사 본인 또는 관리자에서 선택한 교사) */}
       <Dialog open={showMileageDetail} onOpenChange={setShowMileageDetail}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>나의 마일리지 현황</DialogTitle>
+            <DialogTitle>
+              {pointsDetailOwner?.name
+                ? pointsDetailOwner.isAdminSelf
+                  ? `${pointsDetailOwner.name} 선생님 마일리지 현황`
+                  : `${pointsDetailOwner.name} 선생님 마일리지 현황`
+                : "마일리지 현황"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {isLoadingPointsDetail && (
+              <p className="text-xs text-slate-500">포인트 세부 내역을 불러오는 중입니다...</p>
+            )}
             {/* 기본 포인트 */}
             {pointsDetail && (
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
@@ -2491,6 +2540,46 @@ export default function DashboardPage() {
                   {pointsDetail.total.toLocaleString()}점
                 </span>
               </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 관리자: 개별 교사의 특정 영역 마일리지 기록 모달 */}
+      <Dialog open={showAdminMileageDetail} onOpenChange={setShowAdminMileageDetail}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {adminMileageDetail
+                ? `${adminMileageDetail.teacherName} 선생님 실천 기록`
+                : "마일리지 실천 기록"}
+            </DialogTitle>
+            {adminMileageDetail && (
+              <p className="mt-1 text-xs text-slate-500">
+                영역: {adminMileageDetail.categoryLabel}
+              </p>
+            )}
+          </DialogHeader>
+          <div className="max-h-[420px] overflow-y-auto space-y-2">
+            {!adminMileageDetail || adminMileageDetail.entries.length === 0 ? (
+              <p className="text-sm text-slate-500">해당 영역의 마일리지 기록이 없습니다.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm text-slate-700">
+                {adminMileageDetail.entries.map((e) => (
+                  <li key={e.id} className="rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-1.5">
+                    <div className="text-[11px] text-slate-400 mb-0.5">
+                      {new Date(e.created_at).toLocaleString("ko-KR", {
+                        year: "2-digit",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words">{e.content}</div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </DialogContent>

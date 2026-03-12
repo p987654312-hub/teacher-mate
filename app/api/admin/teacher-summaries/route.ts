@@ -2,12 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeMileageProgress, parseValueFromContent } from "@/lib/mileageProgress";
 import { parseStored } from "@/app/api/points/school-settings/route";
-import {
-  getTrainingDifficultyLevel,
-  getClassOpenDifficultyLevel,
-  getDifficultyStars,
-  getRelativeDifficultyStars,
-} from "@/lib/mileageDifficulty";
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -224,42 +218,9 @@ export async function POST(req: Request) {
       })
     );
 
-    const goalKeysRel = ["community", "book_edutech", "health", "other"] as const;
-    const goalsByEmail: Record<string, Record<string, number>> = {};
-    result.forEach((r) => {
-      goalsByEmail[r.email] = (r as { planGoals?: Record<string, number> }).planGoals ?? {};
-    });
-    const n = result.length;
-    const relativeByEmail: Record<string, Record<string, 1 | 2 | 3>> = {};
-    result.forEach((r) => {
-      relativeByEmail[r.email] = {};
-      goalKeysRel.forEach((key) => {
-        if (n <= 1) relativeByEmail[r.email][key] = 1;
-        else if (n <= 5) relativeByEmail[r.email][key] = 2;
-        else {
-          const values = result
-            .map((t) => goalsByEmail[t.email]?.[key] ?? 0)
-            .sort((a, b) => a - b);
-          const current = goalsByEmail[r.email]?.[key] ?? 0;
-          const pos = values.indexOf(current);
-          const rank = pos >= 0 ? pos : values.length;
-          const third = Math.max(1, Math.floor(values.length / 3));
-          if (rank < third) relativeByEmail[r.email][key] = 1;
-          else if (rank < 2 * third) relativeByEmail[r.email][key] = 2;
-          else relativeByEmail[r.email][key] = 3;
-        }
-      });
-    });
-
     const teachersOut = result.map((r) => {
-      const rel = relativeByEmail[r.email] ?? {};
       const categories = (r.mileageSummary.categories as { key: string; label: string; progress: number; sum: number; goal: number; unit: string }[]).map((c) => {
-        const goal = c.goal ?? 0;
-        let difficultyStars: string;
-        if (c.key === "training") difficultyStars = getDifficultyStars(getTrainingDifficultyLevel(goal));
-        else if (c.key === "class_open") difficultyStars = getDifficultyStars(getClassOpenDifficultyLevel(goal));
-        else difficultyStars = getRelativeDifficultyStars(rel[c.key] ?? 2);
-        return { key: c.key, label: c.label, progress: c.progress, sum: c.sum ?? 0, goal: c.goal ?? 0, unit: c.unit ?? "", difficultyStars };
+        return { key: c.key, label: c.label, progress: c.progress, sum: c.sum ?? 0, goal: c.goal ?? 0, unit: c.unit ?? "" };
       });
       const { planGoals: _pg, ...rest } = r as { planGoals?: Record<string, number> };
       return { ...rest, mileageSummary: { overallProgress: r.mileageSummary.overallProgress, categories } };

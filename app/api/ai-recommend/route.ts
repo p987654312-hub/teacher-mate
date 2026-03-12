@@ -174,6 +174,11 @@ ${mileageText || "(없음)"}
 - 평가자 기초 자료:
 ${contextText || "(없음)"}
 
+[담당 업무 작성 가이드 – 반드시 반영]
+- 초등학교 일반적인 교육활동 업무분장(예: 교육기획부, 생활인성부, 과학정보부, 문화예술부, 방과후·돌봄, 체육교육부, 안전교육부, 행정·업무지원 등)을 기본 틀로 이해하고, 평가자의 실제 담당 업무(위 참고 자료의 "담당 업무")와 연결해서 작성할 것.
+- "담당 업무" 영역(dutyGoal, dutyResult)은 위 업무분장 틀과 평가자의 실제 역할(예: 생활인성부, 과학정보부, 방과후학교 담당, 안전·보건, 예산·구매, 시설관리 등)이 드러나도록, 구체적인 학교 업무(계획 수립, 회의 운영, 문서 작성, 행사 운영, 학부모·학생 안내, 안전점검, 예산 집행 등)를 포함해서 써 줄 것.
+- 단순히 "학교 업무를 성실히 수행함"과 같은 포괄적 표현만 쓰지 말고, 업무분장표에 나올 법한 실제 활동 중심으로 개조식으로 작성할 것.
+
 [출력 형식] 반드시 아래 JSON만 출력할 것. 다른 설명이나 마크다운 없이 JSON만. 각 값은 개조식 문장들(줄바꿈 가능)이며 200자 내외.
 {
   "learningGoal": "가. 학습지도 추진 목표 (개조식, ~지원/~적용/~조성함 등, 200자 내외)",
@@ -208,6 +213,10 @@ ${mileageText || "(없음)"}
       prompt = `[역할] 너는 AI나 컨설턴트가 아니라, 역량 진단 결과를 바탕으로 이번 학기 목표를 직접 세우고 있는 '교사 본인'이다.
 
 [시점·어조] 반드시 1인칭 시점("저는", "나의")을 사용하고, 학교나 교육청에 제출하는 공식 계획서처럼 전문적이고 의지적인 어조("~하고자 합니다", "~할 계획입니다", "~노력하겠습니다")로 작성할 것.
+
+[문장 끝맺음]
+- 마지막 문장을 포함해 "다짐합니다"라는 표현은 절대 쓰지 말 것.
+- 대신 "노력할 것입니다.", "실천할 것입니다.", "꾸준히 개선해 나갈 것입니다.", "성실히 이행하겠습니다."처럼 자연스러운 종결 표현을 사용할 것.
 
 [절대 금지] "이 교사님의~", "추천합니다", "다음과 같습니다", "결과를 분석해보면" 같은 제3자 화법이나 AI 비서 도입부는 사용하지 말 것. 인사말 없이 바로 본인의 다짐과 목표부터 시작할 것.
 
@@ -320,6 +329,9 @@ ${planText}
       const cardType = String((body as any)?.cardType ?? "").trim();
       const count = Math.min(Math.max(1, Number((body as any)?.count) || 1), 20);
       const developmentGoal = String((body as any)?.developmentGoal ?? "").trim();
+      const categoryKey = String((body as any)?.categoryKey ?? "").trim();
+      const categoryLabel = String((body as any)?.categoryLabel ?? "").trim();
+      const categoryUnit = String((body as any)?.categoryUnit ?? "").trim();
       const currentYear = new Date().getFullYear();
       const cardTypes: Record<string, { keys: string[]; desc: string }> = {
         training: { keys: ["name", "period", "duration", "remarks"], desc: "직무/자율 연수: name(연수명), period(시기 예: 4월), duration(시간 수), remarks(비고)" },
@@ -336,6 +348,11 @@ ${planText}
           { status: 400 }
         );
       }
+
+      const categoryTitle = categoryLabel || categoryKey || "";
+      const categoryContext = categoryTitle
+        ? `\n[카테고리(학교 설정) – 반드시 준수]\n- 현재 카테고리명: "${categoryTitle}"\n- 생성하는 내용은 반드시 이 카테고리명(의미)에 맞아야 한다.\n- 카테고리명에 운동/체력/건강이 명시되지 않았다면, 조깅·헬스·걷기 등 체력향상 예시는 사용하지 말 것.\n- 카테고리 단위(있으면 참고): "${categoryUnit || "(없음)"}"\n`
+        : "";
       const periodInstruction = spec.keys.includes("period")
         ? `\n[시기(period) 규칙 – 반드시 준수]\n- 연도는 **${currentYear}년**(올해)만 사용할 것. 과거 연도 사용 금지.\n${
             cardType === "book"
@@ -343,10 +360,12 @@ ${planText}
               : `- 시기는 ${currentYear}년 기준 월 또는 학기로 표기할 것.\n`
           }`
         : "";
+      const descPrefix = categoryTitle ? `${categoryTitle}: ` : "";
       prompt = `[역할] 너는 교원 자기역량 개발 계획서 작성을 돕는 전문가이다.
 
-[지시] 아래 '자기역량 개발목표'를 참고하여, **${spec.desc}** 형식의 계획 행을 **정확히 ${count}개** 생성한다.
+[지시] 아래 '자기역량 개발목표'를 참고하여, **${descPrefix}${spec.desc}** 형식의 계획 행을 **정확히 ${count}개** 생성한다.
 ${periodInstruction}
+[중요] 학교 설정 카테고리명에 맞지 않는 내용(예: 제목이 전문성 계발인데 체력훈련 내용 등)은 금지.${categoryContext}
 [자기역량 개발목표]
 ${developmentGoal || "(없음 - 일반적인 교원 역량 개발에 맞는 합리적인 예시로 생성)"}
 
@@ -448,6 +467,22 @@ ${cardType === "other" ? '[{"text":"교육과정 워크숍 참가"}]' : ""}
       msg.includes("limit") ||
       msg.includes("resource_exhausted");
     if (isQuotaOrRate) {
+      // 개발 환경에서는 실제 오류 내용을 함께 반환하여 원인 파악을 쉽게 합니다.
+      if (process.env.NODE_ENV === "development") {
+        return NextResponse.json(
+          {
+            error: "Gemini 호출이 제한되었습니다(쿼터/레이트리밋 가능).",
+            code: "QUOTA_EXCEEDED",
+            debug: {
+              status: error?.status ?? null,
+              name: error?.name ?? null,
+              message: error?.message ?? null,
+              details: error?.errorDetails ?? error?.details ?? null,
+            },
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         {
           error: "개발자의 AI(제미나이) API한도가 초과되었습니다. 개발자의 주머니 사정이 여의치 않아 발생하는 오류이니 30여분 후 다시 실행부탁드립니다.",
@@ -458,7 +493,17 @@ ${cardType === "other" ? '[{"text":"교육과정 워크숍 참가"}]' : ""}
     }
     const errorMessage = error?.message || "알 수 없는 오류가 발생했습니다.";
     return NextResponse.json(
-      { error: `Gemini API 호출 실패: ${errorMessage}` },
+      process.env.NODE_ENV === "development"
+        ? {
+            error: `Gemini API 호출 실패: ${errorMessage}`,
+            debug: {
+              status: error?.status ?? null,
+              name: error?.name ?? null,
+              message: error?.message ?? null,
+              details: error?.errorDetails ?? error?.details ?? null,
+            },
+          }
+        : { error: `Gemini API 호출 실패: ${errorMessage}` },
       { status: 500 }
     );
   }

@@ -557,6 +557,7 @@ export default function PlanPage() {
     labels: string[];
   } | null>(null);
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
+  const [missingAnnualGoalKeys, setMissingAnnualGoalKeys] = useState<string[]>([]);
 
   // 폼 데이터
   const [developmentGoal, setDevelopmentGoal] = useState("");
@@ -738,6 +739,28 @@ export default function PlanPage() {
             const op = planData.other_plans as OtherPlanRow[] | null;
             if (Array.isArray(op) && op.length > 0) setOtherPlans(op);
           }
+
+          // 연간 목표 미기재 표시(빨간 외곽선) 복원: 저장된 계획서 값 + 이전 저장 시 경고 기록(localStorage) 병합
+          const missingFromPlan = computeMissingAnnualGoals({
+            training: String((planData as any)?.annual_goal ?? ""),
+            class_open: String((planData as any)?.expense_annual_goal ?? ""),
+            community: String((planData as any)?.community_annual_goal ?? ""),
+            book_edutech: String((planData as any)?.book_annual_goal ?? ""),
+            health: String((planData as any)?.education_annual_goal ?? ""),
+            other: String((planData as any)?.other_annual_goal ?? ""),
+          });
+          let missingFromStorage: string[] = [];
+          if (typeof window !== "undefined") {
+            try {
+              const raw = localStorage.getItem(missingAnnualGoalsStorageKey(email));
+              missingFromStorage = raw ? (JSON.parse(raw) as string[]).filter((x) => typeof x === "string") : [];
+            } catch {
+              missingFromStorage = [];
+            }
+          }
+          const mergedMissing = Array.from(new Set([...missingFromStorage, ...missingFromPlan]));
+          setMissingAnnualGoalKeys(mergedMissing);
+          persistMissingAnnualGoals(email, mergedMissing);
         } catch (e) {
           console.error("Error loading plan/diagnosis:", e);
         }
@@ -904,6 +927,34 @@ export default function PlanPage() {
   const getPlanCategoryLabel = (key: string) => schoolCategories.find((c) => c.key === key)?.label ?? PLAN_CATEGORY_DEFAULTS[key]?.label ?? key;
   const getPlanCategoryUnit = (key: string) => schoolCategories.find((c) => c.key === key)?.unit ?? PLAN_CATEGORY_DEFAULTS[key]?.unit ?? "회";
 
+  const missingAnnualGoalsStorageKey = (email: string) => `teacher_mate_plan_missing_annual_goals_${email.toLowerCase()}`;
+  const computeMissingAnnualGoals = (values: {
+    training: string;
+    class_open: string;
+    community: string;
+    book_edutech: string;
+    health: string;
+    other: string;
+  }) => {
+    const missing: string[] = [];
+    if (!values.training.trim()) missing.push("training");
+    if (!values.class_open.trim()) missing.push("class_open");
+    if (!values.community.trim()) missing.push("community");
+    if (!values.book_edutech.trim()) missing.push("book_edutech");
+    if (!values.health.trim()) missing.push("health");
+    if (!values.other.trim()) missing.push("other");
+    return missing;
+  };
+  const persistMissingAnnualGoals = (email: string, keys: string[]) => {
+    if (typeof window === "undefined") return;
+    try {
+      if (!keys.length) localStorage.removeItem(missingAnnualGoalsStorageKey(email));
+      else localStorage.setItem(missingAnnualGoalsStorageKey(email), JSON.stringify(keys));
+    } catch {
+      // ignore
+    }
+  };
+
   // AI 추천/수정 후 드래프트 저장 (API 절감: 한번 쓰인 내용 다시 열어도 유지)
   const savePlanDraft = async (
     email: string,
@@ -981,12 +1032,24 @@ export default function PlanPage() {
     }
     setAiFillRowsLoading(cardType);
     try {
+      const categoryByCard: Record<PlanCardType, { key: string; label: string; unit: string }> = {
+        training: { key: "training", label: getPlanCategoryLabel("training"), unit: getPlanCategoryUnit("training") },
+        expense: { key: "class_open", label: getPlanCategoryLabel("class_open"), unit: getPlanCategoryUnit("class_open") },
+        community: { key: "community", label: getPlanCategoryLabel("community"), unit: getPlanCategoryUnit("community") },
+        book: { key: "book_edutech", label: getPlanCategoryLabel("book_edutech"), unit: getPlanCategoryUnit("book_edutech") },
+        education: { key: "health", label: getPlanCategoryLabel("health"), unit: getPlanCategoryUnit("health") },
+        other: { key: "other", label: getPlanCategoryLabel("other"), unit: getPlanCategoryUnit("other") },
+      };
+      const cat = categoryByCard[cardType];
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "plan_fill_rows",
           cardType,
+          categoryKey: cat.key,
+          categoryLabel: cat.label,
+          categoryUnit: cat.unit,
           count: rows.length,
           developmentGoal: developmentGoal.trim() || undefined,
         }),
@@ -1227,6 +1290,19 @@ export default function PlanPage() {
       hasWarning = true;
       const missingList = validation.missingItems.join(", ");
       warningMessage = `${missingList} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.`;
+      const missingKeys = computeMissingAnnualGoals({
+        training: annualGoal,
+        class_open: expenseAnnualGoal,
+        community: communityAnnualGoal,
+        book_edutech: bookAnnualGoal,
+        health: educationAnnualGoal,
+        other: otherAnnualGoal,
+      });
+      setMissingAnnualGoalKeys(missingKeys);
+      persistMissingAnnualGoals(userEmail, missingKeys);
+
+      const proceed = confirm(`${missingList}이(가) 비어있습니다. 그래도 저장하시겠습니까?`);
+      if (!proceed) return;
     }
 
     try {
@@ -1445,9 +1521,19 @@ export default function PlanPage() {
                 <Input
                   id="annual-goal"
                   value={annualGoal}
-                  onChange={(e) => setAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "training");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("training") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("training")}</span>
               </div>
@@ -1507,9 +1593,19 @@ export default function PlanPage() {
                 <Input
                   id="expense-annual-goal"
                   value={expenseAnnualGoal}
-                  onChange={(e) => setExpenseAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setExpenseAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "class_open");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("class_open") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("class_open")}</span>
               </div>
@@ -1569,9 +1665,19 @@ export default function PlanPage() {
                 <Input
                   id="community-annual-goal"
                   value={communityAnnualGoal}
-                  onChange={(e) => setCommunityAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCommunityAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "community");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("community") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("community")}</span>
               </div>
@@ -1631,9 +1737,19 @@ export default function PlanPage() {
                 <Input
                   id="book-annual-goal"
                   value={bookAnnualGoal}
-                  onChange={(e) => setBookAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBookAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "book_edutech");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("book_edutech") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("book_edutech")}</span>
               </div>
@@ -1692,9 +1808,19 @@ export default function PlanPage() {
                 <Input
                   id="education-annual-goal"
                   value={educationAnnualGoal}
-                  onChange={(e) => setEducationAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEducationAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "health");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("health") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">
                   {getPlanCategoryUnit("health")}
@@ -1756,9 +1882,19 @@ export default function PlanPage() {
                 <Input
                   id="other-annual-goal"
                   value={otherAnnualGoal}
-                  onChange={(e) => setOtherAnnualGoal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOtherAnnualGoal(v);
+                    if (v.trim()) {
+                      const next = missingAnnualGoalKeys.filter((k) => k !== "other");
+                      if (next.length !== missingAnnualGoalKeys.length) {
+                        setMissingAnnualGoalKeys(next);
+                        if (userEmail) persistMissingAnnualGoals(userEmail, next);
+                      }
+                    }
+                  }}
                   placeholder="연간 목표"
-                  className="w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1"
+                  className={`w-[2.5cm] max-w-[2.5cm] h-8 rounded-lg border-slate-200 text-sm py-1 ${missingAnnualGoalKeys.includes("other") ? "border-red-500 ring-1 ring-red-300" : ""}`}
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("other")}</span>
               </div>
