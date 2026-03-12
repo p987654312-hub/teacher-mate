@@ -2238,31 +2238,31 @@ export default function DashboardPage() {
                                           style={{ cursor: "pointer" }}
                                           title={`${c.label} ${Math.round(c.progress)}%`}
                                           onClick={async () => {
-                                            try {
-                                        setShowAdminMileageDetail(true);
+                                  try {
                                         setAdminMileageDetail(null);
-                                              const { data: { session } } = await supabase.auth.getSession();
-                                              const token = session?.access_token;
-                                              if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
-                                              const res = await fetch("/api/admin/mileage-by-email", {
-                                                method: "POST",
-                                                headers: {
-                                                  "Content-Type": "application/json",
-                                                  Authorization: `Bearer ${token}`,
-                                                },
-                                                body: JSON.stringify({ email: t.email, category: c.key }),
-                                              });
-                                              const json = await res.json();
-                                              if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
-                                              setAdminMileageDetail({
-                                                teacherName: t.name || t.email || "교사",
-                                                categoryLabel: c.label,
-                                                entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
-                                              });
-                                            } catch (err: any) {
-                                              console.error(err);
-                                              alert(err?.message || "마일리지 기록을 불러오는 중 오류가 발생했습니다.");
-                                            }
+                                        const { data: { session } } = await supabase.auth.getSession();
+                                        const token = session?.access_token;
+                                        if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+                                        const res = await fetch("/api/admin/mileage-by-email", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                            Authorization: `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({ email: t.email, category: c.key }),
+                                        });
+                                        const json = await res.json();
+                                        if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
+                                        setAdminMileageDetail({
+                                          teacherName: t.name || t.email || "교사",
+                                          categoryLabel: c.label,
+                                          entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
+                                        });
+                                        setShowAdminMileageDetail(true);
+                                      } catch (err: any) {
+                                        console.error(err);
+                                        alert(err?.message || "마일리지 기록을 불러오는 중 오류가 발생했습니다.");
+                                      }
                                           }}
                                         >
                                           <ResponsiveContainer width={38} height={38}>
@@ -2439,8 +2439,7 @@ export default function DashboardPage() {
                                     title={`${c.label} ${Math.round(c.progress)}%`}
                                     onClick={async () => {
                                       try {
-                                        setShowAdminMileageDetail(true);
-                                        setAdminMileageDetail({ teacherName: t.name || t.email || "교사", categoryLabel: c.label, entries: [] });
+                                        setAdminMileageDetail(null);
                                         const { data: { session } } = await supabase.auth.getSession();
                                         const token = session?.access_token;
                                         if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
@@ -2459,6 +2458,7 @@ export default function DashboardPage() {
                                           categoryLabel: c.label,
                                           entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
                                         });
+                                        setShowAdminMileageDetail(true);
                                       } catch (err: any) {
                                         console.error(err);
                                         alert(err?.message || "마일리지 기록을 불러오는 중 오류가 발생했습니다.");
