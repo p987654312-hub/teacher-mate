@@ -2239,8 +2239,8 @@ export default function DashboardPage() {
                                           title={`${c.label} ${Math.round(c.progress)}%`}
                                           onClick={async () => {
                                             try {
-                                              setShowAdminMileageDetail(true);
-                                              setAdminMileageDetail({ teacherName: t.name || t.email || "교사", categoryLabel: c.label, entries: [] });
+                                        setShowAdminMileageDetail(true);
+                                        setAdminMileageDetail(null);
                                               const { data: { session } } = await supabase.auth.getSession();
                                               const token = session?.access_token;
                                               if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
@@ -2625,7 +2625,9 @@ export default function DashboardPage() {
             )}
           </DialogHeader>
           <div className="max-h-[420px] overflow-y-auto space-y-2">
-            {!adminMileageDetail || adminMileageDetail.entries.length === 0 ? (
+            {!adminMileageDetail ? (
+              <p className="text-sm text-slate-500">해당 영역의 마일리지 기록을 불러오는 중입니다...</p>
+            ) : adminMileageDetail.entries.length === 0 ? (
               <p className="text-sm text-slate-500">해당 영역의 마일리지 기록이 없습니다.</p>
             ) : (
               <ul className="space-y-1.5 text-sm text-slate-700">
