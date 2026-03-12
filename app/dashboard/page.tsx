@@ -1332,6 +1332,7 @@ export default function DashboardPage() {
                                             outerRadius="95%"
                                             dataKey="value"
                                             strokeWidth={0}
+                                            cursor="pointer"
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>
@@ -1468,7 +1469,7 @@ export default function DashboardPage() {
                       <div>
                         <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">교사 성찰 기록장</h2>
                         <p className="mt-1 text-xs text-slate-500">
-                          성장의 결과를 서식에 맞게 작성합니다.
+                          자기역량 개발 결과 보고서를 완성합니다.
                         </p>
                       </div>
                       <div className="mt-3 flex flex-wrap justify-end gap-2 min-w-0">
@@ -2230,7 +2231,40 @@ export default function DashboardPage() {
                                         { name: "b", value: 100 - val, fill: "#e2e8f0" },
                                       ].filter((d) => d.value > 0);
                                       return (
-                                        <div key={c.key} className="flex min-w-[4.25rem] flex-col items-center gap-0.5 sm:min-w-[4.75rem] md:min-w-[5rem]" title={`${c.label} ${Math.round(c.progress)}%`}>
+                                        <button
+                                          key={c.key}
+                                          type="button"
+                                          className="flex min-w-[4.25rem] flex-col items-center gap-0.5 sm:min-w-[4.75rem] md:min-w-[5rem]"
+                                          style={{ cursor: "pointer" }}
+                                          title={`${c.label} ${Math.round(c.progress)}%`}
+                                          onClick={async () => {
+                                            try {
+                                              setShowAdminMileageDetail(true);
+                                              setAdminMileageDetail({ teacherName: t.name || t.email || "교사", categoryLabel: c.label, entries: [] });
+                                              const { data: { session } } = await supabase.auth.getSession();
+                                              const token = session?.access_token;
+                                              if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+                                              const res = await fetch("/api/admin/mileage-by-email", {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type": "application/json",
+                                                  Authorization: `Bearer ${token}`,
+                                                },
+                                                body: JSON.stringify({ email: t.email, category: c.key }),
+                                              });
+                                              const json = await res.json();
+                                              if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
+                                              setAdminMileageDetail({
+                                                teacherName: t.name || t.email || "교사",
+                                                categoryLabel: c.label,
+                                                entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
+                                              });
+                                            } catch (err: any) {
+                                              console.error(err);
+                                              alert(err?.message || "마일리지 기록을 불러오는 중 오류가 발생했습니다.");
+                                            }
+                                          }}
+                                        >
                                           <ResponsiveContainer width={38} height={38}>
                                             <PieChart>
                                               <Pie
@@ -2241,6 +2275,7 @@ export default function DashboardPage() {
                                                 outerRadius="95%"
                                                 dataKey="value"
                                                 strokeWidth={0}
+                                                cursor="pointer"
                                               >
                                                 {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
                                                   <Cell key={j} fill={d.fill} />
@@ -2248,7 +2283,9 @@ export default function DashboardPage() {
                                               </Pie>
                                             </PieChart>
                                           </ResponsiveContainer>
-                                          <span className="w-full truncate text-center text-[8px] text-slate-500 sm:text-[9px]">{c.label}</span>
+                                          <span className="w-full text-center leading-tight text-slate-500 text-[8px] sm:text-[9px]">
+                                            {c.label.length > 7 ? `${c.label.slice(0, 7)}…` : c.label}
+                                          </span>
                                           {(() => {
                                             const goal = (c as { goal?: number }).goal ?? 0;
                                             const sum = (c as { sum?: number }).sum ?? 0;
@@ -2260,7 +2297,7 @@ export default function DashboardPage() {
                                               </span>
                                             );
                                           })()}
-                                        </div>
+                                        </button>
                                       );
                                     })}
                                   </div>
@@ -2294,16 +2331,40 @@ export default function DashboardPage() {
                             {t.reflectionDone ? (
                               <>
                                 <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=1`}>
-                                  <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">결과</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">보고서1</span></span>
+                                  <span
+                                    className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
+                                    title="(구)자기실적평가서"
+                                  >
+                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">(구)자기실적</span>
+                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">평가서</span>
+                                  </span>
                                 </Link>
                                 <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=2`}>
-                                  <span className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"><span className="text-[9px] text-emerald-800 sm:text-[10px]">결과</span><span className="text-[9px] text-emerald-800 sm:text-[10px]">보고서2</span></span>
+                                  <span
+                                    className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
+                                    title="자기역량 개발 결과 보고서"
+                                  >
+                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">자기역량</span>
+                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">결과보고서</span>
+                                  </span>
                                 </Link>
                               </>
                             ) : (
                               <>
-                                <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">결과</span><span className="text-[9px] text-slate-400 sm:text-[10px]">보고서1</span></span>
-                                <span className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5" title="미작성"><span className="text-[9px] text-slate-400 sm:text-[10px]">결과</span><span className="text-[9px] text-slate-400 sm:text-[10px]">보고서2</span></span>
+                                <span
+                                  className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
+                                  title="미작성"
+                                >
+                                  <span className="text-[9px] text-slate-400 sm:text-[10px]">(구)자기실적</span>
+                                  <span className="text-[9px] text-slate-400 sm:text-[10px]">평가서</span>
+                                </span>
+                                <span
+                                  className="inline-flex h-[30px] cursor-not-allowed flex-col items-center justify-center rounded-md bg-slate-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
+                                  title="미작성"
+                                >
+                                  <span className="text-[9px] text-slate-400 sm:text-[10px]">자기역량</span>
+                                  <span className="text-[9px] text-slate-400 sm:text-[10px]">결과보고서</span>
+                                </span>
                               </>
                             )}
                             <button
@@ -2374,6 +2435,7 @@ export default function DashboardPage() {
                                     key={c.key}
                                     type="button"
                                     className="flex flex-col items-center gap-1"
+                                    style={{ cursor: "pointer" }}
                                     title={`${c.label} ${Math.round(c.progress)}%`}
                                     onClick={async () => {
                                       try {
@@ -2423,7 +2485,9 @@ export default function DashboardPage() {
                                         <span className="text-[15px] font-semibold text-slate-600">{Math.round(c.progress)}%</span>
                                       </div>
                                     </div>
-                                    <span className="w-full truncate text-center text-[13px] font-medium text-slate-700">{c.label}</span>
+                                    <span className="w-full text-center text-[13px] font-medium text-slate-700 break-words whitespace-normal">
+                                      {c.label}
+                                    </span>
                                     {progressText && <span className="text-[11px] text-slate-600">{progressText}</span>}
                                   </button>
                                 );

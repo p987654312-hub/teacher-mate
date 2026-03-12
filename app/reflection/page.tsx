@@ -819,7 +819,7 @@ export default function ReflectionPage() {
             <CardPageHeader
               icon={<MessageCircle className="h-6 w-6" />}
               title="자기역량 개발 결과 보고서 작성 기초 정보"
-              subtitle="교사 성찰 기록장 · 성장의 결과를 서식에 맞게 작성하기 위한 기초 자료입니다."
+              subtitle="교사 성찰 기록장 · 성장의 결과를 서식에 맞게 작성하여 자기역량 개발 결과 보고서를 완성합니다."
             />
           </div>
           <Link href="/reflection/result-report" className="shrink-0" onClick={(e) => { if (hasUnsavedChangesRef.current && !window.confirm("저장하지 않고 페이지를 나가시겠습니까?\n나가시면 입력한 내용이 저장되지 않을 수 있습니다.")) e.preventDefault(); }}>
@@ -865,75 +865,7 @@ export default function ReflectionPage() {
                 rows={10}
               />
             </Card>
-            <Card className="rounded-2xl border-slate-200/80 bg-white p-5 shadow-sm">
-              <h2 className="text-base font-semibold text-slate-800">추가 입력 사항</h2>
-              <p className="mt-1 text-xs text-slate-500">학습지도·생활지도·담당 업무·창의적 업무개선 항목을 기재합니다. 위 저장 버튼으로 함께 저장됩니다.</p>
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">학습지도 추진 목표</Label>
-                  <Input
-                    value={extraInputs.learning_goal}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, learning_goal: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">학습지도 추진 실적</Label>
-                  <Input
-                    value={extraInputs.learning_result}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, learning_result: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">생활지도 추진 목표</Label>
-                  <Input
-                    value={extraInputs.life_goal}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, life_goal: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">생활지도 추진 실적</Label>
-                  <Input
-                    value={extraInputs.life_result}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, life_result: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">담당 업무 추진 목표</Label>
-                  <Input
-                    value={extraInputs.duty_goal}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, duty_goal: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">담당 업무 추진 실적</Label>
-                  <Input
-                    value={extraInputs.duty_result}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, duty_result: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-xs font-medium text-slate-600">창의적 업무개선 사항</Label>
-                  <Input
-                    value={extraInputs.creative_improvement}
-                    onChange={(e) => setExtraInputs((prev) => ({ ...prev, creative_improvement: e.target.value }))}
-                    placeholder="기재"
-                    className="rounded-lg border-slate-200 bg-slate-50/50 text-sm"
-                  />
-                </div>
-              </div>
-            </Card>
+            
           </TabsContent>
           <TabsContent value="reflection" className="mt-0 space-y-4">
             <Card className="rounded-2xl border-slate-200/80 bg-white p-5 shadow-sm">

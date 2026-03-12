@@ -160,7 +160,7 @@ export async function POST(req: Request) {
             .limit(1)
             .maybeSingle(),
           supabase.from("mileage_entries").select("id, content, category").eq("user_email", email),
-          supabase.from("reflection_drafts").select("id").eq("user_email", email).limit(1).maybeSingle(),
+          supabase.from("reflection_drafts").select("goal_achievement_text, reflection_text").eq("user_email", email).maybeSingle(),
           supabase.from("user_points").select("base_points, login_points").eq("user_email", email).maybeSingle(),
         ]);
 
@@ -199,6 +199,14 @@ export async function POST(req: Request) {
         const loginPoints = (pointsRes.data?.login_points ?? 0) as number;
         const totalPoints = Math.round(basePoints + loginPoints + mileagePoints);
 
+        const reflectionTextRaw = (reflectionRes.data as { goal_achievement_text?: string; reflection_text?: string } | null) || null;
+        const reflectionDone =
+          !!reflectionTextRaw &&
+          !!(
+            (reflectionTextRaw.goal_achievement_text ?? "").trim() ||
+            (reflectionTextRaw.reflection_text ?? "").trim()
+          );
+
         return {
           id: t.id,
           email,
@@ -209,7 +217,7 @@ export async function POST(req: Request) {
           hasPreDiagnosis: !!preRes.data,
           hasPostDiagnosis: !!postRes.data,
           planCompleted,
-          reflectionDone: !!reflectionRes.data,
+          reflectionDone,
           mileageSummary: { overallProgress, categories: categoriesWithGoal },
           totalPoints,
           planGoals,
