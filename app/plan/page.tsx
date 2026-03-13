@@ -516,15 +516,18 @@ function SortableOtherRow({
   otherPlans,
   setOtherPlans,
   removeOtherRow,
+  placeholders,
 }: {
   row: OtherPlanRow;
   idx: number;
   otherPlans: OtherPlanRow[];
   setOtherPlans: (plans: OtherPlanRow[]) => void;
   removeOtherRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 3월", method: "예: 방법", remarks: "비고" };
 
   return (
     <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
@@ -539,7 +542,7 @@ function SortableOtherRow({
           setOtherPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 지원단 활동" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -549,7 +552,7 @@ function SortableOtherRow({
           setOtherPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 3월" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.method}
@@ -559,7 +562,7 @@ function SortableOtherRow({
           setOtherPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 컨설팅" : ""}
+        placeholder={idx === 0 ? ph.method : ""}
       />
       <Input
         value={row.remarks}
@@ -569,7 +572,7 @@ function SortableOtherRow({
           setOtherPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "비고" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -983,19 +986,27 @@ export default function PlanPage() {
   const getPlanCategoryLabel = (key: string) => schoolCategories.find((c) => c.key === key)?.label ?? PLAN_CATEGORY_DEFAULTS[key]?.label ?? key;
   const getPlanCategoryUnit = (key: string) => schoolCategories.find((c) => c.key === key)?.unit ?? PLAN_CATEGORY_DEFAULTS[key]?.unit ?? "회";
 
-  /** 학교에서 설정한 영역명(label)에 맞는 예시 문구 반환 (내용/시기/방법/비고) */
+  /** 학교에서 설정한 영역명(label)에 맞는 예시 문구 반환. 라벨 우선 매칭 후 키 기본값 사용 */
   const getPlaceholdersForCategory = (key: string, label: string): { content: string; period: string; method: string; remarks: string } => {
     const L = (label ?? "").trim();
-    if (key === "health") {
-      if (/대학원|연구회|전문성\s*계발|석사|박사/.test(L)) return { content: "예: 대학원 졸업", period: "예: 3월", method: "예: 논문 작성", remarks: "예: 석사 과정" };
-      if (/건강|체력|운동|등산|달리기/.test(L)) return { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" };
-      return { content: "예: 활동 내용", period: "예: 5월", method: "예: 월 1회", remarks: "비고" };
-    }
+    // 전문성계발Ⅰ(지원단, 연구대회, 교육청 등) → 지원단/연구대회/교육청 예시
+    if (/지원단|연구대회|교육청|공식\s*활동|전문성\s*계발\s*[ⅠI]|전문성계발\s*[ⅠI]/.test(L))
+      return { content: "예: 지원단 활동", period: "예: 3월", method: "예: 연구대회 참가", remarks: "예: 교육청 공식 활동" };
+    // 전문성계발Ⅱ(대학원, 연구회 등) → 대학원/논문 예시
+    if (/대학원|석사|박사|논문|전문성\s*계발\s*[ⅡII]|전문성계발\s*[ⅡII]/.test(L))
+      return { content: "예: 대학원 졸업", period: "예: 3월", method: "예: 논문 작성", remarks: "예: 석사 과정" };
+    if (/\b연구회\b/.test(L))
+      return { content: "예: 연구회 활동", period: "예: 4월", method: "예: 월 1회 모임", remarks: "예: 학회 발표" };
+    // 건강/체력 (공백 포함 가능)
+    if (/건강|체력|운동|등산|달리기|수영|헬스/.test(L))
+      return { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" };
+    // 나머지는 키별 기본 예시
     const defaults: Record<string, { content: string; period: string; method: string; remarks: string }> = {
       training: { content: "예: AI 활용 연수", period: "예: 4월", method: "예: 온라인 15시간", remarks: "예: 직무연수 인정" },
       class_open: { content: "예: 학부모 공개 수업", period: "예: 3월", method: "예: 학부모 참관", remarks: "예: 학교설명회 연계" },
       community: { content: "예: 수업 나눔 동아리", period: "예: 4월", method: "예: 월 1회 모임", remarks: "비고" },
       book_edutech: { content: "예: 교육서적 독서", period: "예: 6월", method: "예: 독서 후 수업 적용", remarks: "비고" },
+      health: { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" },
       other: { content: "예: 지원단 활동", period: "예: 3월", method: "예: 컨설팅", remarks: "비고" },
     };
     return defaults[key] ?? { content: "예: 내용", period: "예: 월", method: "예: 방법", remarks: "비고" };
@@ -2030,7 +2041,15 @@ export default function PlanPage() {
                   <div></div>
                 </div>
                 {otherPlans.map((row, idx) => (
-                  <SortableOtherRow key={row.id} row={row} idx={idx} otherPlans={otherPlans} setOtherPlans={setOtherPlans} removeOtherRow={removeOtherRow} />
+                  <SortableOtherRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    otherPlans={otherPlans}
+                    setOtherPlans={setOtherPlans}
+                    removeOtherRow={removeOtherRow}
+                    placeholders={getPlaceholdersForCategory("other", getPlanCategoryLabel("other"))}
+                  />
                 ))}
               </div>
             </SortableContext>
