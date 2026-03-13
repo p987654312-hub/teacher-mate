@@ -289,10 +289,7 @@ function DiagnosisContent() {
           // AI 분석 요청 (전체 분석)
           const { data: { session: diagSession } } = await supabase.auth.getSession();
           const diagToken = diagSession?.access_token;
-          if (!diagToken) {
-            setAiLoading(false);
-            return;
-          }
+          if (!diagToken) return;
           const analysisRes = await fetch("/api/ai-recommend", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${diagToken}` },
