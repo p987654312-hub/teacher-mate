@@ -16,4 +16,6 @@ CREATE INDEX IF NOT EXISTS idx_reflection_drafts_updated_at ON reflection_drafts
 ALTER TABLE reflection_drafts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can manage own reflection draft" ON reflection_drafts
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL
+  USING ((auth.jwt() ->> 'email') = user_email)
+  WITH CHECK ((auth.jwt() ->> 'email') = user_email);

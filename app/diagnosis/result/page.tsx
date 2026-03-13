@@ -345,9 +345,15 @@ function DiagnosisResultContent() {
         keys.forEach((k) => {
           labelsOnly[k] = domainLabels[k] ?? k;
         });
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          alert("로그인이 필요합니다.");
+          return;
+        }
         const res = await fetch("/api/ai-recommend", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             type: "analysis_post",
             preScores: preScoresAvg,
@@ -495,10 +501,16 @@ function DiagnosisResultContent() {
   const handleRedoAnalysis = async () => {
     setAiAnalysisLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const domainScoresText = domainAverages.map((d) => `${d.label}: ${d.avg.toFixed(1)}점`).join(", ");
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           type: "analysis",
           strongDomains: strengths.map((s) => s.label),

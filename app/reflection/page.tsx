@@ -427,9 +427,15 @@ export default function ReflectionPage() {
     }
     setAiLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ type: "result_report", planSummary, mileageText }),
       });
       const json = await res.json();
@@ -737,9 +743,15 @@ export default function ReflectionPage() {
     }
     setSelfEvalAiLoading(true);
     try {
+      const { data: { session: selfEvalSession } } = await supabase.auth.getSession();
+      const selfEvalToken = selfEvalSession?.access_token;
+      if (!selfEvalToken) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${selfEvalToken}` },
         body: JSON.stringify({
           type: "self_eval_sections",
           planSummary,

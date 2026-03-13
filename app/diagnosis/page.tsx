@@ -287,9 +287,15 @@ function DiagnosisContent() {
           const totalScoreNorm100 = Math.round((totalScore / maxTotal) * 100);
 
           // AI 분석 요청 (전체 분석)
+          const { data: { session: diagSession } } = await supabase.auth.getSession();
+          const diagToken = diagSession?.access_token;
+          if (!diagToken) {
+            setAiLoading(false);
+            return;
+          }
           const analysisRes = await fetch("/api/ai-recommend", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${diagToken}` },
             body: JSON.stringify({
               type: "analysis",
               strongDomains: strengths,

@@ -1041,9 +1041,15 @@ export default function PlanPage() {
         other: { key: "other", label: getPlanCategoryLabel("other"), unit: getPlanCategoryUnit("other") },
       };
       const cat = categoryByCard[cardType];
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           type: "plan_fill_rows",
           cardType,
@@ -1146,9 +1152,15 @@ export default function PlanPage() {
         payload.book_plans = bookPlans;
         payload.expense_requests = expenseRequests;
       }
+      const { data: { session: sessionForAi } } = await supabase.auth.getSession();
+      const aiToken = sessionForAi?.access_token;
+      if (!aiToken) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiToken}` },
         body: JSON.stringify(payload),
       });
 
@@ -1219,9 +1231,15 @@ export default function PlanPage() {
     try {
       setIsMentoringLoading(true);
       setMentoringFeedback(null);
+      const { data: { session: mentorSession } } = await supabase.auth.getSession();
+      const mentorToken = mentorSession?.access_token;
+      if (!mentorToken) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${mentorToken}` },
         body: JSON.stringify({
           type: "mentor",
           strongDomains: diagnosisSummary.strengths,

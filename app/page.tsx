@@ -176,12 +176,20 @@ export default function Home() {
             const res = await fetch("/api/admin/verify-code", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ code: betaCode }),
+              body: JSON.stringify({
+                code: betaCode,
+                schoolName: (schoolName ?? "").trim(),
+              }),
             });
+            const json = await res.json().catch(() => null);
             if (!res.ok) {
-              const json = await res.json().catch(() => null);
               const msg = json?.error ?? "인증코드가 올바르지 않습니다.";
               alert(msg);
+              setIsLoading(false);
+              return;
+            }
+            if (json?.adminCount != null && Number(json.adminCount) >= 3) {
+              alert("해당 학교는 관리자가 3명으로 이미 만원입니다.");
               setIsLoading(false);
               return;
             }
@@ -190,23 +198,6 @@ export default function Home() {
             alert("인증코드 확인 중 오류가 발생했습니다.");
             setIsLoading(false);
             return;
-          }
-          try {
-            const countRes = await fetch("/api/admin/count-by-school", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ schoolName: (schoolName ?? "").trim() }),
-            });
-            if (countRes.ok) {
-              const { adminCount } = await countRes.json();
-              if (Number(adminCount) >= 3) {
-                alert("해당 학교는 관리자가 3명으로 이미 만원입니다.");
-                setIsLoading(false);
-                return;
-              }
-            }
-          } catch (e) {
-            console.error(e);
           }
         }
         const { data, error: signUpError } = await supabase.auth.signUp({

@@ -51,8 +51,33 @@ export async function POST(req: Request) {
       );
     }
 
-    // Admin API로 user_metadata 업데이트
     const supabaseAdmin = getSupabaseAdmin();
+
+    // 관리자 역할인 경우: 학교별 최대 3명 제한 (서버 검증)
+    const MAX_ADMINS_PER_SCHOOL = 3;
+    if (role === "admin") {
+      const trimmedSchool = (schoolName as string)?.trim() ?? "";
+      const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+      if (!listError && listData?.users) {
+        const users = listData.users as Array<{ user_metadata?: { role?: string; schoolName?: string } }>;
+        const adminCount = users.filter(
+          (u) =>
+            (u.user_metadata?.role ?? "") === "admin" &&
+            (u.user_metadata?.schoolName ?? "").trim() === trimmedSchool
+        ).length;
+        if (adminCount >= MAX_ADMINS_PER_SCHOOL) {
+          return NextResponse.json(
+            { error: "해당 학교는 관리자가 3명으로 이미 만원입니다." },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
+    // Admin API로 user_metadata 업데이트
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       user_metadata: {
         role,

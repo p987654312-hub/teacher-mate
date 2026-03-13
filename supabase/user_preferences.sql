@@ -15,4 +15,6 @@ CREATE INDEX IF NOT EXISTS idx_user_preferences_user_email ON user_preferences(u
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can manage own preferences" ON user_preferences
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL
+  USING ((auth.jwt() ->> 'email') = user_email)
+  WITH CHECK ((auth.jwt() ->> 'email') = user_email);

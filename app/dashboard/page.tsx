@@ -283,11 +283,17 @@ export default function DashboardPage() {
       // 관리자: 교원 목록은 교사용 데이터와 병렬 요청 (체감 속도 개선)
       const adminTeachersPromise =
         role === "admin" && schoolName
-          ? fetch("/api/admin/teacher-summaries", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ schoolName }),
-            }).then(async (res) => ({ ok: res.ok, json: await res.json() }))
+          ? (async () => {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              if (!token) return { ok: false as const, json: { error: "로그인이 필요합니다." } };
+              const res = await fetch("/api/admin/teacher-summaries", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ schoolName }),
+              });
+              return { ok: res.ok, json: await res.json() };
+            })()
           : null;
 
       // 교사용: 초기 로드 시 병렬 요청으로 체감 속도 개선 (getSession 1회, DB/API 병렬)

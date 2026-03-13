@@ -27,7 +27,10 @@ CREATE INDEX IF NOT EXISTS idx_mileage_entries_user_email ON mileage_entries(use
 CREATE INDEX IF NOT EXISTS idx_mileage_entries_created_at ON mileage_entries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mileage_entries_category ON mileage_entries(user_email, category);
 
--- (선택) RLS: 사용자 본인 데이터만 접근하려면 아래 주석 해제 후 실행
--- ALTER TABLE mileage_entries ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Users can manage own mileage" ON mileage_entries
---   FOR ALL USING (true);
+-- RLS: 사용자 본인 데이터만 접근 (anon key로 접근 시 적용, service role은 관리자 API에서 사용)
+ALTER TABLE mileage_entries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own mileage" ON mileage_entries
+  FOR ALL
+  USING ((auth.jwt() ->> 'email') = user_email)
+  WITH CHECK ((auth.jwt() ->> 'email') = user_email);
