@@ -438,13 +438,20 @@ export default function MileagePage() {
 
     if (aiAssistOn) {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          alert("로그인이 필요합니다.");
+          setAdding(false);
+          return;
+        }
         const res = await fetch("/api/ai-classify-mileage", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            text: trimmed, 
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            text: trimmed,
             categories: displayCategories,
-            currentDate: new Date().toISOString().split('T')[0] // YYYY-MM-DD 형식
+            currentDate: new Date().toISOString().split("T")[0],
           }),
         });
         const data = await res.json();

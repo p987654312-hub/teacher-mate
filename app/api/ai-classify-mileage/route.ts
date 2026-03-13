@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase env");
+  return createClient(url, key);
+}
 
 function getGeminiKeys(): string[] {
   const keys: string[] = [];
@@ -133,6 +141,17 @@ const DEFAULT_CATEGORY_DESC: Record<string, string> = {
 
 /** 교사가 입력한 텍스트를 분석해 활동별로 분류하고, YY.MM.DD + 요약 형식으로 반환 */
 export async function POST(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+  const supabase = getSupabaseAdmin();
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+  if (userError || !user?.email) {
+    return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
+  }
+
   const geminiKeys = getGeminiKeys();
   if (geminiKeys.length === 0) {
     return NextResponse.json(

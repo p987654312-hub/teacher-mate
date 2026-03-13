@@ -508,9 +508,16 @@ export default function ReflectionPage() {
       .join("\n\n");
     setReflectionAiLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        alert("로그인이 필요합니다.");
+        setReflectionAiLoading(false);
+        return;
+      }
       const res = await fetch("/api/ai-summarize-reflections", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ reflections: reflectionsText }),
       });
       const json = await res.json();
