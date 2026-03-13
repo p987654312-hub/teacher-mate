@@ -436,15 +436,18 @@ function SortableEducationRow({
   educationPlans,
   setEducationPlans,
   removeEducationRow,
+  placeholders,
 }: {
   row: EducationPlanRow;
   idx: number;
   educationPlans: EducationPlanRow[];
   setEducationPlans: (plans: EducationPlanRow[]) => void;
   removeEducationRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 5월", method: "예: 방법", remarks: "비고" };
 
   return (
     <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
@@ -459,7 +462,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 공개수업" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -469,7 +472,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 5월" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.duration}
@@ -479,7 +482,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 월 1회" : ""}
+        placeholder={idx === 0 ? ph.method : ""}
       />
       <Input
         value={row.remarks}
@@ -489,7 +492,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 동료장학 연계" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -979,6 +982,24 @@ export default function PlanPage() {
   };
   const getPlanCategoryLabel = (key: string) => schoolCategories.find((c) => c.key === key)?.label ?? PLAN_CATEGORY_DEFAULTS[key]?.label ?? key;
   const getPlanCategoryUnit = (key: string) => schoolCategories.find((c) => c.key === key)?.unit ?? PLAN_CATEGORY_DEFAULTS[key]?.unit ?? "회";
+
+  /** 학교에서 설정한 영역명(label)에 맞는 예시 문구 반환 (내용/시기/방법/비고) */
+  const getPlaceholdersForCategory = (key: string, label: string): { content: string; period: string; method: string; remarks: string } => {
+    const L = (label ?? "").trim();
+    if (key === "health") {
+      if (/대학원|연구회|전문성\s*계발|석사|박사/.test(L)) return { content: "예: 대학원 졸업", period: "예: 3월", method: "예: 논문 작성", remarks: "예: 석사 과정" };
+      if (/건강|체력|운동|등산|달리기/.test(L)) return { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" };
+      return { content: "예: 활동 내용", period: "예: 5월", method: "예: 월 1회", remarks: "비고" };
+    }
+    const defaults: Record<string, { content: string; period: string; method: string; remarks: string }> = {
+      training: { content: "예: AI 활용 연수", period: "예: 4월", method: "예: 온라인 15시간", remarks: "예: 직무연수 인정" },
+      class_open: { content: "예: 학부모 공개 수업", period: "예: 3월", method: "예: 학부모 참관", remarks: "예: 학교설명회 연계" },
+      community: { content: "예: 수업 나눔 동아리", period: "예: 4월", method: "예: 월 1회 모임", remarks: "비고" },
+      book_edutech: { content: "예: 교육서적 독서", period: "예: 6월", method: "예: 독서 후 수업 적용", remarks: "비고" },
+      other: { content: "예: 지원단 활동", period: "예: 3월", method: "예: 컨설팅", remarks: "비고" },
+    };
+    return defaults[key] ?? { content: "예: 내용", period: "예: 월", method: "예: 방법", remarks: "비고" };
+  };
 
   const missingAnnualGoalsStorageKey = (email: string) => `teacher_mate_plan_missing_annual_goals_${email.toLowerCase()}`;
   const computeMissingAnnualGoals = (values: {
@@ -1929,7 +1950,15 @@ export default function PlanPage() {
                   <div></div>
                 </div>
                 {educationPlans.map((row, idx) => (
-                  <SortableEducationRow key={row.id} row={row} idx={idx} educationPlans={educationPlans} setEducationPlans={setEducationPlans} removeEducationRow={removeEducationRow} />
+                  <SortableEducationRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    educationPlans={educationPlans}
+                    setEducationPlans={setEducationPlans}
+                    removeEducationRow={removeEducationRow}
+                    placeholders={getPlaceholdersForCategory("health", getPlanCategoryLabel("health"))}
+                  />
                 ))}
               </div>
             </SortableContext>
