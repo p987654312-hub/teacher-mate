@@ -73,6 +73,7 @@ type BookPlanRow = {
   title: string;
   period: string;
   method: string;
+  remarks: string;
 };
 
 type ExpenseRequestRow = {
@@ -93,7 +94,10 @@ type CommunityPlanRow = {
 
 type OtherPlanRow = {
   id: string;
-  text: string;
+  content: string;
+  period: string;
+  method: string;
+  remarks: string;
 };
 
 const DEFAULT_EXPENSE_REQUESTS: ExpenseRequestRow[] = [
@@ -104,6 +108,17 @@ const DEFAULT_EXPENSE_REQUESTS: ExpenseRequestRow[] = [
 function getDefaultExpenseRequestsWithEmptyRow(): ExpenseRequestRow[] {
   const base = [...DEFAULT_EXPENSE_REQUESTS].map((r, i) => ({ ...r, id: String(Date.now() + i) }));
   return base.concat([{ id: String(Date.now() + 2), activity: "", period: "", method: "", remarks: "" }]);
+}
+
+// 기존 other_plans { id, text } → { id, content, period, method, remarks } 호환
+function normalizeOtherPlanRow(row: { id: string; text?: string; content?: string; period?: string; method?: string; remarks?: string }): OtherPlanRow {
+  return {
+    id: row.id,
+    content: (row.content ?? row.text ?? "").trim(),
+    period: (row.period ?? "").trim(),
+    method: (row.method ?? "").trim(),
+    remarks: (row.remarks ?? "").trim(),
+  };
 }
 
 // Sortable Row 컴포넌트들
@@ -136,7 +151,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: AI 활용 수업" : ""}
+        placeholder={idx === 0 ? "예: AI 활용 연수" : ""}
       />
       <Input
         value={row.period}
@@ -146,13 +161,9 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 4월중" : ""}
+        placeholder={idx === 0 ? "예: 4월" : ""}
       />
       <Input
-        type="number"
-        min={0}
-        step={1}
-        inputMode="numeric"
         value={row.duration}
         onChange={(e) => {
           const updated = [...trainingPlans];
@@ -160,7 +171,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "시간" : ""}
+        placeholder={idx === 0 ? "예: 온라인 15시간" : ""}
       />
       <Input
         value={row.remarks}
@@ -170,7 +181,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "비고" : ""}
+        placeholder={idx === 0 ? "예: 직무연수 인정" : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -217,7 +228,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder=""
+        placeholder={idx === 0 ? "예: 학부모 공개 수업" : ""}
       />
       <Input
         value={row.period}
@@ -227,7 +238,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder=""
+        placeholder={idx === 0 ? "예: 3월" : ""}
       />
       <Input
         value={row.method}
@@ -237,7 +248,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder=""
+        placeholder={idx === 0 ? "예: 학부모 참관" : ""}
       />
       <Input
         value={row.remarks}
@@ -247,7 +258,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder=""
+        placeholder={idx === 0 ? "예: 학교설명회 연계" : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -304,7 +315,7 @@ function SortableCommunityRow({
           setCommunityPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 4월~6월" : ""}
+        placeholder={idx === 0 ? "예: 4월" : ""}
       />
       <Input
         value={row.method}
@@ -359,7 +370,7 @@ function SortableBookRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -371,7 +382,7 @@ function SortableBookRow({
           setBookPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: AI 시대의 교육" : ""}
+        placeholder={idx === 0 ? "예: 교육서적 독서" : ""}
       />
       <Input
         value={row.period}
@@ -392,6 +403,16 @@ function SortableBookRow({
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
         placeholder={idx === 0 ? "예: 독서 후 수업 적용" : ""}
+      />
+      <Input
+        value={row.remarks}
+        onChange={(e) => {
+          const updated = [...bookPlans];
+          updated[idx].remarks = e.target.value;
+          setBookPlans(updated);
+        }}
+        className="rounded text-xs w-full h-8 py-1 text-left"
+        placeholder={idx === 0 ? "비고" : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -438,7 +459,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 하이킹" : ""}
+        placeholder={idx === 0 ? "예: 공개수업" : ""}
       />
       <Input
         value={row.period}
@@ -448,7 +469,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 4~10월" : ""}
+        placeholder={idx === 0 ? "예: 5월" : ""}
       />
       <Input
         value={row.duration}
@@ -458,7 +479,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 월 2회" : ""}
+        placeholder={idx === 0 ? "예: 월 1회" : ""}
       />
       <Input
         value={row.remarks}
@@ -468,7 +489,7 @@ function SortableEducationRow({
           setEducationPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 서울 둘레길 정복" : ""}
+        placeholder={idx === 0 ? "예: 동료장학 연계" : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -503,30 +524,62 @@ function SortableOtherRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 rounded border border-slate-100 bg-slate-50/50 px-2 py-1">
+    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
       <Input
-        value={row.text}
+        value={row.content}
         onChange={(e) => {
           const updated = [...otherPlans];
-          updated[idx].text = e.target.value;
+          updated[idx].content = e.target.value;
           setOtherPlans(updated);
         }}
-        className="flex-1 rounded text-xs h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 지원단활동, 컨설팅 및 강의, 봉사활동 등" : ""}
+        className="rounded text-xs w-full h-8 py-1 text-left"
+        placeholder={idx === 0 ? "예: 지원단 활동" : ""}
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => removeOtherRow(row.id)}
-        disabled={otherPlans.length === 1}
-        className="h-8 w-8 shrink-0 rounded-full text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-      >
-        ×
-      </Button>
+      <Input
+        value={row.period}
+        onChange={(e) => {
+          const updated = [...otherPlans];
+          updated[idx].period = e.target.value;
+          setOtherPlans(updated);
+        }}
+        className="rounded text-xs w-full h-8 py-1 text-left"
+        placeholder={idx === 0 ? "예: 3월" : ""}
+      />
+      <Input
+        value={row.method}
+        onChange={(e) => {
+          const updated = [...otherPlans];
+          updated[idx].method = e.target.value;
+          setOtherPlans(updated);
+        }}
+        className="rounded text-xs w-full h-8 py-1 text-left"
+        placeholder={idx === 0 ? "예: 컨설팅" : ""}
+      />
+      <Input
+        value={row.remarks}
+        onChange={(e) => {
+          const updated = [...otherPlans];
+          updated[idx].remarks = e.target.value;
+          setOtherPlans(updated);
+        }}
+        className="rounded text-xs w-full h-8 py-1 text-left"
+        placeholder={idx === 0 ? "비고" : ""}
+      />
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => removeOtherRow(row.id)}
+          disabled={otherPlans.length === 1}
+          className="h-8 w-8 shrink-0 rounded-full text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+        >
+          ×
+        </Button>
+      </div>
     </div>
   );
 }
@@ -575,14 +628,14 @@ export default function PlanPage() {
     { id: "1", area: "", period: "", duration: "", remarks: "" },
   ]);
   const [bookPlans, setBookPlans] = useState<BookPlanRow[]>([
-    { id: "1", title: "", period: "", method: "" },
+    { id: "1", title: "", period: "", method: "", remarks: "" },
   ]);
   const [expenseRequests, setExpenseRequests] = useState<ExpenseRequestRow[]>(() => getDefaultExpenseRequestsWithEmptyRow());
   const [communityPlans, setCommunityPlans] = useState<CommunityPlanRow[]>([
     { id: "1", activity: "", period: "", method: "", remarks: "" },
   ]);
   const [otherPlans, setOtherPlans] = useState<OtherPlanRow[]>([
-    { id: "1", text: "" },
+    { id: "1", content: "", period: "", method: "", remarks: "" },
   ]);
   const [mentoringFeedback, setMentoringFeedback] = useState<string | null>(null);
   const [isMentoringLoading, setIsMentoringLoading] = useState(false);
@@ -725,8 +778,8 @@ export default function PlanPage() {
             if (Array.isArray(tp) && tp.length > 0) setTrainingPlans(tp);
             const ep = planData.education_plans as EducationPlanRow[] | null;
             if (Array.isArray(ep) && ep.length > 0) setEducationPlans(ep);
-            const bp = planData.book_plans as BookPlanRow[] | null;
-            if (Array.isArray(bp) && bp.length > 0) setBookPlans(bp);
+            const bp = planData.book_plans as (BookPlanRow & { remarks?: string })[] | null;
+            if (Array.isArray(bp) && bp.length > 0) setBookPlans(bp.map((r) => ({ id: r.id, title: r.title ?? "", period: r.period ?? "", method: r.method ?? "", remarks: r.remarks ?? "" })));
             const er = planData.expense_requests as (ExpenseRequestRow & { amount?: string })[] | null;
             const hasRealContent = Array.isArray(er) && er.some((r) => (r.activity ?? "").trim() !== "" || (r.method ?? "").trim() !== "");
             if (hasRealContent && Array.isArray(er) && er.length > 0) {
@@ -736,8 +789,8 @@ export default function PlanPage() {
             }
             const cp = planData.community_plans as CommunityPlanRow[] | null;
             if (Array.isArray(cp) && cp.length > 0) setCommunityPlans(cp);
-            const op = planData.other_plans as OtherPlanRow[] | null;
-            if (Array.isArray(op) && op.length > 0) setOtherPlans(op);
+            const op = planData.other_plans as (OtherPlanRow | { id: string; text?: string })[] | null;
+            if (Array.isArray(op) && op.length > 0) setOtherPlans(op.map(normalizeOtherPlanRow));
           }
 
           // 연간 목표 미기재 표시(빨간 외곽선) 복원: 저장된 계획서 값 + 이전 저장 시 경고 기록(localStorage) 병합
@@ -794,7 +847,7 @@ export default function PlanPage() {
   const addBookRow = () => {
     setBookPlans([
       ...bookPlans,
-      { id: Date.now().toString(), title: "", period: "", method: "" },
+      { id: Date.now().toString(), title: "", period: "", method: "", remarks: "" },
     ]);
   };
 
@@ -813,7 +866,7 @@ export default function PlanPage() {
   };
 
   const addOtherRow = () => {
-    setOtherPlans([...otherPlans, { id: Date.now().toString(), text: "" }]);
+    setOtherPlans([...otherPlans, { id: Date.now().toString(), content: "", period: "", method: "", remarks: "" }]);
   };
 
   // 행 삭제 함수들
@@ -1072,7 +1125,11 @@ export default function PlanPage() {
         const id = (row as { id?: string }).id ?? String(i);
         return { ...row, ...next, id };
       });
-      setter(merged);
+      if (cardType === "other") {
+        setter(merged.map((r) => normalizeOtherPlanRow(r as Parameters<typeof normalizeOtherPlanRow>[0])));
+      } else {
+        setter(merged);
+      }
     } catch (e) {
       console.error(e);
       alert("AI 추천 중 오류가 발생했습니다.");
@@ -1106,7 +1163,7 @@ export default function PlanPage() {
           count(r.area); count(r.period); count(r.duration); count(r.remarks);
         });
         bookPlans.forEach((r) => {
-          count(r.title); count(r.period); count(r.method);
+          count(r.title); count(r.period); count(r.method); count(r.remarks);
         });
         expenseRequests.forEach((r) => {
           count(r.activity); count(r.period); count(r.method); count(r.remarks);
@@ -1114,7 +1171,9 @@ export default function PlanPage() {
         communityPlans.forEach((r) => {
           count(r.activity); count(r.period); count(r.method); count(r.remarks);
         });
-        otherPlans.forEach((r) => count(r.text));
+        otherPlans.forEach((r) => {
+          count(r.content); count(r.period); count(r.method); count(r.remarks);
+        });
         const fillRatio = total > 0 ? filled / total : 0;
         if (fillRatio < 0.5) {
           setExpectedOutcome("위의 내용들을 좀 더 자세하고 성실하게 입력해 주셔야, AI의 도움을 받을 수 있습니다.");
@@ -1573,9 +1632,9 @@ export default function PlanPage() {
               <div className="space-y-0">
                 <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
-                  <div>직무 / 자율 연수명</div>
+                  <div>내용</div>
                   <div>시기</div>
-                  <div>기간(시간)</div>
+                  <div>방법</div>
                   <div>비고</div>
                   <div></div>
                 </div>
@@ -1787,11 +1846,12 @@ export default function PlanPage() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleBookDragEnd}>
             <SortableContext items={bookPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
-                  <div>서적/도구명</div>
+                  <div>내용</div>
                   <div>시기</div>
-                  <div>활용방법</div>
+                  <div>방법</div>
+                  <div>비고</div>
                   <div></div>
                 </div>
                 {bookPlans.map((row, idx) => (
@@ -1864,7 +1924,7 @@ export default function PlanPage() {
                   <div className="w-4"></div>
                   <div>내용</div>
                   <div>시기</div>
-                  <div>기간</div>
+                  <div>방법</div>
                   <div>비고</div>
                   <div></div>
                 </div>
@@ -1932,6 +1992,14 @@ export default function PlanPage() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleOtherDragEnd}>
             <SortableContext items={otherPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                  <div className="w-4"></div>
+                  <div>내용</div>
+                  <div>시기</div>
+                  <div>방법</div>
+                  <div>비고</div>
+                  <div></div>
+                </div>
                 {otherPlans.map((row, idx) => (
                   <SortableOtherRow key={row.id} row={row} idx={idx} otherPlans={otherPlans} setOtherPlans={setOtherPlans} removeOtherRow={removeOtherRow} />
                 ))}

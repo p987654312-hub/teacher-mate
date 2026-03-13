@@ -21,10 +21,10 @@ const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
 
 type TrainingPlanRow = { id: string; name: string; period: string; duration: string; remarks: string };
 type EducationPlanRow = { id: string; area: string; period: string; duration: string; remarks: string };
-type BookPlanRow = { id: string; title: string; period: string; method: string };
+type BookPlanRow = { id: string; title: string; period: string; method: string; remarks?: string };
 type ExpenseRequestRow = { id: string; activity: string; period: string; method: string; remarks: string };
 type CommunityPlanRow = { id: string; activity: string; period: string; method: string; remarks: string };
-type OtherPlanRow = { id: string; text: string };
+type OtherPlanRow = { id: string; text?: string; content?: string; period?: string; method?: string; remarks?: string };
 
 type PlanData = {
   development_goal: string;
@@ -512,9 +512,9 @@ function PlanPrintContent() {
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">직무 / 자율 연수명</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
                       <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="w-14 border border-slate-300 px-1 py-0.5 text-left font-medium">기간</th>
+                      <th className="w-14 border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
                     </tr>
                   </thead>
@@ -598,9 +598,10 @@ function PlanPrintContent() {
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">서적/도구명</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
                       <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">활용방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -609,9 +610,10 @@ function PlanPrintContent() {
                         <td className="border border-slate-300 px-1 py-0.5">{r.title || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.method || ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{r.remarks ?? ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -630,7 +632,7 @@ function PlanPrintContent() {
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
                       <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">기간</th>
+                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
                     </tr>
                   </thead>
@@ -653,17 +655,28 @@ function PlanPrintContent() {
                   <span>기타 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.other_annual_goal || "—"} 건</span>
                 </div>
-                <div className="min-h-[3rem] border border-slate-300 px-2 py-1.5">
-                  {otherPlans.length ? (
-                    <ul className="list-inside list-disc space-y-0.5 text-xs">
-                      {otherPlans.map((r) => (
-                        <li key={r.id}>{r.text || ""}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span className="text-slate-400">&nbsp;</span>
-                  )}
-                </div>
+                <table className="w-full border-collapse border border-slate-300 text-xs">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
+                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {otherPlans.length ? otherPlans.map((r) => (
+                      <tr key={r.id}>
+                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).content ?? (r as OtherPlanRow).text ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).period ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).method ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).remarks ?? ""}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 

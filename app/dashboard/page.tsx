@@ -1534,6 +1534,7 @@ export default function DashboardPage() {
                         size="sm"
                         className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
                         onClick={() => {
+                          if (!showPointSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
                           setShowDiagnosisSettings(false);
                           setShowPointSettings((v) => !v);
                         }}
@@ -1549,6 +1550,7 @@ export default function DashboardPage() {
                         size="sm"
                         className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
                         onClick={() => {
+                          if (!showDiagnosisSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
                           setShowPointSettings(false);
                           setShowDiagnosisSettings((v) => !v);
                         }}

@@ -20,6 +20,8 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isGoogleOnly, setIsGoogleOnly] = useState(false);
+  const [initialSchoolName, setInitialSchoolName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -30,10 +32,13 @@ export default function AccountPage() {
       }
       const u = data.user;
       setEmail(u.email ?? null);
-      const meta = (u.user_metadata ?? {}) as { name?: string; schoolName?: string; gradeClass?: string };
+      const meta = (u.user_metadata ?? {}) as { name?: string; schoolName?: string; gradeClass?: string; role?: string };
       setName(meta.name ?? "");
-      setSchoolName(meta.schoolName ?? "");
+      const sn = meta.schoolName ?? "";
+      setSchoolName(sn);
+      setInitialSchoolName(sn);
       setGradeClass(meta.gradeClass ?? "");
+      setIsAdmin(meta.role === "admin");
 
       const identities = (u as any).identities as Array<{ provider: string }> | undefined;
       const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth") ?? false;
@@ -49,14 +54,39 @@ export default function AccountPage() {
     }
     setLoading(true);
     setMessage(null);
-    const { error } = await supabase.auth.updateUser({
-      data: { name: name.trim(), schoolName: schoolName.trim(), gradeClass: gradeClass.trim() },
-    });
-    setLoading(false);
-    if (error) {
-      setMessage(`프로필 저장 중 오류: ${error.message}`);
-    } else {
-      setMessage("프로필이 저장되었습니다.");
+    const newSn = schoolName.trim();
+    const oldSn = initialSchoolName.trim();
+
+    try {
+      // 관리자가 학교명을 바꾼 경우: 학교별 세팅(영역/포인트, 사전사후검사)을 새 학교명으로 옮기고, 해당 학교 구성원 schoolName 통일
+      if (isAdmin && oldSn && newSn !== oldSn) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (token) {
+          const res = await fetch("/api/account/rename-school", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ newSchoolName: newSn }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setMessage(j?.error ?? "학교명 변경 처리에 실패했습니다.");
+            return;
+          }
+        }
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        data: { name: name.trim(), schoolName: newSn, gradeClass: gradeClass.trim() },
+      });
+      if (error) {
+        setMessage(`프로필 저장 중 오류: ${error.message}`);
+      } else {
+        setInitialSchoolName(newSn);
+        setMessage("프로필이 저장되었습니다.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
