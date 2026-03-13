@@ -14,7 +14,6 @@ export async function GET() {
     "GEMINI_API_KEY",
     "GEMINI_API_KEY_1",
     "ADMIN_CODE",
-    "NEXT_PUBLIC_ADMIN_CODE",
   ] as const;
 
   const status: Record<string, string> = {};

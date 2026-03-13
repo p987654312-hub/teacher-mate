@@ -382,11 +382,13 @@ export default function Home() {
                       <Label htmlFor="admin-code">슈퍼관리자 코드</Label>
                       <Input
                         id="admin-code"
+                        type="password"
+                        autoComplete="one-time-code"
                         placeholder="슈퍼관리자 코드를 입력하세요"
                         className="rounded-2xl"
                         value={adminCode}
                         onChange={(e) => setAdminCode(e.target.value)}
-                        maxLength={3}
+                        maxLength={32}
                       />
                     </div>
                   )}

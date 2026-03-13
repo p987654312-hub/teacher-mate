@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// 서버 측에서 사용할 관리자 코드
-// 1순위: NEXT_PUBLIC_ADMIN_CODE (이미 .env.local 에 설정해 두신 값)
-// 2순위: ADMIN_CODE (원하면 더 비공개로 쓸 수 있는 키)
-// 3순위: 로컬 개발용 기본값 "pbk"
-const ADMIN_CODE_ENV =
-  process.env.NEXT_PUBLIC_ADMIN_CODE ||
-  process.env.ADMIN_CODE ||
-  "pbk";
+// 관리자 코드: 서버 전용 환경 변수만 사용 (NEXT_PUBLIC_ 사용 시 클라이언트 번들에 노출되므로 사용 금지)
+// ADMIN_CODE만 사용. 로컬 개발 시 .env.local에 ADMIN_CODE=원하는값 설정
+const ADMIN_CODE_ENV = process.env.ADMIN_CODE ?? "pbk";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
