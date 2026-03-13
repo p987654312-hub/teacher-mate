@@ -507,8 +507,7 @@ function DiagnosisContent() {
               제출된 진단 결과를 최첨단 AI 기술로 분석 중입니다.
             </p>
             <p className="text-[11px] text-slate-500">
-              선생님의 진단 결과를 바탕으로, 강점과 약점을 분석하고 <br />
-              목적지 플래너 추천까지 준비하고 있습니다. 잠시만 기다려 주세요...
+              잠시만 기다려 주세요...
             </p>
           </div>
         </div>
