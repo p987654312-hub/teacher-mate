@@ -343,7 +343,7 @@ function DiagnosisContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white px-4 py-4">
+    <div className="relative flex min-h-screen flex-col bg-white px-4 py-4">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <CardPageHeader
           icon={<ClipboardCheck className="h-6 w-6" />}
@@ -482,17 +482,37 @@ function DiagnosisContent() {
         </div>
 
         {/* 하단 버튼 */}
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-2">
           <Button
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting}
             className="w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-sm font-semibold text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70 sm:w-64"
           >
-            {isSubmitting ? "제출 중..." : "진단 결과 제출하기"}
+            {isSubmitting ? "제출 및 AI 분석 중..." : "진단 결과 제출하기"}
           </Button>
         </div>
       </div>
+
+      {/* 제출/AI 분석 중 전체 화면 오버레이 */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+          <div className="rounded-2xl bg-white px-6 py-4 shadow-xl border border-slate-200 flex flex-col items-center gap-3 max-w-sm text-center">
+            <div className="flex items-center justify-center gap-1 text-blue-600">
+              <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.2s]" />
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.1s]" />
+              <span className="h-2 w-2 rounded-full bg-blue-600 animate-bounce" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800">
+              제출된 진단 결과를 최첨단 AI 기술로 분석 중입니다.
+            </p>
+            <p className="text-[11px] text-slate-500">
+              선생님의 진단 결과를 바탕으로, 강점과 약점을 분석하고 <br />
+              목적지 플래너 추천까지 준비하고 있습니다. 잠시만 기다려 주세요...
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

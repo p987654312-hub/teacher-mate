@@ -681,6 +681,8 @@ export default function DashboardPage() {
       training: "annual_goal", class_open: "expense_annual_goal", community: "community_annual_goal",
       book_edutech: "book_annual_goal", health: "education_annual_goal", other: "other_annual_goal",
     };
+    // 학교 설정 영역명을 재조회하여 사용할 카테고리 배열 (필요 시 나중에 채움)
+    let categoriesForRefetch: CategoryConfigItem[] | undefined;
     const refetchPlan = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) return;
@@ -693,18 +695,30 @@ export default function DashboardPage() {
         .maybeSingle();
       const ratio = planRow ? getPlanFillRatio(planRow as PlanRow) : 0;
       setPlanCompleted(ratio >= 0.7);
-      
-      // 연간 목표량 검증
-      const PLAN_CATEGORY_LABELS: Record<string, string> = {
-        training: "연수(직무·자율)",
-        class_open: "수업 공개",
-        community: "교원학습 공동체",
-        book_edutech: "전문 서적/에듀테크",
-        health: "건강/체력",
-        other: "기타 계획",
-      };
       const missingItems: string[] = [];
       const planGoalsRow = planRow as Record<string, string | null | undefined> | null | undefined;
+      // 연간 목표량 검증 (학교에서 설정한 영역명 우선 사용)
+      const getPlanLabelForKey = (key: string, cats?: CategoryConfigItem[]): string => {
+        const fromCategory = cats?.find((c) => c.key === key)?.label;
+        if (fromCategory && fromCategory.trim()) return fromCategory.trim();
+        const defaults: Record<string, string> = {
+          training: "연수(직무·자율)",
+          class_open: "수업 공개",
+          community: "교원학습 공동체",
+          book_edutech: "전문 서적/에듀테크",
+          health: "건강/체력",
+          other: "기타 계획",
+        };
+        return defaults[key] ?? key;
+      };
+      const PLAN_CATEGORY_LABELS: Record<string, string> = {
+        training: getPlanLabelForKey("training", categoriesForRefetch),
+        class_open: getPlanLabelForKey("class_open", categoriesForRefetch),
+        community: getPlanLabelForKey("community", categoriesForRefetch),
+        book_edutech: getPlanLabelForKey("book_edutech", categoriesForRefetch),
+        health: getPlanLabelForKey("health", categoriesForRefetch),
+        other: getPlanLabelForKey("other", categoriesForRefetch),
+      };
       const goals = [
         { key: "training", value: String(planGoalsRow?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.training },
         { key: "class_open", value: String(planGoalsRow?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.class_open },
@@ -730,7 +744,6 @@ export default function DashboardPage() {
         setMileageStarted(true);
       }
       // 포커스/재조회 시에도 관리자 설정 영역명 사용 (기본 영역명이 잠깐 보이는 현상 방지)
-      let categoriesForRefetch: CategoryConfigItem[] | undefined;
       const { data: { session: sessionRefetch } } = await supabase.auth.getSession();
       if (sessionRefetch?.access_token) {
         try {
@@ -914,7 +927,7 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="min-h-screen bg-white px-4 py-10">
+    <div className="min-h-[calc(100vh-40px)] bg-white px-4 py-6 md:py-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-col gap-0.5">
@@ -1182,7 +1195,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-                        자기역량개발계획
+                        목적지 플래너(자기역량 개발계획서)
                       </h2>
                       <p className="mt-1 text-xs text-slate-500">
                         연간 역량 개발 목표를 세우고 실행 계획을 관리합니다.
@@ -1202,7 +1215,7 @@ export default function DashboardPage() {
                           }
                         }}
                         className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                        title={planMissingGoals.length > 0 ? `${planMissingGoals.join(", ")} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.` : undefined}
+                        title={planMissingGoals.length > 0 ? "미작성 된 계획이 있어 출력이 불가합니다." : undefined}
                       >
                         <Printer className="h-3.5 w-3.5" />
                         계획서 보기
@@ -1210,7 +1223,7 @@ export default function DashboardPage() {
                       {planMissingGoals.length > 0 && (
                         <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
                           <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg max-w-xs whitespace-normal">
-                            {planMissingGoals.join(", ")} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.
+                            미작성 된 계획이 있어 출력이 불가합니다.
                             <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
                           </div>
                         </div>

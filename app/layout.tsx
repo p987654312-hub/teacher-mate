@@ -25,17 +25,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-white antialiased`}
-      >
-        <div className="flex min-h-screen flex-1 flex-col pb-7">
-          <main className="flex-1">{children}</main>
-          <footer className="fixed bottom-0 left-0 right-0 border-t border-slate-200/30 py-1.5 text-center text-xs print:hidden">
-            <span className="text-slate-400">Inspired by 교원성장메이트(강주원)</span>
-            <span className="mx-1.5 text-slate-400">|</span>
-            <span className="font-medium text-slate-600">Crafted by Shingu.es.연구팀</span>
-          </footer>
+      <body className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-white antialiased`}>
+        <div className="flex min-h-screen flex-1 flex-col">
+          <main className="flex-1 pb-6">{children}</main>
         </div>
+        <footer className="fixed bottom-0 left-0 right-0 py-1 text-center text-[10px] text-slate-400 bg-transparent print:hidden">
+          Inspired by 교원성장메이트(강주원) · Crafted by Shingu.es.연구팀
+        </footer>
       </body>
     </html>
   );

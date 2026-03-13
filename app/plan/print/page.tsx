@@ -294,7 +294,7 @@ function PlanPrintContent() {
 
   const handlePrint = useReactToPrint({
     contentRef,
-    documentTitle: "자기역량 개발계획서",
+    documentTitle: "목적지 플래너(자기역량 개발계획서)",
     pageStyle: `
       @page { size: A4; margin: 12mm; }
       html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -305,23 +305,14 @@ function PlanPrintContent() {
   // 데이터 로드 후 검증 (Hook은 조건부 렌더링 전에 선언되어야 함)
   useEffect(() => {
     if (!loading && plan) {
-      const PLAN_CATEGORY_LABELS: Record<string, string> = {
-        training: "연수(직무·자율)",
-        class_open: "수업 공개",
-        community: "교원학습 공동체",
-        book_edutech: "전문 서적/에듀테크",
-        health: "건강/체력",
-        other: "기타 계획",
-      };
-
       const missingItems: string[] = [];
       const goals = [
-        { key: "training", value: (plan.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.training },
-        { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.class_open },
-        { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.community },
-        { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.book_edutech },
-        { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.health },
-        { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.other },
+        { key: "training", value: (plan.annual_goal ?? "").trim(), label: getCategoryLabel("training") },
+        { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: getCategoryLabel("class_open") },
+        { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: getCategoryLabel("community") },
+        { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: getCategoryLabel("book_edutech") },
+        { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: getCategoryLabel("health") },
+        { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: getCategoryLabel("other") },
       ];
 
       goals.forEach((goal) => {
@@ -352,27 +343,33 @@ function PlanPrintContent() {
   const communityPlans = (plan?.community_plans ?? []) as CommunityPlanRow[];
   const otherPlans = (plan?.other_plans ?? []) as OtherPlanRow[];
 
+  // 학교에서 설정한 영역명 우선 사용 (없으면 기본값)
+  const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
+    training: "연수(직무·자율)",
+    class_open: "수업 공개",
+    community: "교원학습 공동체",
+    book_edutech: "전문 서적/에듀테크",
+    health: "건강/체력",
+    other: "기타 계획",
+  };
+  const getCategoryLabel = (key: string): string => {
+    const fromSettings = schoolCategories.find((c) => c.key === key)?.label;
+    if (fromSettings && fromSettings.trim()) return fromSettings.trim();
+    return DEFAULT_CATEGORY_LABELS[key] ?? key;
+  };
+
   // 연간 목표량 검증 함수
   const validateAnnualGoals = (): { isValid: boolean; missingItems: string[] } => {
     if (!plan) return { isValid: false, missingItems: [] };
 
-    const PLAN_CATEGORY_LABELS: Record<string, string> = {
-      training: "연수(직무·자율)",
-      class_open: "수업 공개",
-      community: "교원학습 공동체",
-      book_edutech: "전문 서적/에듀테크",
-      health: "건강/체력",
-      other: "기타 계획",
-    };
-
     const missingItems: string[] = [];
     const goals = [
-      { key: "training", value: (plan.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.training },
-      { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.class_open },
-      { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.community },
-      { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.book_edutech },
-      { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.health },
-      { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS.other },
+      { key: "training", value: (plan.annual_goal ?? "").trim(), label: getCategoryLabel("training") },
+      { key: "class_open", value: (plan.expense_annual_goal ?? "").trim(), label: getCategoryLabel("class_open") },
+      { key: "community", value: (plan.community_annual_goal ?? "").trim(), label: getCategoryLabel("community") },
+      { key: "book_edutech", value: (plan.book_annual_goal ?? "").trim(), label: getCategoryLabel("book_edutech") },
+      { key: "health", value: (plan.education_annual_goal ?? "").trim(), label: getCategoryLabel("health") },
+      { key: "other", value: (plan.other_annual_goal ?? "").trim(), label: getCategoryLabel("other") },
     ];
 
     goals.forEach((goal) => {
@@ -438,7 +435,7 @@ function PlanPrintContent() {
         >
           {/* 제목 */}
           <div className="mb-6 border-b-2 border-sky-200 bg-sky-50/80 py-3 text-center print:py-2">
-            <h1 className="text-lg font-bold text-slate-800">자기역량 개발계획서</h1>
+            <h1 className="text-lg font-bold text-slate-800">목적지 플래너(자기역량 개발계획서)</h1>
           </div>
 
           <div className="space-y-4 text-sm text-slate-800">
@@ -506,16 +503,15 @@ function PlanPrintContent() {
               {/* 1행: 연수 | 수업 공개 */}
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>연수(직무, 자율) 계획</span>
+                  <span>{getCategoryLabel("training")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.annual_goal || "—"} 시간</span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="w-14 border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -523,27 +519,25 @@ function PlanPrintContent() {
                       <tr key={r.id}>
                         <td className="border border-slate-300 px-1 py-0.5">{r.name || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{r.duration || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.remarks || ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>수업 공개 계획</span>
+                  <span>{getCategoryLabel("class_open")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.expense_annual_goal || "—"} 회</span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -551,11 +545,10 @@ function PlanPrintContent() {
                       <tr key={r.id}>
                         <td className="border border-slate-300 px-1 py-0.5">{r.activity || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{r.method || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.remarks || ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -564,16 +557,15 @@ function PlanPrintContent() {
               {/* 2행: 교원학습 | 서적 */}
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>교원학습 공동체 활동 계획</span>
+                  <span>{getCategoryLabel("community")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.community_annual_goal || "—"} 회</span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -581,27 +573,25 @@ function PlanPrintContent() {
                       <tr key={r.id}>
                         <td className="border border-slate-300 px-1 py-0.5">{r.activity || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{r.method || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.remarks || ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>전문 서적 / 에듀테크 등 구입 활용 계획</span>
+                  <span>{getCategoryLabel("book_edutech")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.book_annual_goal || "—"} 회</span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -609,11 +599,10 @@ function PlanPrintContent() {
                       <tr key={r.id}>
                         <td className="border border-slate-300 px-1 py-0.5">{r.title || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{r.method || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.remarks ?? ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -622,7 +611,7 @@ function PlanPrintContent() {
               {/* 3행: 건강 | 기타 */}
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>건강/체력 향상 계획</span>
+                  <span>{getCategoryLabel("health")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">
                     나의 연간 목표: {plan?.education_annual_goal || "—"} {schoolCategories.find((c) => c.key === "health")?.unit ?? "시간"}
                   </span>
@@ -631,9 +620,8 @@ function PlanPrintContent() {
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -641,39 +629,36 @@ function PlanPrintContent() {
                       <tr key={r.id}>
                         <td className="border border-slate-300 px-1 py-0.5">{r.area || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.period || ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{r.duration || ""}</td>
                         <td className="border border-slate-300 px-1 py-0.5">{r.remarks || ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
-                  <span>기타 계획</span>
+                  <span>{getCategoryLabel("other")} 계획</span>
                   <span className="text-slate-600 font-normal text-xs">나의 연간 목표: {plan?.other_annual_goal || "—"} 건</span>
                 </div>
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">내용</th>
-                      <th className="w-12 border border-slate-300 px-1 py-0.5 text-left font-medium">시기</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">방법</th>
-                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">비고</th>
+                      <th className="w-28 border border-slate-300 px-1 py-0.5 text-left font-medium">시기 및 방법</th>
+                      <th className="border border-slate-300 px-1 py-0.5 text-left font-medium">기대효과</th>
                     </tr>
                   </thead>
                   <tbody>
                     {otherPlans.length ? otherPlans.map((r) => (
                       <tr key={r.id}>
-                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).content ?? (r as OtherPlanRow).text ?? ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).period ?? ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).method ?? ""}</td>
-                        <td className="border border-slate-300 px-1 py-0.5">{(r as OtherPlanRow).remarks ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{r.content ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{r.period ?? ""}</td>
+                        <td className="border border-slate-300 px-1 py-0.5">{r.remarks ?? ""}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={4} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
+                      <tr><td colSpan={3} className="border border-slate-300 px-1 py-0.5">&nbsp;</td></tr>
                     )}
                   </tbody>
                 </table>

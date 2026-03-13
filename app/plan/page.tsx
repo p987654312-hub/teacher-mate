@@ -79,30 +79,42 @@ type BookPlanRow = {
 type ExpenseRequestRow = {
   id: string;
   activity: string; // 내용
-  period: string;
-  method: string;
-  remarks: string;
+  period: string; // 시기 및 방법 (예: 3월, 학부모 참관)
+  method: string; // 과거 호환용 (사용 안 함)
+  remarks: string; // 기대효과
 };
 
 type CommunityPlanRow = {
   id: string;
   activity: string; // 내용
-  period: string;
-  method: string;
-  remarks: string;
+  period: string; // 시기 및 방법
+  method: string; // 과거 호환용 (사용 안 함)
+  remarks: string; // 기대효과
 };
 
 type OtherPlanRow = {
   id: string;
-  content: string;
-  period: string;
-  method: string;
-  remarks: string;
+  content: string; // 내용
+  period: string; // 시기 및 방법
+  method: string; // 과거 호환용 (사용 안 함)
+  remarks: string; // 기대효과
 };
 
 const DEFAULT_EXPENSE_REQUESTS: ExpenseRequestRow[] = [
-  { id: "1", activity: "학부모 공개 수업", period: "3월", method: "학부모 전체 참관", remarks: "학교설명회 연계" },
-  { id: "2", activity: "동료 공개 수업", period: "9월", method: "동료 교사 수업 참관", remarks: "자율장학 연계" },
+  {
+    id: "1",
+    activity: "학부모 공개 수업",
+    period: "3월, 학부모 전체 참관",
+    method: "",
+    remarks: "학교설명회 연계",
+  },
+  {
+    id: "2",
+    activity: "동료 공개 수업",
+    period: "9월, 동료 교사 수업 참관",
+    method: "",
+    remarks: "자율장학 연계",
+  },
 ];
 
 function getDefaultExpenseRequestsWithEmptyRow(): ExpenseRequestRow[] {
@@ -128,18 +140,25 @@ function SortableTrainingRow({
   trainingPlans,
   setTrainingPlans,
   removeTrainingRow,
+  placeholders,
 }: {
   row: TrainingPlanRow;
   idx: number;
   trainingPlans: TrainingPlanRow[];
   setTrainingPlans: (plans: TrainingPlanRow[]) => void;
   removeTrainingRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 4월, 온라인 15시간", method: "예: 방법", remarks: "예: 기대효과" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -151,7 +170,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: AI 활용 연수" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -161,17 +180,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 4월" : ""}
-      />
-      <Input
-        value={row.duration}
-        onChange={(e) => {
-          const updated = [...trainingPlans];
-          updated[idx].duration = e.target.value;
-          setTrainingPlans(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 온라인 15시간" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.remarks}
@@ -181,7 +190,7 @@ function SortableTrainingRow({
           setTrainingPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 직무연수 인정" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -205,18 +214,25 @@ function SortableExpenseRow({
   expenseRequests,
   setExpenseRequests,
   removeExpenseRow,
+  placeholders,
 }: {
   row: ExpenseRequestRow;
   idx: number;
   expenseRequests: ExpenseRequestRow[];
   setExpenseRequests: (requests: ExpenseRequestRow[]) => void;
   removeExpenseRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 3월, 학부모 참관", method: "예: 방법", remarks: "예: 기대효과" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -228,7 +244,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 학부모 공개 수업" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -238,17 +254,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 3월" : ""}
-      />
-      <Input
-        value={row.method}
-        onChange={(e) => {
-          const updated = [...expenseRequests];
-          updated[idx].method = e.target.value;
-          setExpenseRequests(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 학부모 참관" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.remarks}
@@ -258,7 +264,7 @@ function SortableExpenseRow({
           setExpenseRequests(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 학교설명회 연계" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -282,18 +288,25 @@ function SortableCommunityRow({
   communityPlans,
   setCommunityPlans,
   removeCommunityRow,
+  placeholders,
 }: {
   row: CommunityPlanRow;
   idx: number;
   communityPlans: CommunityPlanRow[];
   setCommunityPlans: (plans: CommunityPlanRow[]) => void;
   removeCommunityRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 4월, 월 1회 모임", method: "예: 방법", remarks: "예: 기대효과" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -305,7 +318,7 @@ function SortableCommunityRow({
           setCommunityPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 수업 나눔 동아리" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -315,17 +328,7 @@ function SortableCommunityRow({
           setCommunityPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 4월" : ""}
-      />
-      <Input
-        value={row.method}
-        onChange={(e) => {
-          const updated = [...communityPlans];
-          updated[idx].method = e.target.value;
-          setCommunityPlans(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 월 1회 모임" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.remarks}
@@ -335,7 +338,7 @@ function SortableCommunityRow({
           setCommunityPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "비고" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -359,18 +362,25 @@ function SortableBookRow({
   bookPlans,
   setBookPlans,
   removeBookRow,
+  placeholders,
 }: {
   row: BookPlanRow;
   idx: number;
   bookPlans: BookPlanRow[];
   setBookPlans: (plans: BookPlanRow[]) => void;
   removeBookRow: (id: string) => void;
+  placeholders?: { content: string; period: string; method: string; remarks: string };
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const ph = placeholders ?? { content: "예: 내용", period: "예: 6월, 독서 후 수업 적용", method: "예: 방법", remarks: "예: 기대효과" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -382,7 +392,7 @@ function SortableBookRow({
           setBookPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 교육서적 독서" : ""}
+        placeholder={idx === 0 ? ph.content : ""}
       />
       <Input
         value={row.period}
@@ -392,17 +402,7 @@ function SortableBookRow({
           setBookPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 6월" : ""}
-      />
-      <Input
-        value={row.method}
-        onChange={(e) => {
-          const updated = [...bookPlans];
-          updated[idx].method = e.target.value;
-          setBookPlans(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "예: 독서 후 수업 적용" : ""}
+        placeholder={idx === 0 ? ph.period : ""}
       />
       <Input
         value={row.remarks}
@@ -412,7 +412,7 @@ function SortableBookRow({
           setBookPlans(updated);
         }}
         className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? "비고" : ""}
+        placeholder={idx === 0 ? ph.remarks : ""}
       />
       <div className="flex justify-center">
         <Button
@@ -450,7 +450,11 @@ function SortableEducationRow({
   const ph = placeholders ?? { content: "예: 내용", period: "예: 5월", method: "예: 방법", remarks: "비고" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -474,16 +478,7 @@ function SortableEducationRow({
         className="rounded text-xs w-full h-8 py-1 text-left"
         placeholder={idx === 0 ? ph.period : ""}
       />
-      <Input
-        value={row.duration}
-        onChange={(e) => {
-          const updated = [...educationPlans];
-          updated[idx].duration = e.target.value;
-          setEducationPlans(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? ph.method : ""}
-      />
+      {/* duration 필드는 더 이상 별도 입력칸으로 사용하지 않음 */}
       <Input
         value={row.remarks}
         onChange={(e) => {
@@ -530,7 +525,11 @@ function SortableOtherRow({
   const ph = placeholders ?? { content: "예: 내용", period: "예: 3월", method: "예: 방법", remarks: "비고" };
 
   return (
-    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full items-center rounded border border-slate-100 bg-slate-50/50 px-2 py-1 text-left"
+    >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -554,16 +553,7 @@ function SortableOtherRow({
         className="rounded text-xs w-full h-8 py-1 text-left"
         placeholder={idx === 0 ? ph.period : ""}
       />
-      <Input
-        value={row.method}
-        onChange={(e) => {
-          const updated = [...otherPlans];
-          updated[idx].method = e.target.value;
-          setOtherPlans(updated);
-        }}
-        className="rounded text-xs w-full h-8 py-1 text-left"
-        placeholder={idx === 0 ? ph.method : ""}
-      />
+      {/* method 필드는 더 이상 별도 입력칸으로 사용하지 않음 */}
       <Input
         value={row.remarks}
         onChange={(e) => {
@@ -598,7 +588,21 @@ export default function PlanPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingGoal, setIsGeneratingGoal] = useState(false);
   const [isGeneratingOutcome, setIsGeneratingOutcome] = useState(false);
-  const [aiFillRowsLoading, setAiFillRowsLoading] = useState<string | null>(null);
+  const [aiFillRowsLoading, setAiFillRowsLoading] = useState<{
+    training: boolean;
+    expense: boolean;
+    community: boolean;
+    book: boolean;
+    education: boolean;
+    other: boolean;
+  }>({
+    training: false,
+    expense: false,
+    community: false,
+    book: false,
+    education: false,
+    other: false,
+  });
   const [hasUsedAIGoal, setHasUsedAIGoal] = useState(false);
   const [hasUsedAIEffect, setHasUsedAIEffect] = useState(false);
   const [diagnosisSummary, setDiagnosisSummary] = useState<{
@@ -633,10 +637,10 @@ export default function PlanPage() {
   const [educationPlans, setEducationPlans] = useState<EducationPlanRow[]>([
     { id: "1", area: "", period: "", duration: "", remarks: "" },
   ]);
-  const [bookPlans, setBookPlans] = useState<BookPlanRow[]>([
-    { id: "1", title: "", period: "", method: "", remarks: "" },
+  const [bookPlans, setBookPlans] = useState<BookPlanRow[]>([{ id: "1", title: "", period: "", method: "", remarks: "" }]);
+  const [expenseRequests, setExpenseRequests] = useState<ExpenseRequestRow[]>([
+    { id: "1", activity: "", period: "", method: "", remarks: "" },
   ]);
-  const [expenseRequests, setExpenseRequests] = useState<ExpenseRequestRow[]>(() => getDefaultExpenseRequestsWithEmptyRow());
   const [communityPlans, setCommunityPlans] = useState<CommunityPlanRow[]>([
     { id: "1", activity: "", period: "", method: "", remarks: "" },
   ]);
@@ -999,18 +1003,70 @@ export default function PlanPage() {
       return { content: "예: 연구회 활동", period: "예: 4월", method: "예: 월 1회 모임", remarks: "예: 학회 발표" };
     // 건강/체력 (공백 포함 가능)
     if (/건강|체력|운동|등산|달리기|수영|헬스/.test(L))
-      return { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" };
+      return { content: "예: 걷기·조깅 등 유산소 운동", period: "예: 3~7월, 주 3회", method: "예: 30분 이상 실천", remarks: "예: 체력 향상 및 스트레스 해소(기대효과)" };
     // 나머지는 키별 기본 예시
     const defaults: Record<string, { content: string; period: string; method: string; remarks: string }> = {
-      training: { content: "예: AI 활용 연수", period: "예: 4월", method: "예: 온라인 15시간", remarks: "예: 직무연수 인정" },
-      class_open: { content: "예: 학부모 공개 수업", period: "예: 3월", method: "예: 학부모 참관", remarks: "예: 학교설명회 연계" },
-      community: { content: "예: 수업 나눔 동아리", period: "예: 4월", method: "예: 월 1회 모임", remarks: "비고" },
-      book_edutech: { content: "예: 교육서적 독서", period: "예: 6월", method: "예: 독서 후 수업 적용", remarks: "비고" },
-      health: { content: "예: 등산", period: "예: 5월", method: "예: 주 2회", remarks: "예: 둘레길" },
-      other: { content: "예: 지원단 활동", period: "예: 3월", method: "예: 컨설팅", remarks: "비고" },
+      // 직무연수 계획: 학생 상담·학습 지원 중심 예시
+      training: {
+        content: "예: 학생 상담 및 학습코칭 역량 강화를 위한 연수",
+        period: "예: 4월, 온라인 직무연수 15시간",
+        method: "예: 사례 중심 강의 및 실습",
+        remarks: "예: 학급 학생 상담·학습 지원 역량 향상(기대효과)",
+      },
+      // 수업 공개: 학부모·동료 공개수업 기본 예시
+      class_open: {
+        content: "예: 학부모 공개 수업",
+        period: "예: 3월, 학부모 전체 참관",
+        method: "예: 학부모 대상 안내자료 제공",
+        remarks: "예: 학교설명회 연계 및 수업 신뢰도 향상(기대효과)",
+      },
+      community: {
+        content: "예: 수업 나눔 동아리",
+        period: "예: 4월, 월 1회 모임",
+        method: "예: 수업 사례 공유 및 피드백",
+        remarks: "예: 수업 전문성 공동 성장(기대효과)",
+      },
+      book_edutech: {
+        content: "예: 교육서적·에듀테크 활용 독서",
+        period: "예: 6월, 독서 후 수업 적용",
+        method: "예: 핵심 내용 정리 후 수업에 적용",
+        remarks: "예: 학생 참여 중심 수업 설계 역량 향상(기대효과)",
+      },
+      health: {
+        content: "예: 걷기·조깅 등 유산소 운동",
+        period: "예: 3~7월, 주 3회",
+        method: "예: 30분 이상 실천",
+        remarks: "예: 체력 향상 및 스트레스 해소(기대효과)",
+      },
+      other: {
+        content: "예: 교육청 연계 기타 활동",
+        period: "예: 3월", method: "예: 컨설팅·워크숍 참여",
+        remarks: "예: 학교 교육과정 운영 내실화(기대효과)",
+      },
     };
     return defaults[key] ?? { content: "예: 내용", period: "예: 월", method: "예: 방법", remarks: "비고" };
   };
+
+  // 학교에서 설정한 카드명이 "수업 공개" 계열일 때만 기본 예시 2개(학부모/동료 공개수업)를 자동 채움
+  useEffect(() => {
+    if (!schoolCategories.length) return;
+    const label = getPlanCategoryLabel("class_open");
+    const L = (label ?? "").trim();
+    if (!L) return;
+    const isClassOpenCategory = /수업\s*공개|공개\s*수업|공개수업|open\s*class/i.test(L);
+    if (!isClassOpenCategory) return;
+    // 이미 사용자가 내용을 입력한 경우에는 건드리지 않음
+    const hasUserData = expenseRequests.some(
+      (r) => (r.activity ?? "").trim() !== "" || (r.period ?? "").trim() !== "" || (r.remarks ?? "").trim() !== ""
+    );
+    if (hasUserData) return;
+    const now = Date.now();
+    setExpenseRequests([
+      { ...DEFAULT_EXPENSE_REQUESTS[0], id: String(now) },
+      { ...DEFAULT_EXPENSE_REQUESTS[1], id: String(now + 1) },
+      { id: String(now + 2), activity: "", period: "", method: "", remarks: "" },
+    ]);
+  }, [schoolCategories, expenseRequests]);
 
   const missingAnnualGoalsStorageKey = (email: string) => `teacher_mate_plan_missing_annual_goals_${email.toLowerCase()}`;
   const computeMissingAnnualGoals = (values: {
@@ -1115,7 +1171,7 @@ export default function PlanPage() {
       alert(AI_ROW_MESSAGE);
       return;
     }
-    setAiFillRowsLoading(cardType);
+    setAiFillRowsLoading((prev) => ({ ...prev, [cardType]: true }));
     try {
       const categoryByCard: Record<PlanCardType, { key: string; label: string; unit: string }> = {
         training: { key: "training", label: getPlanCategoryLabel("training"), unit: getPlanCategoryUnit("training") },
@@ -1150,12 +1206,34 @@ export default function PlanPage() {
         alert(data?.code === "QUOTA_EXCEEDED" ? data.error : (data?.error || "AI 추천을 불러오는데 실패했습니다."));
         return;
       }
-      const filled = (data.rows || []) as Record<string, string>[];
+      const filled = (data.rows || []) as { activity?: string; period?: string; remarks?: string }[];
       if (filled.length === 0) return;
-      const merged = (rows as Record<string, unknown>[]).map((row, i) => {
-        const next = filled[i] || {};
-        const id = (row as { id?: string }).id ?? String(i);
-        return { ...row, ...next, id };
+      const merged = (rows as any[]).map((row, i) => {
+        const base: any = { ...row };
+        const ai = filled[i] || {};
+        if (cardType === "training") {
+          base.name = ai.activity ?? base.name ?? "";
+          base.period = ai.period ?? base.period ?? "";
+          base.remarks = ai.remarks ?? base.remarks ?? "";
+        } else if (cardType === "expense" || cardType === "community") {
+          base.activity = ai.activity ?? base.activity ?? "";
+          base.period = ai.period ?? base.period ?? "";
+          base.remarks = ai.remarks ?? base.remarks ?? "";
+        } else if (cardType === "book") {
+          base.title = ai.activity ?? base.title ?? "";
+          base.period = ai.period ?? base.period ?? "";
+          base.remarks = ai.remarks ?? base.remarks ?? "";
+        } else if (cardType === "education") {
+          base.area = ai.activity ?? base.area ?? "";
+          base.period = ai.period ?? base.period ?? "";
+          base.remarks = ai.remarks ?? base.remarks ?? "";
+        } else if (cardType === "other") {
+          base.content = ai.activity ?? base.content ?? "";
+          base.period = ai.period ?? base.period ?? "";
+          base.remarks = ai.remarks ?? base.remarks ?? "";
+        }
+        base.id = (row as { id?: string }).id ?? String(i);
+        return base;
       });
       if (cardType === "other") {
         setter(merged.map((r) => normalizeOtherPlanRow(r as Parameters<typeof normalizeOtherPlanRow>[0])));
@@ -1166,7 +1244,7 @@ export default function PlanPage() {
       console.error(e);
       alert("AI 추천 중 오류가 발생했습니다.");
     } finally {
-      setAiFillRowsLoading(null);
+      setAiFillRowsLoading((prev) => ({ ...prev, [cardType]: false }));
     }
   };
 
@@ -1479,7 +1557,7 @@ export default function PlanPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 text-left">
         <CardPageHeader
           icon={<ClipboardList className="h-6 w-6" />}
-          title="자기역량 개발계획서 작성"
+          title="목적지 플래너(자기역량 개발계획서 작성)"
           subtitle="연간 역량 개발 목표와 실천 계획을 세우고 기록합니다."
         />
 
@@ -1646,32 +1724,38 @@ export default function PlanPage() {
                 />
                 <span className="text-sm text-slate-600 whitespace-nowrap">{getPlanCategoryUnit("training")}</span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleAIFillRowsClick("training")}
-                disabled={aiFillRowsLoading !== null}
-                className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
-              >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "training" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "training" ? "추천 생성 중..." : "AI 추천 받기"}
-              </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleAIFillRowsClick("training")}
+              className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
+            >
+              <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.training ? "animate-spin" : ""}`} />
+              {aiFillRowsLoading.training ? "추천 생성 중..." : "AI 추천 받기"}
+            </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrainingDragEnd}>
             <SortableContext items={trainingPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {trainingPlans.map((row, idx) => (
-                  <SortableTrainingRow key={row.id} row={row} idx={idx} trainingPlans={trainingPlans} setTrainingPlans={setTrainingPlans} removeTrainingRow={removeTrainingRow} />
+                  <SortableTrainingRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    trainingPlans={trainingPlans}
+                    setTrainingPlans={setTrainingPlans}
+                    removeTrainingRow={removeTrainingRow}
+                    placeholders={getPlaceholdersForCategory("training", getPlanCategoryLabel("training"))}
+                  />
                 ))}
               </div>
             </SortableContext>
@@ -1723,27 +1807,33 @@ export default function PlanPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleAIFillRowsClick("expense")}
-                disabled={aiFillRowsLoading !== null}
                 className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
               >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "expense" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "expense" ? "추천 생성 중..." : "AI 추천 받기"}
+                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.expense ? "animate-spin" : ""}`} />
+                {aiFillRowsLoading.expense ? "추천 생성 중..." : "AI 추천 받기"}
               </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExpenseDragEnd}>
             <SortableContext items={expenseRequests.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {expenseRequests.map((row, idx) => (
-                  <SortableExpenseRow key={row.id} row={row} idx={idx} expenseRequests={expenseRequests} setExpenseRequests={setExpenseRequests} removeExpenseRow={removeExpenseRow} />
+                  <SortableExpenseRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    expenseRequests={expenseRequests}
+                    setExpenseRequests={setExpenseRequests}
+                    removeExpenseRow={removeExpenseRow}
+                    placeholders={getPlaceholdersForCategory("class_open", getPlanCategoryLabel("class_open"))}
+                  />
                 ))}
               </div>
             </SortableContext>
@@ -1795,27 +1885,33 @@ export default function PlanPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleAIFillRowsClick("community")}
-                disabled={aiFillRowsLoading !== null}
                 className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
               >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "community" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "community" ? "추천 생성 중..." : "AI 추천 받기"}
+                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.community ? "animate-spin" : ""}`} />
+                {aiFillRowsLoading.community ? "추천 생성 중..." : "AI 추천 받기"}
               </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCommunityDragEnd}>
             <SortableContext items={communityPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {communityPlans.map((row, idx) => (
-                  <SortableCommunityRow key={row.id} row={row} idx={idx} communityPlans={communityPlans} setCommunityPlans={setCommunityPlans} removeCommunityRow={removeCommunityRow} />
+                  <SortableCommunityRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    communityPlans={communityPlans}
+                    setCommunityPlans={setCommunityPlans}
+                    removeCommunityRow={removeCommunityRow}
+                    placeholders={getPlaceholdersForCategory("community", getPlanCategoryLabel("community"))}
+                  />
                 ))}
               </div>
             </SortableContext>
@@ -1867,27 +1963,33 @@ export default function PlanPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleAIFillRowsClick("book")}
-                disabled={aiFillRowsLoading !== null}
                 className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
               >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "book" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "book" ? "추천 생성 중..." : "AI 추천 받기"}
+                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.book ? "animate-spin" : ""}`} />
+                {aiFillRowsLoading.book ? "추천 생성 중..." : "AI 추천 받기"}
               </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleBookDragEnd}>
             <SortableContext items={bookPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {bookPlans.map((row, idx) => (
-                  <SortableBookRow key={row.id} row={row} idx={idx} bookPlans={bookPlans} setBookPlans={setBookPlans} removeBookRow={removeBookRow} />
+                  <SortableBookRow
+                    key={row.id}
+                    row={row}
+                    idx={idx}
+                    bookPlans={bookPlans}
+                    setBookPlans={setBookPlans}
+                    removeBookRow={removeBookRow}
+                    placeholders={getPlaceholdersForCategory("book_edutech", getPlanCategoryLabel("book_edutech"))}
+                  />
                 ))}
               </div>
             </SortableContext>
@@ -1941,23 +2043,21 @@ export default function PlanPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleAIFillRowsClick("education")}
-                disabled={aiFillRowsLoading !== null}
                 className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
               >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "education" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "education" ? "추천 생성 중..." : "AI 추천 받기"}
+                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.education ? "animate-spin" : ""}`} />
+                {aiFillRowsLoading.education ? "추천 생성 중..." : "AI 추천 받기"}
               </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEducationDragEnd}>
             <SortableContext items={educationPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {educationPlans.map((row, idx) => (
@@ -2021,23 +2121,21 @@ export default function PlanPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleAIFillRowsClick("other")}
-                disabled={aiFillRowsLoading !== null}
                 className="shrink-0 rounded-full border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-xs text-purple-600 hover:from-purple-100 hover:to-pink-100 disabled:opacity-50"
               >
-                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading === "other" ? "animate-spin" : ""}`} />
-                {aiFillRowsLoading === "other" ? "추천 생성 중..." : "AI 추천 받기"}
+                <Sparkles className={`mr-1 h-3 w-3 ${aiFillRowsLoading.other ? "animate-spin" : ""}`} />
+                {aiFillRowsLoading.other ? "추천 생성 중..." : "AI 추천 받기"}
               </Button>
             </div>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleOtherDragEnd}>
             <SortableContext items={otherPlans.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 w-full rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 leading-none text-left">
                   <div className="w-4"></div>
                   <div>내용</div>
-                  <div>시기</div>
-                  <div>방법</div>
-                  <div>비고</div>
+                  <div>시기 및 방법</div>
+                  <div>기대효과</div>
                   <div></div>
                 </div>
                 {otherPlans.map((row, idx) => (

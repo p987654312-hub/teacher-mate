@@ -1179,10 +1179,10 @@ export default function ReflectionPage() {
                 </div>
                 <div className="mt-4 flex justify-end border-t border-slate-200 pt-4">
                   <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={saveSelfEvalForm} disabled={savingStatus.evidence === "saving"}>
-                    <Save className="mr-1.5 h-3.5 w-3.5" />
-                    {savingStatus.evidence === "saving" ? "저장 중..." : savingStatus.evidence === "saved" ? "저장됨" : "저장"}
-                  </Button>
-                </div>
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                  {savingStatus.evidence === "saving" ? "저장 중..." : savingStatus.evidence === "saved" ? "저장됨" : "저장"}
+                </Button>
+              </div>
               </div>
             </Card>
           </TabsContent>
