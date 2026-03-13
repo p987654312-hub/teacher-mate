@@ -110,9 +110,15 @@ export async function POST(req: Request) {
       const domainKeysList: string[] = Array.isArray((body as any)?.domainKeys) && (body as any).domainKeys.length > 0
         ? (body as any).domainKeys
         : Object.keys(domainLabels);
-      const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(pre[k]) ?? 0}점`).join(", ");
+      //const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(pre[k]) ?? 0}점`).join(", ");
+      const preText = domainKeysList.map((k) => {
+        const label = domainLabels[k] ?? k;
+        // 1. 키(k)로 먼저 찾고, 없으면 라벨(label)로도 찾아봄
+        const score = pre[k] !== undefined ? pre[k] : pre[label];
+        return `${label}: ${Number(score) || 0}점`;
+      }).join(", ");
       const postText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(post[k]) ?? 0}점`).join(", ");
-      prompt = `[역할] 너는 교원 역량 개발을 지원하는 전문 컨설턴트이다. 사전검사와 사후 검사를 비교하여 분석해줄거야, 만약 사전검사 결과를 모른다면 방사형그래프를 해석해보거나 비교표를 참고해줘.
+      prompt = `[역할] 너는 교원 역량 개발을 지원하는 전문 컨설턴트이다. 
 
 [지시] 사전 검사 결과와 사후 검사 결과를 **비교**하여, "무엇이 얼마나 좋아졌는지"와 "어디가 아직 덜 오른 것인지"를 중심으로 분석·제언한다.
 
