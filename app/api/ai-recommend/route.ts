@@ -94,7 +94,7 @@ export async function POST(req: Request) {
 총점(100점 만점 환산): ${totalScore}점
 
 각 문단은 명확한 주제를 다루되, 전문 컨설턴트가 결과를 해석하고 제안하는 톤으로 서술할 것.`;
-    } else if (type === "analysis_post") {
+    /*} else if (type === "analysis_post") {
       const pre = (body as any)?.preScores || {};
       const post = (body as any)?.postScores || {};
       const preTotal = Number((body as any)?.preTotal) ?? 0;
@@ -110,14 +110,44 @@ export async function POST(req: Request) {
       const domainKeysList: string[] = Array.isArray((body as any)?.domainKeys) && (body as any).domainKeys.length > 0
         ? (body as any).domainKeys
         : Object.keys(domainLabels);
-      //const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(pre[k]) ?? 0}점`).join(", ");
-      const preText = domainKeysList.map((k) => {
-        const label = domainLabels[k] ?? k;
-        // 1. 키(k)로 먼저 찾고, 없으면 라벨(label)로도 찾아봄
-        const score = pre[k] !== undefined ? pre[k] : pre[label];
-        return `${label}: ${Number(score) || 0}점`;
-      }).join(", ");
+      const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(pre[k]) ?? 0}점`).join(", ");
       const postText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${Number(post[k]) ?? 0}점`).join(", ");
+      */
+    } else if (type === "analysis_post") {
+      const pre = (body as any)?.preScores || {};
+      const post = (body as any)?.postScores || {};
+      const preTotal = Number((body as any)?.preTotal) ?? 0;
+      const postTotal = Number((body as any)?.postTotal) ?? 0;
+    
+      // 1. 기존 6개 영역의 이름을 정의 (전달받은게 없으면 이 기본값 사용)
+      const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
+        domain1: "영역1", domain2: "영역2", domain3: "영역3",
+        domain4: "영역4", domain5: "영역5", domain6: "영역6",
+      };
+    
+      const domainLabels = typeof (body as any)?.domainLabels === "object" && (body as any).domainLabels !== null
+          ? { ...FALLBACK_DOMAIN_LABELS, ...(body as any).domainLabels }
+          : FALLBACK_DOMAIN_LABELS;
+    
+      // 2. 분석할 키 목록 가져오기 (domain1~domain6)
+      const domainKeysList: string[] = Array.isArray((body as any)?.domainKeys) && (body as any).domainKeys.length > 0
+        ? (body as any).domainKeys
+        : Object.keys(domainLabels);
+    
+      // 3. [핵심] 데이터 매핑 - 키가 달라도 값(Value)을 찾아내는 로직
+      const getScore = (dataObj: any, key: string, label: string) => {
+        // 키(domain1)로 먼저 찾고, 없으면 라벨(영역1)로 찾음
+        if (dataObj[key] !== undefined) return Number(dataObj[key]);
+        if (dataObj[label] !== undefined) return Number(dataObj[label]);
+        return 0; // 둘 다 없으면 0
+      };
+    
+      const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${getScore(pre, k, domainLabels[k])}점`).join(", ");
+      const postText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${getScore(post, k, domainLabels[k])}점`).join(", ");
+    
+      // 4. 결과 확인용 로그 (데이터가 0으로 나오는지 바로 확인 가능)
+      console.log("### 사전 데이터 변환 결과:", preText);
+      console.log("### 사후 데이터 변환 결과:", postText);
       prompt = `[역할] 너는 교원 역량 개발을 지원하는 전문 컨설턴트이다. 
 
 [지시] 사전 검사 결과와 사후 검사 결과를 **비교**하여, "무엇이 얼마나 좋아졌는지"와 "어디가 아직 덜 오른 것인지"를 중심으로 분석·제언한다.
