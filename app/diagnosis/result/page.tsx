@@ -137,7 +137,9 @@ function DiagnosisResultContent() {
                   return;
                 }
                 setDiagnosisResult(postRes.data as DiagnosisResult);
-                if (postRes.data.ai_analysis) setAiAnalysis(postRes.data.ai_analysis as string);
+                const reportAnalysis = (postRes.data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report
+                  ?? (postRes.data as { ai_analysis?: string | null }).ai_analysis;
+                if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
                 if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
               } else {
                 const { data, error } = await supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -153,7 +155,8 @@ function DiagnosisResultContent() {
                   return;
                 }
                 setDiagnosisResult(data as DiagnosisResult);
-                if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
+                const reportAnalysis = (data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report ?? (data as { ai_analysis?: string | null }).ai_analysis;
+                if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
               }
             } catch (err) {
               console.error(err);
@@ -242,7 +245,9 @@ function DiagnosisResultContent() {
             return;
           }
           setDiagnosisResult(postRes.data as DiagnosisResult);
-          if (postRes.data.ai_analysis) setAiAnalysis(postRes.data.ai_analysis as string);
+          const reportAnalysis = (postRes.data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report
+                  ?? (postRes.data as { ai_analysis?: string | null }).ai_analysis;
+                if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
           if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
         } else {
           const { data, error } = await supabase
@@ -265,7 +270,8 @@ function DiagnosisResultContent() {
             return;
           }
           setDiagnosisResult(data as DiagnosisResult);
-          if (data.ai_analysis) setAiAnalysis(data.ai_analysis as string);
+          const reportAnalysis = (data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report ?? (data as { ai_analysis?: string | null }).ai_analysis;
+                if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
         }
       } catch (error) {
         console.error(error);
@@ -368,9 +374,10 @@ function DiagnosisResultContent() {
         const json = await res.json();
         if (res.ok && json.recommendation) {
           setAiAnalysis(json.recommendation);
+          const analysisText = json.recommendation;
           await supabase
             .from("diagnosis_results")
-            .update({ ai_analysis: json.recommendation })
+            .update({ ai_analysis: analysisText, ai_analysis_report: analysisText })
             .eq("id", diagnosisResult.id);
         } else if (json?.code === "QUOTA_EXCEEDED") {
           alert(json.error);
@@ -558,7 +565,8 @@ function DiagnosisResultContent() {
       const json = await res.json();
       if (res.ok && json.recommendation) {
         setAiAnalysis(json.recommendation);
-        await supabase.from("diagnosis_results").update({ ai_analysis: json.recommendation }).eq("id", diagnosisResult.id);
+        const analysisText = json.recommendation;
+        await supabase.from("diagnosis_results").update({ ai_analysis: analysisText, ai_analysis_report: analysisText }).eq("id", diagnosisResult.id);
       } else {
         alert(json?.code === "QUOTA_EXCEEDED" ? json.error : "분석 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
@@ -725,11 +733,11 @@ function DiagnosisResultContent() {
           )}
         </div>
 
-        {/* 나의 결과 분석 */}
+        {/* 사전·사후 진단 비교 분석 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold text-slate-800">
-              나의 결과 분석
+              사전·사후 진단 비교 분석
             </h2>
             {!isPost && (
               <Button

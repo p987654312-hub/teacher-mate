@@ -100,6 +100,7 @@ export async function POST(req: Request) {
       { data: evidenceRow },
       { data: nextYearRow },
       { data: selfEvalRow },
+      { data: analysisPrefRow },
     ] = await Promise.all([
       admin.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("diagnosis_results").select("*").eq("user_email", targetEmail).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -108,7 +109,12 @@ export async function POST(req: Request) {
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_evidence_text").maybeSingle(),
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_next_year_goal").maybeSingle(),
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_self_eval_form").maybeSingle(),
+      admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_ai_analysis_first_person").maybeSingle(),
     ]);
+
+    const reportAnalysisText = analysisPrefRow?.pref_value != null
+      ? String(analysisPrefRow.pref_value).trim()
+      : (postData as { ai_analysis?: string | null } | null)?.ai_analysis?.trim() ?? "";
 
     return NextResponse.json({
       ok: true,
@@ -123,6 +129,7 @@ export async function POST(req: Request) {
       evidenceText: evidenceRow?.pref_value != null ? String(evidenceRow.pref_value) : "",
       nextYearGoalText: nextYearRow?.pref_value != null ? String(nextYearRow.pref_value) : "",
       selfEvalForm: selfEvalRow?.pref_value ?? null,
+      reportAnalysisText,
     });
   } catch (error) {
     console.error("result-report-by-email error:", error);

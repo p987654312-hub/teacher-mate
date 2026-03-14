@@ -328,7 +328,11 @@ function DiagnosisContent() {
             if (analysisRes.ok) {
               const result = await analysisRes.json();
               if (result.recommendation && result.recommendation.trim()) {
-                await supabase.from("diagnosis_results").update({ ai_analysis: result.recommendation.trim() }).eq("id", savedResultId);
+                const analysisText = result.recommendation.trim();
+                await supabase.from("diagnosis_results").update({
+                  ai_analysis: analysisText,
+                  ai_analysis_report: analysisText,
+                }).eq("id", savedResultId);
               }
             } else {
               const err = await analysisRes.json().catch(() => ({}));
@@ -360,7 +364,11 @@ function DiagnosisContent() {
           if (analysisRes.ok) {
             const result = await analysisRes.json();
             if (result.recommendation && result.recommendation.trim()) {
-              await supabase.from("diagnosis_results").update({ ai_analysis: result.recommendation.trim() }).eq("id", savedResultId);
+              const analysisText = result.recommendation.trim();
+                await supabase.from("diagnosis_results").update({
+                  ai_analysis: analysisText,
+                  ai_analysis_report: analysisText,
+                }).eq("id", savedResultId);
             }
           } else {
             const err = await analysisRes.json().catch(() => ({}));

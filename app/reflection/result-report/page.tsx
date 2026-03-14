@@ -50,6 +50,7 @@ type DiagnosisRow = {
   raw_answers?: Record<string, unknown> & { _schema?: string };
   category_scores?: Record<string, { score?: number; count?: number }>;
   ai_analysis?: string | null;
+  ai_analysis_report?: string | null;
 };
 
 type MileageEntry = { id: string; content: string; category: string; created_at: string };
@@ -75,6 +76,8 @@ function ResultReportContent() {
   const [diagnosisSurvey, setDiagnosisSurvey] = useState<DiagnosisSurvey | null>(null);
   const [selfEvalForm, setSelfEvalForm] = useState<any | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** 기초정보 > 사전사후결과분석 탭 내용 (pref 우선, 없으면 진단 ai_analysis) */
+  const [reportAnalysisText, setReportAnalysisText] = useState("");
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -143,6 +146,7 @@ function ResultReportContent() {
         setReflectionText(j.reflectionText ?? "");
         setEvidenceText(j.evidenceText ?? "");
         setNextYearGoalText(j.nextYearGoalText ?? "");
+        setReportAnalysisText(j.reportAnalysisText ?? "");
         if (j.selfEvalForm) {
           try {
             const parsed = typeof j.selfEvalForm === "string" ? JSON.parse(j.selfEvalForm) : j.selfEvalForm;
@@ -231,6 +235,12 @@ function ResultReportContent() {
       if (isMounted && evidenceRow?.pref_value != null) setEvidenceText(String(evidenceRow.pref_value));
       const { data: nextYearRow } = await supabase.from("user_preferences").select("pref_value").eq("user_email", email).eq("pref_key", "reflection_next_year_goal").maybeSingle();
       if (isMounted && nextYearRow?.pref_value != null) setNextYearGoalText(String(nextYearRow.pref_value));
+      const { data: analysisPrefRow } = await supabase.from("user_preferences").select("pref_value").eq("user_email", email).eq("pref_key", "reflection_ai_analysis_first_person").maybeSingle();
+      if (isMounted) {
+        const fromPref = analysisPrefRow?.pref_value != null ? String(analysisPrefRow.pref_value).trim() : "";
+        const fromDiagnosis = (postData as { ai_analysis?: string | null })?.ai_analysis?.trim() ?? "";
+        setReportAnalysisText(fromPref || fromDiagnosis);
+      }
       const { data: selfEvalRow } = await supabase
         .from("user_preferences")
         .select("pref_value")
@@ -721,11 +731,11 @@ function ResultReportContent() {
                 ))}
               </div>
             )}
-            {preResult && postResult && (postResult.ai_analysis ?? "").trim() && (
+            {reportAnalysisText.trim() && (
               <div className="mt-4 rounded border border-slate-200 bg-slate-50/50 p-3">
                 <h3 className="mb-2 text-xs font-bold text-slate-800">결과 분석</h3>
                 <div className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">
-                  {postResult.ai_analysis!.trim()}
+                  {reportAnalysisText.trim()}
                 </div>
               </div>
             )}

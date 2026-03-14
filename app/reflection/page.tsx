@@ -269,7 +269,17 @@ export default function ReflectionPage() {
         .limit(1)
         .maybeSingle();
       setPostResultId(postResultRow?.id ?? null);
-      setAnalysisPostText(String(postResultRow?.ai_analysis ?? "").trim());
+      // 1인칭(편집) 본문은 pref에만 저장. 결과보고서·진단결과 페이지에는 3인칭(ai_analysis)만 표시.
+      const { data: analysisPrefRow } = await supabase
+        .from("user_preferences")
+        .select("pref_value")
+        .eq("user_email", user.email)
+        .eq("pref_key", "reflection_ai_analysis_first_person")
+        .maybeSingle();
+      const analysisToShow = analysisPrefRow?.pref_value != null
+        ? String(analysisPrefRow.pref_value).trim()
+        : String(postResultRow?.ai_analysis ?? "").trim();
+      setAnalysisPostText(analysisToShow);
       try {
         const emailKey = user.email ?? "";
         const { data: draftRow } = await supabase
@@ -306,6 +316,12 @@ export default function ReflectionPage() {
         const dbEvidence = evidenceRow?.pref_value != null ? String(evidenceRow.pref_value) : "";
         const localEvidence = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_evidence_" + emailKey) ?? "") : "";
         setEvidenceText(dbEvidence || localEvidence || "");
+        if (!dbEvidence && localEvidence) {
+          void supabase.from("user_preferences").upsert(
+            { user_email: emailKey, pref_key: "reflection_evidence_text", pref_value: localEvidence, updated_at: new Date().toISOString() },
+            { onConflict: "user_email,pref_key" }
+          ).then(() => {}, () => {});
+        }
         const { data: nextYearRow } = await supabase
           .from("user_preferences")
           .select("pref_value")
@@ -315,6 +331,12 @@ export default function ReflectionPage() {
         const dbNextYear = nextYearRow?.pref_value != null ? String(nextYearRow.pref_value) : "";
         const localNextYear = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_next_year_goal_" + emailKey) ?? "") : "";
         if (!hasUserEditedNextYearRef.current) setNextYearGoalText(dbNextYear || localNextYear || "");
+        if (!dbNextYear && localNextYear) {
+          void supabase.from("user_preferences").upsert(
+            { user_email: emailKey, pref_key: "reflection_next_year_goal", pref_value: localNextYear, updated_at: new Date().toISOString() },
+            { onConflict: "user_email,pref_key" }
+          ).then(() => {}, () => {});
+        }
         const { data: extraRow } = await supabase
           .from("user_preferences")
           .select("pref_value")
@@ -418,9 +440,15 @@ export default function ReflectionPage() {
       supabase.from("reflection_drafts").upsert(
         { user_email: userEmail, goal_achievement_text: goalAchievementText, reflection_text: reflectionText, updated_at: new Date().toISOString() },
         { onConflict: "user_email" }
-      ).then(() => {
-        hasUnsavedChangesRef.current = false;
-      }, () => {});
+      ).then(() => {}, () => {});
+      supabase.from("user_preferences").upsert(
+        { user_email: userEmail, pref_key: "reflection_evidence_text", pref_value: latestRef.current.evidenceText, updated_at: new Date().toISOString() },
+        { onConflict: "user_email,pref_key" }
+      ).then(() => {}, () => {});
+      supabase.from("user_preferences").upsert(
+        { user_email: userEmail, pref_key: "reflection_next_year_goal", pref_value: latestRef.current.nextYearGoalText, updated_at: new Date().toISOString() },
+        { onConflict: "user_email,pref_key" }
+      ).then(() => { hasUnsavedChangesRef.current = false; }, () => {});
     };
     const onVisibilityChange = () => { if (document.visibilityState === "hidden") saveToServer(); };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -437,7 +465,7 @@ export default function ReflectionPage() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [userEmail, goalAchievementText, reflectionText]);
+  }, [userEmail, goalAchievementText, reflectionText, evidenceText, nextYearGoalText]);
 
   useEffect(() => {
     if (!userEmail) return;
@@ -977,8 +1005,11 @@ export default function ReflectionPage() {
                     const rewritten = (json.recommendation ?? "").trim();
                     if (rewritten) {
                       setAnalysisPostText(rewritten);
-                      if (postResultId && userEmail) {
-                        await supabase.from("diagnosis_results").update({ ai_analysis: rewritten }).eq("id", postResultId).eq("user_email", userEmail);
+                      if (userEmail) {
+                        await supabase.from("user_preferences").upsert(
+                          { user_email: userEmail, pref_key: "reflection_ai_analysis_first_person", pref_value: rewritten, updated_at: new Date().toISOString() },
+                          { onConflict: "user_email,pref_key" }
+                        );
                       }
                     }
                   } catch (e) {
@@ -992,9 +1023,12 @@ export default function ReflectionPage() {
                   {analysisRewriteLoading ? "다듬는 중..." : "AI로 글 다듬기"}
                 </Button>
                 <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={async () => {
-                  if (!postResultId || !userEmail) return;
+                  if (!userEmail) return;
                   try {
-                    await supabase.from("diagnosis_results").update({ ai_analysis: analysisPostText }).eq("id", postResultId).eq("user_email", userEmail);
+                    await supabase.from("user_preferences").upsert(
+                      { user_email: userEmail, pref_key: "reflection_ai_analysis_first_person", pref_value: analysisPostText, updated_at: new Date().toISOString() },
+                      { onConflict: "user_email,pref_key" }
+                    );
                     alert("저장되었습니다.");
                   } catch {
                     alert("저장에 실패했습니다.");
