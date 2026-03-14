@@ -20,6 +20,7 @@ type PlanRow = {
   community_annual_goal?: string | null;
   book_annual_goal?: string | null;
   education_annual_goal?: string | null;
+  education_annual_goal_unit?: string | null;
   other_annual_goal?: string | null;
   training_plans?: Array<{ name?: string; period?: string; duration?: string; remarks?: string }> | null;
   education_plans?: Array<{ area?: string; period?: string; duration?: string; remarks?: string }> | null;
