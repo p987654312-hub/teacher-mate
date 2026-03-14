@@ -89,7 +89,7 @@ export default function SubDomainBarCharts({ barChartDataByDomain, className = "
               }}
             />
             <Tooltip
-              formatter={(value: number | undefined, name: string): [string, string] => [
+              formatter={(value: number | undefined, name: string | undefined): [string, string] => [
                 value != null ? `${Number(value)}점` : "-",
                 name === "사전" ? "사전 (100점 환산)" : "사후 (100점 환산)",
               ]}
