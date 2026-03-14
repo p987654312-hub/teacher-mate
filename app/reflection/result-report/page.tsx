@@ -519,59 +519,8 @@ function ResultReportContent() {
   const maxTotal = totalQuestionCount * 5;
   const totalNorm = result && maxTotal > 0 ? (result.total_score / maxTotal) * 100 : 0;
   const preTotalNorm = preResult && maxTotal > 0 ? (preResult.total_score / maxTotal) * 100 : 0;
-  const categoryOrder = ["training", "class_open", "community", "book_edutech", "health", "other"];
-
   function toShortYear(text: string): string {
     return text.replace(/\b20(\d{2})\./g, "$1.");
-  }
-  function summarizeGoalAchievementText(raw: string): string {
-    if (!raw || !raw.trim()) return raw || "";
-    const lines = raw.split(/\r?\n/);
-    const out: string[] = [];
-    let title = "";
-    const bullets: string[] = [];
-    let includeRest = true;
-    const flush = (): boolean => {
-      if (title) {
-        // 실천내용(불릿)은 보고서에 표시하지 않고, 목표달성도 항목만 출력
-        const alreadyBracket = title.match(/^\[\s*(.+?)\s*\]\s*목표\s*:\s*(.+)$/);
-        if (alreadyBracket) {
-          out.push(`[ ${alreadyBracket[1].trim()} ] 목표 : ${alreadyBracket[2].trim()}`);
-        } else {
-          const m = title.match(/^(.+?)\s+목표\s*:\s*(.+)$/);
-          if (m) {
-            out.push(`[ ${m[1].trim()} ] 목표 : ${m[2].trim()}`);
-          } else {
-            out.push(`[ ${title} ]`);
-          }
-        }
-        const isLastReportBlock = /기타/.test(title);
-        title = "";
-        bullets.length = 0;
-        if (isLastReportBlock) return false;
-      }
-      return true;
-    };
-    for (const line of lines) {
-      if (!includeRest) break;
-      const trimmed = line.trim();
-      if (trimmed.startsWith("목표 :") || trimmed.startsWith("목표:")) {
-        includeRest = flush();
-        if (!includeRest) break;
-        title = trimmed.replace(/^목표\s*:\s*(.+?):\s*/, "$1 목표 : ");
-      } else if (/^\[\s*.+?\s*\]\s*목표\s*:\s*.+$/.test(trimmed) && !trimmed.includes(" - ")) {
-        includeRest = flush();
-        if (!includeRest) break;
-        title = trimmed;
-      } else if (trimmed && title) {
-        bullets.push(trimmed.replace(/^\s*[-–—]\s*/, ""));
-      } else if (trimmed) {
-        includeRest = flush();
-        if (includeRest) out.push(line);
-      }
-    }
-    flush();
-    return out.join("\n");
   }
 
   if (loading) {
@@ -744,61 +693,11 @@ function ResultReportContent() {
             <h2 className="mb-2 text-sm font-bold text-slate-800">목표달성도 및 실천 내용</h2>
             <div className="rounded border border-slate-200 bg-slate-50/50 p-3">
               <div className="text-xs text-slate-700">
-                {goalAchievementText ? (() => {
-                  const raw = toShortYear(goalAchievementText);
-                  const lines = raw.split(/\r?\n/);
-                  const blocks: { title: string; bullets: string[] }[] = [];
-                  let currentTitle = "";
-                  let currentBullets: string[] = [];
-                  const flush = () => {
-                    if (currentTitle.trim()) {
-                      blocks.push({ title: currentTitle.trim(), bullets: [...currentBullets] });
-                      currentBullets = [];
-                    }
-                    currentTitle = "";
-                  };
-                  for (const line of lines) {
-                    const trimmed = line.trim();
-                    const isGoalLine = /^(\[\s*[^\]]+?\s*\]\s*)?목표\s*:/.test(trimmed) || /^\[.+\].*목표\s*:/.test(trimmed);
-                    if (isGoalLine) {
-                      flush();
-                      currentTitle = trimmed;
-                    } else if (currentTitle && /^[-–—]\s*/.test(trimmed)) {
-                      currentBullets.push(trimmed.replace(/^\s*[-–—]\s*/, ""));
-                    } else if (trimmed && !currentTitle) {
-                      flush();
-                      currentTitle = trimmed;
-                    }
-                  }
-                  flush();
-                  if (blocks.length === 0 && raw.trim()) {
-                    return <div className="whitespace-pre-wrap">{raw}</div>;
-                  }
-                  return (
-                    <div className="space-y-4">
-                      {blocks.map((block, bi) => {
-                        const titleMatch = block.title.match(/^(\[\s*[^\]]+?\s*\])(.*)$/);
-                        return (
-                          <div key={bi}>
-                            <p className="mb-1.5">
-                              {titleMatch ? <>{titleMatch[1]}{titleMatch[2]}</> : block.title}
-                            </p>
-                            {block.bullets.length > 0 && (
-                              <ul className="list-none pl-4 space-y-0.5">
-                                {block.bullets.map((b, j) => (
-                                  <li key={j} className="pl-0 flex items-baseline gap-1.5">
-                                    <span className="text-slate-700 shrink-0">▶</span>
-                                    <span>{b}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })() : <p className="text-slate-500">(작성된 내용 없음)</p>}
+                {goalAchievementText ? (
+                <div className="whitespace-pre-wrap">{toShortYear(goalAchievementText)}</div>
+              ) : (
+                <p className="text-slate-500">(작성된 내용 없음)</p>
+              )}
               </div>
             </div>
           </div>
