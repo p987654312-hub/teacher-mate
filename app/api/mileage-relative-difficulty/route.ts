@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     const meta = (user.user_metadata ?? {}) as { role?: string; schoolName?: string };
-    if (meta.role !== "teacher") {
+    if (meta.role !== "teacher" && meta.role !== "admin") {
       return NextResponse.json({ error: "교사만 이용할 수 있습니다." }, { status: 403 });
     }
 

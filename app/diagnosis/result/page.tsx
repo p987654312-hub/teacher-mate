@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
+import { maskDisplayName } from "@/lib/displayName";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { ArrowLeft, Printer, FileDown, RefreshCw } from "lucide-react";
@@ -447,32 +448,7 @@ function DiagnosisResultContent() {
           사후: d.avg,
         }))
       : null;
-  const improvedDomains =
-    isPost && preResult
-      ? domainKeys
-          .filter((key) => diagnosisResult[key as DomainKey] > preResult![key as DomainKey])
-          .map((key) => domainLabels[key])
-      : [];
-
-  // 총점 100점 환산 (실제 역량 수·문항 수 반영)
-  const totalQuestionCount = domainKeys.reduce((s, k) => s + (getCount(k) || 5), 0);
-  const maxTotal = totalQuestionCount * 5;
-  const totalNorm = maxTotal > 0 ? (diagnosisResult.total_score / maxTotal) * 100 : 0;
-  const preTotalNorm = preResult && maxTotal > 0 ? (preResult.total_score / maxTotal) * 100 : 0;
-  const barChartData = isPost && preResult ? [{ name: "사전", 점수: preTotalNorm }, { name: "사후", 점수: totalNorm }] : null;
-
-  // 방사형 범례용 검사일 (사전·사후)
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const y = String(d.getFullYear()).slice(-2);
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}.${m}.${day}`;
-  };
-  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
-  const postDateStr = diagnosisResult ? formatDate(diagnosisResult.created_at) : "";
-
-  // CSV 설문(4/6영역) 있으면 소영역 점수 계산 (raw_answers는 문항 id -> 1~5)
+  // CSV 설문(4/6영역) 있으면 소영역 점수 계산 (막대그래프·기타에서 사용)
   const rawFromDb = (diagnosisResult.raw_answers ?? {}) as Record<string, unknown>;
   const rawAnswersForSub: Record<string, number> = {};
   for (const [k, v] of Object.entries(rawFromDb)) {
@@ -484,6 +460,65 @@ function DiagnosisResultContent() {
     survey?.domains?.length && Array.isArray(survey.questions)
       ? computeSubDomainScores(survey, rawAnswersForSub)
       : null;
+
+  // 총점 100점 환산 (실제 역량 수·문항 수 반영)
+  const totalQuestionCount = domainKeys.reduce((s, k) => s + (getCount(k) || 5), 0);
+  const maxTotal = totalQuestionCount * 5;
+  const totalNorm = maxTotal > 0 ? (diagnosisResult.total_score / maxTotal) * 100 : 0;
+  const preTotalNorm = preResult && maxTotal > 0 ? (preResult.total_score / maxTotal) * 100 : 0;
+
+  // 사후 보고서: 대영역별 막대그래프 데이터 (카드당 1개 대영역 + 해당 소영역들)
+  const to100 = (avg1to5: number) => Math.round(Math.max(0, Math.min(100, avg1to5 * 20)));
+  type BarRow = { name: string; 사전: number; 사후: number };
+  let barChartDataByDomain: { label: string; rows: BarRow[] }[] = [];
+  if (isPost && preResult) {
+    let preSubByDomain: Record<string, { name: string; sum: number; count: number; avg: number }[]> | null = null;
+    if (survey?.domains?.length && Array.isArray(survey.questions) && subDomainScoresByDomain) {
+      const preRaw = (preResult.raw_answers ?? {}) as Record<string, unknown>;
+      const preRawForSub: Record<string, number> = {};
+      for (const [k, v] of Object.entries(preRaw)) {
+        if (k === "_schema") continue;
+        const num = typeof v === "number" ? v : Number(v);
+        if (Number.isFinite(num) && num >= 1 && num <= 5) preRawForSub[String(k)] = num;
+      }
+      preSubByDomain = computeSubDomainScores(survey, preRawForSub);
+    }
+    domainKeys.forEach((key, i) => {
+      const label = domainLabels[key] || `역량${i + 1}`;
+      const preAvg = preAverages[i]?.avg ?? 0;
+      const postAvg = domainAverages[i]?.avg ?? 0;
+      const rows: BarRow[] = [];
+      if (preSubByDomain && subDomainScoresByDomain) {
+        const postSubs = subDomainScoresByDomain[key] ?? [];
+        const preSubs = preSubByDomain[key] ?? [];
+        postSubs.forEach((postSub) => {
+          const preSub = preSubs.find((s) => s.name === postSub.name);
+          const preAvgSub = preSub ? preSub.avg : 0;
+          rows.push({
+            name: postSub.name.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(),
+            사전: to100(preAvgSub),
+            사후: to100(postSub.avg),
+          });
+        });
+      }
+      // 소영역이 없으면 대영역 평균 1개라도 표시해서 빈칸 방지
+      if (rows.length === 0) {
+        rows.push({ name: "평균", 사전: to100(preAvg), 사후: to100(postAvg) });
+      }
+      barChartDataByDomain.push({ label, rows });
+    });
+  }
+
+  // 방사형 범례용 검사일 (사전·사후)
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    const y = String(d.getFullYear()).slice(-2);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}.${m}.${day}`;
+  };
+  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
+  const postDateStr = diagnosisResult ? formatDate(diagnosisResult.created_at) : "";
 
   // 강점/개발 우선 영역 (홀수 대영역이면 강점 3개·개발 2개, 짝수면 반반)
   const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
@@ -583,22 +618,21 @@ function DiagnosisResultContent() {
                 </Button>
               </div>
               <p className="text-sm text-slate-600 mt-[0.5cm]">
-                {userName} 님 / 진단 일시 : {formattedDate}
+                {userName ? maskDisplayName(userName) : ""} 님 / 진단 일시 : {formattedDate}
               </p>
             </div>
           </header>
 
         {/* 방사형 그래프 및 점수 (Recharts lazy) */}
         <div className="-mt-3 flex flex-col gap-4">
-          {isPost && radarCompareData && barChartData ? (
+          {isPost && radarCompareData && barChartDataByDomain.length > 0 ? (
             <DiagnosisResultCharts
               isPost
               radarCompareData={radarCompareData}
-              barChartData={barChartData}
+              barChartDataByDomain={barChartDataByDomain}
               domainAverages={[]}
               preDateStr={preDateStr}
               postDateStr={postDateStr}
-              improvedDomains={improvedDomains}
             />
           ) : (
             <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-1 shadow-sm">
@@ -614,7 +648,7 @@ function DiagnosisResultContent() {
                 <DiagnosisResultCharts
                   isPost={false}
                   radarCompareData={null}
-                  barChartData={null}
+                  barChartDataByDomain={null}
                   domainAverages={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
                   preDateStr=""
                   postDateStr=""

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { maskDisplayName } from "@/lib/displayName";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
@@ -345,12 +346,12 @@ function PlanPrintContent() {
 
   // 학교에서 설정한 영역명 우선 사용 (없으면 기본값)
   const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
-    training: "연수(직무·자율)",
-    class_open: "수업 공개",
-    community: "교원학습 공동체",
-    book_edutech: "전문 서적/에듀테크",
-    health: "건강/체력",
-    other: "기타 계획",
+    training: "마일리지카드1",
+    class_open: "마일리지카드2",
+    community: "마일리지카드3",
+    book_edutech: "마일리지카드4",
+    health: "마일리지카드5",
+    other: "마일리지카드6",
   };
   const getCategoryLabel = (key: string): string => {
     const fromSettings = schoolCategories.find((c) => c.key === key)?.label;
@@ -444,7 +445,7 @@ function PlanPrintContent() {
               <tbody>
                 <tr>
                   <td className="w-28 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">성명</td>
-                  <td className="border border-slate-300 px-2 py-1.5">{userName || "—"}</td>
+                  <td className="border border-slate-300 px-2 py-1.5">{userName ? maskDisplayName(userName) : "—"}</td>
                   <td className="w-28 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">학교명</td>
                   <td className="border border-slate-300 px-2 py-1.5">{userSchool || "—"}</td>
                 </tr>
@@ -500,7 +501,7 @@ function PlanPrintContent() {
 
             {/* 6개 항목: 한 줄에 두 개씩 2열 배치 */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-              {/* 1행: 연수 | 수업 공개 */}
+              {/* 1행: 마일리지카드1 | 마일리지카드2 */}
               <div>
                 <div className="flex justify-between items-center border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">
                   <span>{getCategoryLabel("training")} 계획</span>

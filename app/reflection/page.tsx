@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { CardPageHeader } from "@/components/CardPageHeader";
@@ -87,19 +86,19 @@ const initialSelfEvalForm: SelfEvalFormState = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  training: "연수(직무·자율)",
-  class_open: "수업 공개",
-  community: "교원학습 공동체",
-  book_edutech: "전문 서적/에듀테크",
-  health: "건강/체력",
-  other: "기타",
+  training: "마일리지카드1",
+  class_open: "마일리지카드2",
+  community: "마일리지카드3",
+  book_edutech: "마일리지카드4",
+  health: "마일리지카드5",
+  other: "마일리지카드6",
 };
 
 function formatPlanSummary(plan: Record<string, unknown> | null, categories?: { key: string; label: string; unit: string }[]): string {
   if (!plan) return "계획서가 없습니다.";
   const labels: Record<string, string> = categories?.length === 6
     ? Object.fromEntries(categories.map((c) => [c.key, c.label]))
-    : { training: "연수(직무·자율)", class_open: "수업 공개", community: "교원학습 공동체", book_edutech: "전문 서적/에듀테크", health: "건강/체력", other: "기타" };
+    : { training: "마일리지카드1", class_open: "마일리지카드2", community: "마일리지카드3", book_edutech: "마일리지카드4", health: "마일리지카드5", other: "마일리지카드6" };
   const units: Record<string, string> = categories?.length === 6
     ? Object.fromEntries(categories.map((c) => [c.key, c.unit]))
     : { training: "시간", class_open: "회", community: "회", book_edutech: "회", health: "시간", other: "건" };
@@ -115,51 +114,51 @@ function formatPlanSummary(plan: Record<string, unknown> | null, categories?: { 
   const other = (plan.other_annual_goal as string)?.trim();
   if (annual || expense || community || book || education || other) {
     lines.push("\n[연간 목표]");
-    if (annual) lines.push("- " + (labels.training ?? "연수") + ": " + annual + " " + (units.training ?? "시간"));
-    if (expense) lines.push("- " + (labels.class_open ?? "수업 공개") + ": " + expense + " " + (units.class_open ?? "회"));
-    if (community) lines.push("- " + (labels.community ?? "교원학습 공동체") + ": " + community + " " + (units.community ?? "회"));
-    if (book) lines.push("- " + (labels.book_edutech ?? "전문 서적/에듀테크") + ": " + book + " " + (units.book_edutech ?? "회"));
-    if (education) lines.push("- " + (labels.health ?? "건강/체력") + ": " + education + " " + ((plan.education_annual_goal_unit as string) || units.health || "시간"));
-    if (other) lines.push("- " + (labels.other ?? "기타") + ": " + other + " " + (units.other ?? "건"));
+    if (annual) lines.push("- " + (labels.training ?? "마일리지카드1") + ": " + annual + " " + (units.training ?? "시간"));
+    if (expense) lines.push("- " + (labels.class_open ?? "마일리지카드2") + ": " + expense + " " + (units.class_open ?? "회"));
+    if (community) lines.push("- " + (labels.community ?? "마일리지카드3") + ": " + community + " " + (units.community ?? "회"));
+    if (book) lines.push("- " + (labels.book_edutech ?? "마일리지카드4") + ": " + book + " " + (units.book_edutech ?? "회"));
+    if (education) lines.push("- " + (labels.health ?? "마일리지카드5") + ": " + education + " " + ((plan.education_annual_goal_unit as string) || units.health || "시간"));
+    if (other) lines.push("- " + (labels.other ?? "마일리지카드6") + ": " + other + " " + (units.other ?? "건"));
   }
   const trainingPlans = (plan.training_plans as { name?: string; period?: string; duration?: string; remarks?: string }[]) ?? [];
   if (trainingPlans.length > 0) {
-    lines.push("\n[" + (labels.training ?? "연수(직무·자율)") + " 계획]");
+    lines.push("\n[" + (labels.training ?? "마일리지카드1") + " 계획]");
     trainingPlans.forEach((r) => {
       if (r?.name?.trim()) lines.push(`- ${r.name} (${r.period ?? ""}, ${r.duration ?? ""}) ${r.remarks ?? ""}`);
     });
   }
   const bookPlans = (plan.book_plans as { title?: string; period?: string; method?: string }[]) ?? [];
   if (bookPlans.length > 0) {
-    lines.push("\n[" + (labels.book_edutech ?? "전문 서적/에듀테크") + " 계획]");
+    lines.push("\n[" + (labels.book_edutech ?? "마일리지카드4") + " 계획]");
     bookPlans.forEach((r) => {
       if (r?.title?.trim()) lines.push(`- ${r.title} (${r.period ?? ""}) ${r.method ?? ""}`);
     });
   }
   const expenseRequests = (plan.expense_requests as { activity?: string; period?: string; method?: string }[]) ?? [];
   if (expenseRequests.length > 0) {
-    lines.push("\n[" + (labels.class_open ?? "수업 공개") + " 계획]");
+    lines.push("\n[" + (labels.class_open ?? "마일리지카드2") + " 계획]");
     expenseRequests.forEach((r) => {
       if (r?.activity?.trim()) lines.push(`- ${r.activity} (${r.period ?? ""}) ${r.method ?? ""}`);
     });
   }
   const communityPlans = (plan.community_plans as { activity?: string; period?: string; method?: string }[]) ?? [];
   if (communityPlans.length > 0) {
-    lines.push("\n[" + (labels.community ?? "교원학습 공동체") + " 계획]");
+    lines.push("\n[" + (labels.community ?? "마일리지카드3") + " 계획]");
     communityPlans.forEach((r) => {
       if (r?.activity?.trim()) lines.push(`- ${r.activity} (${r.period ?? ""}) ${r.method ?? ""}`);
     });
   }
   const educationPlans = (plan.education_plans as { area?: string; period?: string; duration?: string }[]) ?? [];
   if (educationPlans.length > 0) {
-    lines.push("\n[" + (labels.health ?? "건강/체력") + " 계획]");
+    lines.push("\n[" + (labels.health ?? "마일리지카드5") + " 계획]");
     educationPlans.forEach((r) => {
       if (r?.area?.trim()) lines.push(`- ${r.area} (${r.period ?? ""}, ${r.duration ?? ""})`);
     });
   }
   const otherPlans = (plan.other_plans as { text?: string }[]) ?? [];
   if (otherPlans.length > 0) {
-    lines.push("\n[" + (labels.other ?? "기타") + " 계획]");
+    lines.push("\n[" + (labels.other ?? "마일리지카드6") + " 계획]");
     otherPlans.forEach((r) => {
       if (r?.text?.trim()) lines.push("- " + r.text);
     });
@@ -191,11 +190,22 @@ export default function ReflectionPage() {
   });
   const [selfEvalForm, setSelfEvalForm] = useState<SelfEvalFormState>(initialSelfEvalForm);
   const [selfEvalAiLoading, setSelfEvalAiLoading] = useState(false);
+  const [analysisPostText, setAnalysisPostText] = useState("");
+  const [postResultId, setPostResultId] = useState<string | null>(null);
+  const [analysisRewriteLoading, setAnalysisRewriteLoading] = useState(false);
+  const [nextYearGoalAiLoading, setNextYearGoalAiLoading] = useState(false);
   const saveDraftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveEvidenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveNextYearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasUnsavedChangesRef = useRef(false);
+  const hasUserEditedNextYearRef = useRef(false);
   const lastSavedSelfEvalRef = useRef<string | null>(null);
+  const initialLoadDoneRef = useRef(false);
+  const latestRef = useRef({ goalAchievementText: "", reflectionText: "", evidenceText: "", nextYearGoalText: "", userEmail: null as string | null });
+  latestRef.current = { goalAchievementText, reflectionText, evidenceText, nextYearGoalText, userEmail };
+  const selfEvalFormRef = useRef<SelfEvalFormState>(initialSelfEvalForm);
+  selfEvalFormRef.current = selfEvalForm;
+  const navigatingToReportRef = useRef(false);
 
   useEffect(() => {
     const check = async () => {
@@ -250,6 +260,16 @@ export default function ReflectionPage() {
         );
         setMileageText(lines.join("\n\n") || "마일리지에 기록된 내용이 없습니다.");
       }
+      const { data: postResultRow } = await supabase
+        .from("diagnosis_results")
+        .select("id, ai_analysis")
+        .eq("user_email", user.email)
+        .eq("diagnosis_type", "post")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setPostResultId(postResultRow?.id ?? null);
+      setAnalysisPostText(String(postResultRow?.ai_analysis ?? "").trim());
       try {
         const emailKey = user.email ?? "";
         const { data: draftRow } = await supabase
@@ -257,26 +277,25 @@ export default function ReflectionPage() {
           .select("goal_achievement_text, reflection_text")
           .eq("user_email", emailKey)
           .maybeSingle();
-        if (draftRow && ((draftRow.goal_achievement_text as string) || (draftRow.reflection_text as string))) {
-          setGoalAchievementText((draftRow.goal_achievement_text as string) ?? "");
-          setReflectionText((draftRow.reflection_text as string) ?? "");
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem("teacher_mate_goal_achievement_" + emailKey, (draftRow.goal_achievement_text as string) ?? "");
-              localStorage.setItem("teacher_mate_reflection_text_" + emailKey, (draftRow.reflection_text as string) ?? "");
-            } catch (_) {}
-          }
-        } else {
-          const savedGoal = typeof window !== "undefined" ? localStorage.getItem("teacher_mate_goal_achievement_" + emailKey) : null;
-          const savedReflection = typeof window !== "undefined" ? localStorage.getItem("teacher_mate_reflection_text_" + emailKey) : null;
-          if (savedGoal != null && savedGoal !== "") setGoalAchievementText(savedGoal);
-          if (savedReflection != null) setReflectionText(savedReflection ?? "");
-          if ((savedGoal ?? "") !== "" || (savedReflection ?? "") !== "") {
-            void supabase.from("reflection_drafts").upsert(
-              { user_email: emailKey, goal_achievement_text: savedGoal ?? "", reflection_text: savedReflection ?? "", updated_at: new Date().toISOString() },
-              { onConflict: "user_email" }
-            ).then(() => {}, () => {});
-          }
+        const dbGoal = String((draftRow?.goal_achievement_text as string) ?? "").trim();
+        const dbReflection = String((draftRow?.reflection_text as string) ?? "").trim();
+        const localGoal = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_goal_achievement_" + emailKey) ?? "") : "";
+        const localReflection = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_reflection_text_" + emailKey) ?? "") : "";
+        setGoalAchievementText(dbGoal || localGoal || "");
+        setReflectionText(dbReflection || localReflection || "");
+        if (typeof window !== "undefined") {
+          try {
+            const goalToStore = dbGoal || localGoal || "";
+            const reflectionToStore = dbReflection || localReflection || "";
+            if (goalToStore) localStorage.setItem("teacher_mate_goal_achievement_" + emailKey, goalToStore);
+            if (reflectionToStore) localStorage.setItem("teacher_mate_reflection_text_" + emailKey, reflectionToStore);
+          } catch (_) {}
+        }
+        if (!dbGoal && !dbReflection && (localGoal || localReflection)) {
+          void supabase.from("reflection_drafts").upsert(
+            { user_email: emailKey, goal_achievement_text: localGoal, reflection_text: localReflection, updated_at: new Date().toISOString() },
+            { onConflict: "user_email" }
+          ).then(() => {}, () => {});
         }
         const { data: evidenceRow } = await supabase
           .from("user_preferences")
@@ -284,14 +303,18 @@ export default function ReflectionPage() {
           .eq("user_email", emailKey)
           .eq("pref_key", "reflection_evidence_text")
           .maybeSingle();
-        if (evidenceRow?.pref_value != null) setEvidenceText(String(evidenceRow.pref_value));
+        const dbEvidence = evidenceRow?.pref_value != null ? String(evidenceRow.pref_value) : "";
+        const localEvidence = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_evidence_" + emailKey) ?? "") : "";
+        setEvidenceText(dbEvidence || localEvidence || "");
         const { data: nextYearRow } = await supabase
           .from("user_preferences")
           .select("pref_value")
           .eq("user_email", emailKey)
           .eq("pref_key", "reflection_next_year_goal")
           .maybeSingle();
-        if (nextYearRow?.pref_value != null) setNextYearGoalText(String(nextYearRow.pref_value));
+        const dbNextYear = nextYearRow?.pref_value != null ? String(nextYearRow.pref_value) : "";
+        const localNextYear = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_next_year_goal_" + emailKey) ?? "") : "";
+        if (!hasUserEditedNextYearRef.current) setNextYearGoalText(dbNextYear || localNextYear || "");
         const { data: extraRow } = await supabase
           .from("user_preferences")
           .select("pref_value")
@@ -319,22 +342,31 @@ export default function ReflectionPage() {
           .eq("user_email", emailKey)
           .eq("pref_key", "reflection_self_eval_form")
           .maybeSingle();
+        let merged: SelfEvalFormState = { ...initialSelfEvalForm };
         if (selfEvalRow?.pref_value != null) {
           try {
             const parsed = JSON.parse(String(selfEvalRow.pref_value)) as Partial<SelfEvalFormState>;
-            const merged = { ...initialSelfEvalForm, ...parsed };
-            setSelfEvalForm(merged);
-            lastSavedSelfEvalRef.current = JSON.stringify(merged);
+            merged = { ...merged, ...parsed };
           } catch (_) {}
         }
+        const localSelfEval = typeof window !== "undefined" ? localStorage.getItem("teacher_mate_self_eval_form_" + emailKey) : null;
+        if (localSelfEval) {
+          try {
+            const parsed = JSON.parse(localSelfEval) as Partial<SelfEvalFormState>;
+            merged = { ...merged, ...parsed };
+          } catch (_) {}
+        }
+        setSelfEvalForm(merged);
+        lastSavedSelfEvalRef.current = JSON.stringify(merged);
       } catch (_) {}
+      initialLoadDoneRef.current = true;
       setIsChecking(false);
     };
     check();
   }, [router]);
 
   useEffect(() => {
-    if (!userEmail || goalAchievementText === undefined) return;
+    if (!userEmail || goalAchievementText === undefined || !initialLoadDoneRef.current) return;
     try {
       localStorage.setItem("teacher_mate_goal_achievement_" + userEmail, goalAchievementText);
     } catch (_) {}
@@ -342,12 +374,28 @@ export default function ReflectionPage() {
   }, [userEmail, goalAchievementText]);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || !initialLoadDoneRef.current) return;
     try {
       localStorage.setItem("teacher_mate_reflection_text_" + userEmail, reflectionText);
     } catch (_) {}
     hasUnsavedChangesRef.current = true;
   }, [userEmail, reflectionText]);
+
+  useEffect(() => {
+    if (!userEmail || !initialLoadDoneRef.current) return;
+    try {
+      localStorage.setItem("teacher_mate_evidence_" + userEmail, evidenceText);
+    } catch (_) {}
+    hasUnsavedChangesRef.current = true;
+  }, [userEmail, evidenceText]);
+
+  useEffect(() => {
+    if (!userEmail || !initialLoadDoneRef.current) return;
+    try {
+      localStorage.setItem("teacher_mate_next_year_goal_" + userEmail, nextYearGoalText);
+    } catch (_) {}
+    hasUnsavedChangesRef.current = true;
+  }, [userEmail, nextYearGoalText]);
 
   useEffect(() => {
     if (!userEmail) return;
@@ -360,7 +408,7 @@ export default function ReflectionPage() {
       ).then(() => {
         hasUnsavedChangesRef.current = false;
       }, () => {});
-    }, 800);
+    }, 400);
     return () => { if (saveDraftTimeoutRef.current) clearTimeout(saveDraftTimeoutRef.current); };
   }, [userEmail, goalAchievementText, reflectionText]);
 
@@ -376,6 +424,7 @@ export default function ReflectionPage() {
     };
     const onVisibilityChange = () => { if (document.visibilityState === "hidden") saveToServer(); };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (navigatingToReportRef.current) return;
       if (hasUnsavedChangesRef.current) {
         e.preventDefault();
         e.returnValue = "";
@@ -401,7 +450,7 @@ export default function ReflectionPage() {
       ).then(() => {
         hasUnsavedChangesRef.current = false;
       }, () => {});
-    }, 800);
+    }, 400);
     return () => { if (saveEvidenceTimeoutRef.current) clearTimeout(saveEvidenceTimeoutRef.current); };
   }, [userEmail, evidenceText]);
 
@@ -413,12 +462,35 @@ export default function ReflectionPage() {
       supabase.from("user_preferences").upsert(
         { user_email: userEmail, pref_key: "reflection_next_year_goal", pref_value: nextYearGoalText, updated_at: new Date().toISOString() },
         { onConflict: "user_email,pref_key" }
-      ).then(() => {
-        hasUnsavedChangesRef.current = false;
+      ).then(({ error }) => {
+        if (!error) hasUnsavedChangesRef.current = false;
       }, () => {});
-    }, 800);
+    }, 400);
     return () => { if (saveNextYearTimeoutRef.current) clearTimeout(saveNextYearTimeoutRef.current); };
   }, [userEmail, nextYearGoalText]);
+
+  useEffect(() => {
+    return () => {
+      const { userEmail: email, goalAchievementText: g, reflectionText: r, evidenceText: e, nextYearGoalText: n } = latestRef.current;
+      if (!email) return;
+      supabase.from("reflection_drafts").upsert(
+        { user_email: email, goal_achievement_text: g, reflection_text: r, updated_at: new Date().toISOString() },
+        { onConflict: "user_email" }
+      ).then(() => {}, () => {});
+      supabase.from("user_preferences").upsert(
+        { user_email: email, pref_key: "reflection_evidence_text", pref_value: e, updated_at: new Date().toISOString() },
+        { onConflict: "user_email,pref_key" }
+      ).then(() => {}, () => {});
+      supabase.from("user_preferences").upsert(
+        { user_email: email, pref_key: "reflection_next_year_goal", pref_value: n, updated_at: new Date().toISOString() },
+        { onConflict: "user_email,pref_key" }
+      ).then(() => {}, () => {});
+      supabase.from("user_preferences").upsert(
+        { user_email: email, pref_key: "reflection_self_eval_form", pref_value: JSON.stringify(selfEvalFormRef.current), updated_at: new Date().toISOString() },
+        { onConflict: "user_email,pref_key" }
+      ).then(() => {}, () => {});
+    };
+  }, []);
 
   const generateReport = async () => {
     if (!planSummary.trim() && !mileageText.trim()) {
@@ -596,7 +668,12 @@ export default function ReflectionPage() {
     } else if (current !== lastSavedSelfEvalRef.current) {
       hasUnsavedChangesRef.current = true;
     }
-  }, [selfEvalForm]);
+    if (userEmail && initialLoadDoneRef.current && typeof window !== "undefined") {
+      try {
+        localStorage.setItem("teacher_mate_self_eval_form_" + userEmail, current);
+      } catch (_) {}
+    }
+  }, [userEmail, selfEvalForm]);
 
   const openSelfEvalPrint = () => {
     const f = selfEvalForm;
@@ -808,11 +885,18 @@ export default function ReflectionPage() {
     if (!userEmail) return;
     setSavingStatus((prev) => ({ ...prev, nextYear: "saving" }));
     try {
-      await supabase.from("user_preferences").upsert(
+      const { error } = await supabase.from("user_preferences").upsert(
         { user_email: userEmail, pref_key: "reflection_next_year_goal", pref_value: nextYearGoalText, updated_at: new Date().toISOString() },
         { onConflict: "user_email,pref_key" }
       );
+      if (error) {
+        console.error("내년 목표 저장 실패:", error);
+        alert("내년 목표 저장에 실패했습니다. 다시 시도해 주세요.");
+        setSavingStatus((prev) => ({ ...prev, nextYear: "idle" }));
+        return;
+      }
       hasUnsavedChangesRef.current = false;
+      hasUserEditedNextYearRef.current = false;
       setSavingStatus((prev) => ({ ...prev, nextYear: "saved" }));
       setTimeout(() => setSavingStatus((prev) => ({ ...prev, nextYear: "idle" })), 2000);
     } catch (e) {
@@ -841,23 +925,94 @@ export default function ReflectionPage() {
               subtitle="교사 성찰 기록장 · 성장의 결과를 서식에 맞게 작성하여 자기역량 개발 결과 보고서를 완성합니다."
             />
           </div>
-          <Link href="/reflection/result-report" className="shrink-0" onClick={(e) => { if (hasUnsavedChangesRef.current && !window.confirm("저장하지 않고 페이지를 나가시겠습니까?\n나가시면 입력한 내용이 저장되지 않을 수 있습니다.")) e.preventDefault(); }}>
-            <Button type="button" size="sm" className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-sm hover:opacity-90">보고서 만들기</Button>
-          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm("사전사후결과분석 / 정량 목표 달성도 / 성찰·내년 목표 를 모두 작성하셨나요?")) {
+                return;
+              }
+              if (hasUnsavedChangesRef.current && !window.confirm("저장하지 않고 페이지를 나가시겠습니까?\n나가시면 입력한 내용이 저장되지 않을 수 있습니다.")) {
+                return;
+              }
+              navigatingToReportRef.current = true;
+              window.location.href = "/reflection/result-report";
+            }}
+            className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90 border-0 cursor-pointer"
+          >
+            보고서 만들기
+          </button>
         </div>
         <Tabs defaultValue="goals" className="w-full">
-          <TabsList className="mb-4 grid w-full grid-cols-5 rounded-xl bg-slate-100 p-1">
-            <TabsTrigger value="goals" className="rounded-lg text-sm font-medium">나의 목표</TabsTrigger>
+          <TabsList className="mb-4 grid w-full grid-cols-4 rounded-xl bg-slate-100 p-1">
+            <TabsTrigger value="goals" className="rounded-lg text-sm font-medium">사전사후결과분석</TabsTrigger>
             <TabsTrigger value="report" className="rounded-lg text-sm font-medium">정량 목표 달성도</TabsTrigger>
-            <TabsTrigger value="reflection" className="rounded-lg text-sm font-medium">성찰</TabsTrigger>
-            <TabsTrigger value="nextYear" className="rounded-lg text-sm font-medium">내년 목표</TabsTrigger>
+            <TabsTrigger value="reflection" className="rounded-lg text-sm font-medium">성찰·내년 목표</TabsTrigger>
             <TabsTrigger value="evidence" className="rounded-lg text-sm font-medium">(구)자기실적 평가서</TabsTrigger>
           </TabsList>
-          <TabsContent value="goals" className="mt-0 space-y-4">
+          <TabsContent value="goals" className="mt-0 min-h-0 flex-1 overflow-y-auto space-y-4">
             <Card className="rounded-2xl border-slate-200/80 bg-white p-5 shadow-sm">
-              <h2 className="text-base font-semibold text-slate-800">나의 목표</h2>
-              <p className="mt-1 text-xs text-slate-500">계획서에 작성한 목표와 내용을 불러와 정리합니다.</p>
-              <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-700">{planSummary}</pre>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-slate-800">사전사후결과분석</h2>
+                <div className="flex items-center gap-2">
+                <Button type="button" size="sm" className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90" onClick={async () => {
+                  if (!analysisPostText.trim()) {
+                    alert("사전·사후 결과 분석 내용이 없습니다. 진단 결과 페이지에서 사후 검사 후 결과 분석을 먼저 생성해 주세요.");
+                    return;
+                  }
+                  setAnalysisRewriteLoading(true);
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const token = session?.access_token;
+                    if (!token) { alert("로그인이 필요합니다."); return; }
+                    const res = await fetch("/api/ai-recommend", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ type: "analysis_post_rewrite", text: analysisPostText }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok) {
+                      alert(json?.error ?? "AI 글 다듬기에 실패했습니다.");
+                      return;
+                    }
+                    const rewritten = (json.recommendation ?? "").trim();
+                    if (rewritten) {
+                      setAnalysisPostText(rewritten);
+                      if (postResultId && userEmail) {
+                        await supabase.from("diagnosis_results").update({ ai_analysis: rewritten }).eq("id", postResultId).eq("user_email", userEmail);
+                      }
+                    }
+                  } catch (e) {
+                    console.error(e);
+                    alert("AI 글 다듬기 중 오류가 발생했습니다.");
+                  } finally {
+                    setAnalysisRewriteLoading(false);
+                  }
+                }} disabled={analysisRewriteLoading}>
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  {analysisRewriteLoading ? "다듬는 중..." : "AI로 글 다듬기"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={async () => {
+                  if (!postResultId || !userEmail) return;
+                  try {
+                    await supabase.from("diagnosis_results").update({ ai_analysis: analysisPostText }).eq("id", postResultId).eq("user_email", userEmail);
+                    alert("저장되었습니다.");
+                  } catch {
+                    alert("저장에 실패했습니다.");
+                  }
+                }}>
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                  저장
+                </Button>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">사전, 사후 검사 결과를 분석하여 기재합니다.<span className="text-red-600 font-medium">(본인의 시점으로 작성합니다.)</span></p>
+              <Textarea
+                placeholder="사후 진단 결과 분석이 여기에 표시됩니다. 진단 결과 페이지에서 사후 검사를 완료하고 결과 분석을 생성해 주세요."
+                value={analysisPostText}
+                onChange={(e) => setAnalysisPostText(e.target.value)}
+                className="mt-3 min-h-[200px] resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm whitespace-pre-wrap"
+                rows={10}
+              />
             </Card>
           </TabsContent>
           <TabsContent value="report" className="mt-0 space-y-4">
@@ -875,7 +1030,7 @@ export default function ReflectionPage() {
                   </Button>
                 </div>
               </div>
-              <p className="mt-1 text-xs text-slate-500">개조식으로 작성해 주세요. AI 버튼을 누르면 계획·마일리지 정보를 바탕으로 초안을 채워 줍니다.</p>
+              <p className="mt-1 text-xs text-slate-500">정량 목표 달성도 : 개조식으로 작성해 주세요. AI 버튼을 누르면 계획·마일리지 정보를 바탕으로 초안을 채워 줍니다. 필요한 내용으로 편집해 주세요.</p>
               <Textarea
                 placeholder="정량 목표 달성도를 개조식으로 작성하세요."
                 value={goalAchievementText}
@@ -909,21 +1064,63 @@ export default function ReflectionPage() {
                 className="mt-3 min-h-[140px] resize-y rounded-lg border-slate-200 text-sm"
               />
             </Card>
-          </TabsContent>
-          <TabsContent value="nextYear" className="mt-0 space-y-4">
             <Card className="rounded-2xl border-slate-200/80 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-base font-semibold text-slate-800">내년 목표</h2>
-                <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={saveNextYearGoal} disabled={savingStatus.nextYear === "saving"}>
-                  <Save className="mr-1.5 h-3.5 w-3.5" />
-                  {savingStatus.nextYear === "saving" ? "저장 중..." : savingStatus.nextYear === "saved" ? "저장됨" : "저장"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                    disabled={nextYearGoalAiLoading}
+                    onClick={async () => {
+                      if (!analysisPostText.trim()) {
+                        alert("결과 분석이 없습니다. 먼저 「사전·사후 결과 분석」 탭에서 결과 분석을 작성하거나 AI로 생성해 주세요.");
+                        return;
+                      }
+                      setNextYearGoalAiLoading(true);
+                      try {
+                        const token = (await supabase.auth.getSession()).data.session?.access_token;
+                        if (!token) {
+                          alert("로그인이 필요합니다.");
+                          return;
+                        }
+                        const res = await fetch("/api/ai-recommend", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ type: "next_year_goal", resultAnalysis: analysisPostText }),
+                        });
+                        const json = await res.json();
+                        if (!res.ok) {
+                          alert(json?.error ?? "AI 작성에 실패했습니다.");
+                          return;
+                        }
+                        const text = (json.recommendation ?? "").trim();
+                        if (text) {
+                          hasUserEditedNextYearRef.current = true;
+                          setNextYearGoalText(text);
+                        }
+                      } catch {
+                        alert("AI 작성 중 오류가 발생했습니다.");
+                      } finally {
+                        setNextYearGoalAiLoading(false);
+                      }
+                    }}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    {nextYearGoalAiLoading ? "작성 중..." : "AI로 작성"}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={saveNextYearGoal} disabled={savingStatus.nextYear === "saving"}>
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                    {savingStatus.nextYear === "saving" ? "저장 중..." : savingStatus.nextYear === "saved" ? "저장됨" : "저장"}
+                  </Button>
+                </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">다음 해 목표를 작성해 주세요. 보고서의 「내년도 목표」란에 반영됩니다.</p>
               <Textarea
                 placeholder="내년도 목표를 작성하세요."
                 value={nextYearGoalText}
-                onChange={(e) => setNextYearGoalText(e.target.value)}
+                onChange={(e) => { hasUserEditedNextYearRef.current = true; setNextYearGoalText(e.target.value); }}
                 className="mt-3 min-h-[140px] resize-y rounded-lg border-slate-200 text-sm"
               />
             </Card>

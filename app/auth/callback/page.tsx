@@ -1,14 +1,18 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const hasRunRef = useRef(false);
 
   useEffect(() => {
+    if (hasRunRef.current) return;
+    hasRunRef.current = true;
+
     const handleCallback = async () => {
       const code = searchParams.get("code");
       const errorParam = searchParams.get("error");
@@ -56,20 +60,29 @@ function AuthCallbackContent() {
           return;
         }
 
-        // 도메인 검증 (학교 구글 계정: .sen.go.kr 또는 .sen.es.kr로 끝나는 도메인 허용)
-        const email = user.email;
-        if (!email || (!email.endsWith(".sen.go.kr") && !email.endsWith(".sen.es.kr"))) {
-          await supabase.auth.signOut();
-          router.replace(`/?error=${encodeURIComponent(`학교 구글 계정(.sen.go.kr 또는 .sen.es.kr)만 로그인할 수 있습니다.`)}`);
-          return;
-        }
-
         // 첫 가입 여부 확인 (user_metadata에 role이 없으면 첫 가입)
         const metadata = user.user_metadata as { role?: string } | undefined;
 
         if (!metadata?.role) {
           window.location.href = "/auth/complete-profile";
           return;
+        }
+
+        // 기존 사용자: API로 저장된 개인정보를 user_metadata에 반영 시도 (실패해도 로그인은 진행)
+        try {
+          const token = session?.access_token;
+          if (token) {
+            const res = await fetch("/api/account/profile-overrides", { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+              const overrides = (await res.json()) as { name?: string | null; schoolName?: string | null; gradeClass?: string | null };
+              if (overrides && (overrides.name != null || overrides.schoolName != null || overrides.gradeClass != null)) {
+                const next = { ...(user.user_metadata || {}), ...overrides };
+                await supabase.auth.updateUser({ data: next });
+              }
+            }
+          }
+        } catch {
+          // 프로필 복원 실패해도 로그인은 정상 진행
         }
 
         // 기존 사용자: 로그인 포인트는 비동기로 요청만 하고 대기하지 않음 (대시보드로 바로 이동)
@@ -88,7 +101,7 @@ function AuthCallbackContent() {
     };
 
     handleCallback();
-  }, [router, searchParams]);
+  }, [router, searchParams.get("code") ?? "", searchParams.get("error") ?? ""]);
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">

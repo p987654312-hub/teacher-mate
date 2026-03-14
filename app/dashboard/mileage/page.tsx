@@ -30,12 +30,12 @@ const PLAN_GOAL_KEYS: Record<string, string> = {
 };
 
 const MILEAGE_CATEGORIES = [
-  { key: "training", label: "연수(직무·자율)" },
-  { key: "class_open", label: "수업 공개" },
-  { key: "community", label: "교원학습 공동체" },
-  { key: "book_edutech", label: "전문 서적/에듀테크" },
-  { key: "health", label: "건강/체력" },
-  { key: "other", label: "기타 계획" },
+  { key: "training", label: "마일리지카드1" },
+  { key: "class_open", label: "마일리지카드2" },
+  { key: "community", label: "마일리지카드3" },
+  { key: "book_edutech", label: "마일리지카드4" },
+  { key: "health", label: "마일리지카드5" },
+  { key: "other", label: "마일리지카드6" },
 ] as const;
 
 type MileageEntry = {

@@ -83,13 +83,13 @@ export default function DiagnosisResultRadarWithSub({
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart
               data={domainAverages}
-              outerRadius="62%"
-              margin={{ top: 6, right: 6, left: 6, bottom: 6 }}
+              outerRadius="52%"
+              margin={{ top: 20, right: 44, bottom: 20, left: 44 }}
             >
               <PolarGrid stroke="#e5e7eb" />
               <PolarAngleAxis
                 dataKey="name"
-                tick={{ fill: "#6b7280", fontSize: 11, fontWeight: 600 }}
+                tick={{ fill: "#6b7280", fontSize: 14, fontWeight: 600 }}
               />
               <PolarRadiusAxis
                 angle={90}

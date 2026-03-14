@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -131,12 +132,12 @@ function generateDateList(
 }
 
 const DEFAULT_CATEGORY_DESC: Record<string, string> = {
-  training: "연수(직무·자율) – 직무연수, 자율연수, 연수원 수강 등",
-  class_open: "수업 공개 – 공개수업, 수업나눔, 동료 장학 등",
-  community: "교원학습 공동체 – 학습동아리, 연구회, 모임 등",
-  book_edutech: "전문 서적/에듀테크 – 독서, 책 읽기, 에듀테크 활용, 동영상 시청 등",
-  health: "건강/체력 – 달리기, 등산, 헬스, 수영, 운동 등",
-  other: "기타 계획 – 위 5개에 해당하지 않는 기타 활동",
+  training: "마일리지카드1 – 직무연수, 자율연수, 연수원 수강 등",
+  class_open: "마일리지카드2 – 공개수업, 수업나눔, 동료 장학 등",
+  community: "마일리지카드3 – 학습동아리, 연구회, 모임 등",
+  book_edutech: "마일리지카드4 – 독서, 책 읽기, 에듀테크 활용, 동영상 시청 등",
+  health: "마일리지카드5 – 달리기, 등산, 헬스, 수영, 운동 등",
+  other: "마일리지카드6 – 위 5개에 해당하지 않는 기타 활동",
 };
 
 /** 교사가 입력한 텍스트를 분석해 활동별로 분류하고, YY.MM.DD + 요약 형식으로 반환 */
@@ -202,15 +203,9 @@ export async function POST(req: Request) {
       dateList = generateDateList(dateRange.startDate, dateRange.endDate, dateRange.weekday);
     }
 
-    const prompt = `[역할] 너는 교사의 학교 생활·역량 강화 활동을 6가지 영역으로 분류하는 전문가이다.
-
-[6가지 카테고리 – 반드시 아래 키만 사용]
-${categoryLines}
-
-[현재 날짜] ${todayStr} (오늘 날짜)
-
-[중요: 날짜 범위 계산 - 반드시 준수]
-${dateList.length > 0 ? `**날짜 범위가 감지되었습니다. 다음 ${dateList.length}개의 날짜를 각각 별도의 항목으로 출력해야 합니다:**
+    const dateRangeSection =
+      dateList.length > 0
+        ? `**날짜 범위가 감지되었습니다. 다음 ${dateList.length}개의 날짜를 각각 별도의 항목으로 출력해야 합니다:**
 ${dateList.map((d, i) => `${i + 1}. ${d}`).join("\n")}
 
 **각 날짜마다 동일한 활동 내용을 반복하여 출력하되, 날짜만 변경하여 출력하세요.**
@@ -219,17 +214,17 @@ ${dateList.map((d, i) => `${i + 1}. ${d}`).join("\n")}
 - ${dateList[1] || dateList[0]} 걷기 1시간
 - ${dateList[2] || dateList[0]} 걷기 1시간
 ... (모든 날짜에 대해 각각 출력)
-
-` : `- "1월부터 지금까지", "1월부터 2월까지", "매주 토요일", "매주 일요일" 같은 날짜 범위 표현이 있으면:
+`
+        : `- "1월부터 지금까지", "1월부터 2월까지", "매주 토요일", "매주 일요일" 같은 날짜 범위 표현이 있으면:
   * 시작 날짜와 종료 날짜(또는 오늘 날짜) 사이의 모든 해당 요일을 **정확히 계산**하여 각각 별도의 항목으로 출력한다.
   * 예: "1월부터 지금까지 매주 토요일 1시간 걸었다" → 1월 첫 토요일부터 오늘(${todayStr})까지의 **모든 토요일 날짜를 각각 계산**하여 각각 별도의 항목으로 출력한다.
   * 예: "1월부터 2월까지 매주 일요일 독서" → 1월 첫 일요일부터 2월 마지막 일요일까지의 **모든 일요일 날짜를 각각 계산**하여 각각 별도의 항목으로 출력한다.
 - 날짜 범위 계산 시 연도는 현재 연도(${currentYear})를 기준으로 한다.
-- **절대 금지**: 날짜 범위가 있는데 하나의 날짜만 출력하거나, 오늘 날짜만 출력하는 것은 금지. 반드시 모든 해당 날짜를 각각 출력해야 함.`}
+- **절대 금지**: 날짜 범위가 있는데 하나의 날짜만 출력하거나, 오늘 날짜만 출력하는 것은 금지. 반드시 모든 해당 날짜를 각각 출력해야 함.`;
 
-[단위 규칙 - 사용자 입력 그대로 유지 (절대 변환 금지)]
-${unitInfo ? `**각 카테고리의 단위 설정 (참고용일 뿐, 변환하지 않음):**
-${customCategories?.map(c => `- ${c.key}: ${c.label} (관리자 설정 단위: ${c.unit || "미설정"})`).join("\n") || ""}
+    const unitSection = customCategories
+      ? `**각 카테고리의 단위 설정 (참고용일 뿐, 변환하지 않음):**
+${customCategories.map((c) => `- ${c.key}: ${c.label} (관리자 설정 단위: ${c.unit || "미설정"})`).join("\n")}
 
 **절대 규칙**: 사용자가 입력한 단위를 그대로 유지해야 합니다. 절대 변환하지 마세요.
 - 사용자가 "수영 1시간"이라고 입력했으면 → "수영 1시간"으로 그대로 출력 (절대 "1km"로 변환하지 않음)
@@ -237,40 +232,53 @@ ${customCategories?.map(c => `- ${c.key}: ${c.label} (관리자 설정 단위: $
 - 사용자가 "양재천 달리기 0.5km"라고 입력했으면 → "양재천 달리기 0.5km"로 그대로 출력
 - 관리자 설정 단위와 다르더라도 사용자 입력을 그대로 유지합니다.
 - 단위 변환은 절대 하지 않습니다. 사용자가 입력한 그대로 100% 유지합니다.
-` : `- 각 카테고리의 단위에 맞게 수치를 표기한다.
+`
+      : `- 각 카테고리의 단위에 맞게 수치를 표기한다.
 - training: 시간 단위 (예: "2시간", "1.5시간")
 - class_open, community, book_edutech: 회 단위 (예: "1회", "2회")
 - health: 시간 또는 km 단위 (단위에 맞게 "1시간" 또는 "5km" 등)
 - other: 건 단위 (예: "1건", "2건")
-- **절대 금지**: 시간 단위인 카테고리에 km를 쓰거나, km 단위인 카테고리에 시간을 쓰지 않는다.`}
+- **절대 금지**: 시간 단위인 카테고리에 km를 쓰거나, km 단위인 카테고리에 시간을 쓰지 않는다.`;
 
-[지시]
-1. 사용자가 입력한 텍스트에서 **활동 단위**를 구분한다. (여러 문장, 쉼표, "그리고", "어제/오늘" 등으로 나뉜 여러 활동이 있을 수 있음)
-2. 날짜 범위 표현("매주", "부터", "까지" 등)이 있으면 각 날짜별로 분리하여 계산한다.
-3. 각 활동마다 **한 개의 카테고리**를 골라 위 6개 키 중 하나로 지정한다.
-4. 각 활동의 **기록용 문장**을 만든다: "YY.MM.DD(요일) 활동요약" 형식. 연도는 2자리(${String(currentYear).slice(-2)}). 원문에 날짜가 있으면 그날, 날짜 범위면 각 날짜별로, 없으면 오늘 날짜 사용. 요약은 짧고 구체적으로 (장소·시간·내용 포함).
-5. 각 카테고리의 단위에 맞게 수치를 정확히 표기한다.
+    const dateListOutputRule =
+      dateList.length > 0
+        ? `- **중요**: 위에 제공된 날짜 리스트(${dateList.length}개)를 반드시 모두 사용하여 각 날짜마다 별도의 객체로 출력해야 합니다. 하나라도 빠뜨리면 안 됩니다.\n`
+        : "";
 
-[출력 형식 – JSON만 출력]
-\`\`\`json
-[
-  { "category": "health", "content": "25.01.04(토) 걷기 1시간" },
-  { "category": "health", "content": "25.01.11(토) 걷기 1시간" },
-  { "category": "health", "content": "25.01.18(토) 걷기 1시간" }
-]
-\`\`\`
-- category는 반드시 training, class_open, community, book_edutech, health, other 중 하나.
-- content는 반드시 "YY.MM.DD(요일) " 로 시작하고 이어서 활동 요약 한 문장.
-${dateList.length > 0 ? `- **중요**: 위에 제공된 날짜 리스트(${dateList.length}개)를 반드시 모두 사용하여 각 날짜마다 별도의 객체로 출력해야 합니다. 하나라도 빠뜨리면 안 됩니다.` : `- 날짜 범위가 있으면 각 날짜별로 별도의 객체로 추가한다.`}
-- 한 건이면 배열에 1개, 여러 건이면 각각 객체로 추가.
-- 사용자가 입력한 단위를 그대로 유지하세요. 단위를 변경하거나 변환하지 마세요.
+    // 학교별 AI 프롬프트 오버라이드 조회 (관리자 설정)
+    const meta = (user?.user_metadata ?? {}) as { schoolName?: string };
+    const schoolName = (meta.schoolName ?? "").trim();
+    let promptTemplate = (AI_PROMPT_DEFAULTS as Record<string, { template: string }>).mileage_classify?.template ?? "";
+    if (schoolName) {
+      const { data: settingsRow } = await supabase
+        .from("school_point_settings")
+        .select("settings_json")
+        .eq("school_name", schoolName)
+        .maybeSingle();
+      if (settingsRow?.settings_json) {
+        try {
+          const parsed = JSON.parse(settingsRow.settings_json as string) as Record<string, unknown>;
+          const raw = parsed.aiPromptTemplates;
+          if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+            const t = (raw as Record<string, string>).mileage_classify?.trim();
+            if (t) promptTemplate = t;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
 
-[사용자 입력]
-"""
-${text}
-"""
-
-[출력] JSON 배열만 출력할 것. 날짜 범위가 있으면 각 날짜별로 분리하여 출력한다.`;
+    const prompt = applyPromptTemplate(promptTemplate, {
+      categoryLines,
+      todayStr,
+      dateRangeSection,
+      unitSection,
+      currentYear,
+      currentYear2: String(currentYear).slice(-2),
+      userInput: text,
+      dateListOutputRule,
+    });
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const startIdx = keyIndex % geminiKeys.length;

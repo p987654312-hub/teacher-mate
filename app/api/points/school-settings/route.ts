@@ -22,12 +22,12 @@ function defaultPoints(): Record<string, number> {
 
 export function defaultCategories(): SchoolCategoryConfig[] {
   return [
-    { key: "training", label: "연수(직무·자율)", unit: "시간" },
-    { key: "class_open", label: "수업 공개", unit: "회" },
-    { key: "community", label: "교원학습 공동체", unit: "회" },
-    { key: "book_edutech", label: "전문 서적/에듀테크", unit: "회" },
-    { key: "health", label: "건강/체력", unit: "시간" },
-    { key: "other", label: "기타 계획", unit: "건" },
+    { key: "training", label: "마일리지카드1", unit: "시간" },
+    { key: "class_open", label: "마일리지카드2", unit: "회" },
+    { key: "community", label: "마일리지카드3", unit: "회" },
+    { key: "book_edutech", label: "마일리지카드4", unit: "회" },
+    { key: "health", label: "마일리지카드5", unit: "시간" },
+    { key: "other", label: "마일리지카드6", unit: "건" },
   ];
 }
 

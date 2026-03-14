@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { maskDisplayName } from "@/lib/displayName";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ import { computeMileageProgress } from "@/lib/mileageProgress";
 // mileageDifficulty 관련 별표 표기는 더 이상 사용하지 않음
 import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
 import { DIAGNOSIS_SAMPLE_CSV } from "@/lib/diagnosisSampleCsv";
+import { AI_PROMPT_DEFAULTS, AI_PROMPT_KEYS, type AiPromptKey } from "@/lib/aiPromptDefaults";
 import {
   ClipboardCheck,
   Flag,
@@ -32,6 +34,7 @@ import {
   Minimize2,
   X,
   Trash2,
+  MessageSquare,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import {
@@ -50,12 +53,18 @@ const DashboardDiagnosisRadar = dynamic(
 type PlanRow = {
   development_goal?: string | null;
   expected_outcome?: string | null;
+  annual_goal?: string | null;
+  expense_annual_goal?: string | null;
+  community_annual_goal?: string | null;
+  book_annual_goal?: string | null;
+  education_annual_goal?: string | null;
+  other_annual_goal?: string | null;
   training_plans?: Array<{ name?: string; period?: string; duration?: string; remarks?: string }> | null;
   education_plans?: Array<{ area?: string; period?: string; duration?: string; remarks?: string }> | null;
-  book_plans?: Array<{ title?: string; period?: string; method?: string }> | null;
+  book_plans?: Array<{ title?: string; period?: string; method?: string; remarks?: string }> | null;
   expense_requests?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
   community_plans?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
-  other_plans?: Array<{ text?: string }> | null;
+  other_plans?: Array<{ text?: string; content?: string; period?: string; method?: string; remarks?: string }> | null;
 };
 
 function getPlanFillRatio(row: PlanRow): number {
@@ -67,6 +76,12 @@ function getPlanFillRatio(row: PlanRow): number {
   };
   count(row.development_goal ?? "");
   count(row.expected_outcome ?? "");
+  count(row.annual_goal ?? "");
+  count(row.expense_annual_goal ?? "");
+  count(row.community_annual_goal ?? "");
+  count(row.book_annual_goal ?? "");
+  count(row.education_annual_goal ?? "");
+  count(row.other_annual_goal ?? "");
   (row.training_plans ?? []).forEach((r) => {
     count(r.name); count(r.period); count(r.duration); count(r.remarks);
   });
@@ -74,7 +89,7 @@ function getPlanFillRatio(row: PlanRow): number {
     count(r.area); count(r.period); count(r.duration); count(r.remarks);
   });
   (row.book_plans ?? []).forEach((r) => {
-    count(r.title); count(r.period); count(r.method);
+    count(r.title); count(r.period); count(r.method); count(r.remarks);
   });
   (row.expense_requests ?? []).forEach((r) => {
     count(r.activity); count(r.period); count(r.method); count(r.remarks);
@@ -82,7 +97,12 @@ function getPlanFillRatio(row: PlanRow): number {
   (row.community_plans ?? []).forEach((r) => {
     count(r.activity); count(r.period); count(r.method); count(r.remarks);
   });
-  (row.other_plans ?? []).forEach((r) => count(r.text));
+  (row.other_plans ?? []).forEach((r) => {
+    count(r.text ?? r.content);
+    count(r.period);
+    count(r.method);
+    count(r.remarks);
+  });
   return total > 0 ? filled / total : 0;
 }
 
@@ -163,6 +183,11 @@ export default function DashboardPage() {
   const [reflectionDone, setReflectionDone] = useState(false);
   const [showPointSettings, setShowPointSettings] = useState(false);
   const [showDiagnosisSettings, setShowDiagnosisSettings] = useState(false);
+  const [showAiPromptSettings, setShowAiPromptSettings] = useState(false);
+  const [aiPromptSettings, setAiPromptSettings] = useState<Record<string, { value: string; description: string; label: string }>>({});
+  const [aiPromptSettingsLoading, setAiPromptSettingsLoading] = useState(false);
+  const [aiPromptSettingsSaving, setAiPromptSettingsSaving] = useState(false);
+  const [aiPromptSavingKey, setAiPromptSavingKey] = useState<string | null>(null);
   const [diagnosisTitle, setDiagnosisTitle] = useState("");
   const [diagnosisTitleSaved, setDiagnosisTitleSaved] = useState("");
   const [diagnosisDomains, setDiagnosisDomains] = useState<DiagnosisDomainConfig[]>(() => [...DEFAULT_DIAGNOSIS_DOMAINS]);
@@ -187,12 +212,12 @@ export default function DashboardPage() {
   });
   type CategoryConfigItem = { key: string; label: string; unit: string };
   const DEFAULT_CATEGORIES: CategoryConfigItem[] = [
-    { key: "training", label: "연수(직무·자율)", unit: "시간" },
-    { key: "class_open", label: "수업 공개", unit: "회" },
-    { key: "community", label: "교원학습 공동체", unit: "회" },
-    { key: "book_edutech", label: "전문 서적/에듀테크", unit: "회" },
-    { key: "health", label: "건강/체력", unit: "시간" },
-    { key: "other", label: "기타 계획", unit: "건" },
+    { key: "training", label: "마일리지카드1", unit: "시간" },
+    { key: "class_open", label: "마일리지카드2", unit: "회" },
+    { key: "community", label: "마일리지카드3", unit: "회" },
+    { key: "book_edutech", label: "마일리지카드4", unit: "회" },
+    { key: "health", label: "마일리지카드5", unit: "시간" },
+    { key: "other", label: "마일리지카드6", unit: "건" },
   ];
   const UNIT_OPTIONS = ["시간", "분", "회", "건", "권", "km"];
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfigItem[]>(() => [...DEFAULT_CATEGORIES]);
@@ -213,12 +238,12 @@ export default function DashboardPage() {
   const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
 
   const MILEAGE_CATEGORIES = [
-    { key: "training", label: "연수(직무·자율)" },
-    { key: "class_open", label: "수업 공개" },
-    { key: "community", label: "교원학습 공동체" },
-    { key: "book_edutech", label: "전문 서적/에듀테크" },
-    { key: "health", label: "건강/체력" },
-    { key: "other", label: "기타 계획" },
+    { key: "training", label: "마일리지카드1" },
+    { key: "class_open", label: "마일리지카드2" },
+    { key: "community", label: "마일리지카드3" },
+    { key: "book_edutech", label: "마일리지카드4" },
+    { key: "health", label: "마일리지카드5" },
+    { key: "other", label: "마일리지카드6" },
   ] as const;
   const PLAN_GOAL_KEYS: Record<string, string> = {
     training: "annual_goal",
@@ -268,10 +293,27 @@ export default function DashboardPage() {
           }
         | undefined;
 
-      const name = metadata?.name ?? user.email ?? null;
-      const schoolName = metadata?.schoolName ?? null;
       const role = metadata?.role ?? null;
-      const gradeClass = metadata?.gradeClass ?? metadata?.schoolLevel ?? null;
+      const name = metadata?.name ?? user.email ?? null;
+      let schoolName = metadata?.schoolName ?? null;
+      let gradeClass = metadata?.gradeClass ?? metadata?.schoolLevel ?? null;
+
+      const { data: { session: initSession } } = await supabase.auth.getSession();
+      if (initSession?.access_token) {
+        try {
+          const res = await fetch("/api/account/profile-overrides", {
+            headers: { Authorization: `Bearer ${initSession.access_token}` },
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const overrides = (await res.json()) as { schoolName?: string | null; gradeClass?: string | null };
+            if (overrides.schoolName != null && overrides.schoolName !== "") schoolName = overrides.schoolName;
+            if (overrides.gradeClass != null) gradeClass = overrides.gradeClass;
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       setUserName(name);
       setUserSchool(schoolName);
@@ -349,7 +391,7 @@ export default function DashboardPage() {
             const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
             setPlanCompleted(planFilledRatio >= 0.7);
             const planGoalsRowInit = planRow as Record<string, string | null | undefined> | null | undefined;
-            const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "연수(직무·자율)", class_open: "수업 공개", community: "교원학습 공동체", book_edutech: "전문 서적/에듀테크", health: "건강/체력", other: "기타 계획" };
+            const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "마일리지카드1", class_open: "마일리지카드2", community: "마일리지카드3", book_edutech: "마일리지카드4", health: "마일리지카드5", other: "마일리지카드6" };
             const goalsInit = [
               { value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
               { value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
@@ -439,6 +481,47 @@ export default function DashboardPage() {
 
     checkSession();
   }, [router]);
+
+  // 개인정보(이름 등) 수정 후 우측 상단 표시 갱신: 포커스 시·auth 업데이트 시 사용자 재조회
+  useEffect(() => {
+    if (isChecking) return;
+    const refreshUserMetadata = async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+      const meta = (u.user_metadata as { name?: string; schoolName?: string; gradeClass?: string; schoolLevel?: string; role?: string }) ?? {};
+      let schoolName = meta.schoolName ?? null;
+      let gradeClass = meta.gradeClass ?? meta.schoolLevel ?? null;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const res = await fetch("/api/account/profile-overrides", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const overrides = (await res.json()) as { schoolName?: string | null; gradeClass?: string | null };
+            if (overrides.schoolName != null && overrides.schoolName !== "") schoolName = overrides.schoolName;
+            if (overrides.gradeClass != null) gradeClass = overrides.gradeClass;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      setUserName(meta.name ?? u.email ?? null);
+      setUserSchool(schoolName);
+      setUserGradeClass(gradeClass);
+      setUserRole(meta.role ?? null);
+    };
+    const onFocus = () => { refreshUserMetadata(); };
+    if (typeof window !== "undefined") window.addEventListener("focus", onFocus);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "USER_UPDATED") refreshUserMetadata();
+    });
+    return () => {
+      if (typeof window !== "undefined") window.removeEventListener("focus", onFocus);
+      subscription?.unsubscribe();
+    };
+  }, [isChecking]);
 
   // 관리자 설정 단위 로드 (항상 로드하여 마일리지 카드에 반영)
   useEffect(() => {
@@ -630,22 +713,64 @@ export default function DashboardPage() {
     load();
   }, [showDiagnosisSettings, showAdminView, userSchool]);
 
+  // AI 프롬프트 설정 열 때 로드
+  useEffect(() => {
+    if (!showAiPromptSettings || !showAdminView) return;
+    const load = async () => {
+      setAiPromptSettingsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/ai-prompt-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+        if (res.ok) {
+          const j = await res.json();
+          if (j.prompts && typeof j.prompts === "object") {
+            setAiPromptSettings(j.prompts);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setAiPromptSettingsLoading(false);
+      }
+    };
+    load();
+  }, [showAiPromptSettings, showAdminView]);
+
+  // AI 프롬프트 입력칸: {{변수명}} 빨간색 하이라이트용 ref
+  const promptMirrorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const promptTaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const highlightPlaceholders = (str: string) => {
+    const parts: React.ReactNode[] = [];
+    let last = 0;
+    const re = /\{\{\w+\}\}/g;
+    let m;
+    while ((m = re.exec(str)) !== null) {
+      parts.push(str.slice(last, m.index));
+      parts.push(<span key={`ph-${m.index}`} className="text-red-600 font-medium">{m[0]}</span>);
+      last = m.index + m[0].length;
+    }
+    parts.push(str.slice(last));
+    return parts;
+  };
   // 외부 클릭 시 설정 닫기
   const settingsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if ((showPointSettings || showDiagnosisSettings) && settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+      if ((showPointSettings || showDiagnosisSettings || showAiPromptSettings) && settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
         setShowPointSettings(false);
         setShowDiagnosisSettings(false);
+        setShowAiPromptSettings(false);
       }
     };
-    if (showPointSettings || showDiagnosisSettings) {
+    if (showPointSettings || showDiagnosisSettings || showAiPromptSettings) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showPointSettings, showDiagnosisSettings]);
+  }, [showPointSettings, showDiagnosisSettings, showAiPromptSettings]);
 
   const savePointAndCategorySettings = async (overrides?: { settings?: Record<string, number>; categories?: CategoryConfigItem[] }) => {
     const settings = overrides?.settings ?? pointSettings;
@@ -670,12 +795,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!showTeacherView) return;
     const MILEAGE_CATS = [
-      { key: "training", label: "연수(직무·자율)" },
-      { key: "class_open", label: "수업 공개" },
-      { key: "community", label: "교원학습 공동체" },
-      { key: "book_edutech", label: "전문 서적/에듀테크" },
-      { key: "health", label: "건강/체력" },
-      { key: "other", label: "기타 계획" },
+      { key: "training", label: "마일리지카드1" },
+      { key: "class_open", label: "마일리지카드2" },
+      { key: "community", label: "마일리지카드3" },
+      { key: "book_edutech", label: "마일리지카드4" },
+      { key: "health", label: "마일리지카드5" },
+      { key: "other", label: "마일리지카드6" },
     ];
     const PLAN_KEYS: Record<string, string> = {
       training: "annual_goal", class_open: "expense_annual_goal", community: "community_annual_goal",
@@ -702,12 +827,12 @@ export default function DashboardPage() {
         const fromCategory = cats?.find((c) => c.key === key)?.label;
         if (fromCategory && fromCategory.trim()) return fromCategory.trim();
         const defaults: Record<string, string> = {
-          training: "연수(직무·자율)",
-          class_open: "수업 공개",
-          community: "교원학습 공동체",
-          book_edutech: "전문 서적/에듀테크",
-          health: "건강/체력",
-          other: "기타 계획",
+          training: "마일리지카드1",
+          class_open: "마일리지카드2",
+          community: "마일리지카드3",
+          book_edutech: "마일리지카드4",
+          health: "마일리지카드5",
+          other: "마일리지카드6",
         };
         return defaults[key] ?? key;
       };
@@ -976,7 +1101,7 @@ export default function DashboardPage() {
             >
               {userSchool && <span>{userSchool}</span>}
               {userSchool && userName && <span className="mx-1">|</span>}
-              {userName && <span className="font-medium text-blue-600">{userName}</span>}
+              {userName && <span className="font-medium text-blue-600">{maskDisplayName(userName)}</span>}
               {userName && <span> 님</span>}
             </button>
             <button
@@ -1019,7 +1144,7 @@ export default function DashboardPage() {
                         {userSchool ?? "소속"}
                       </p>
                       <p className="mt-0.5 truncate text-lg font-extrabold text-violet-900 drop-shadow-sm">
-                        {[userGradeClass, userName].filter(Boolean).join(" ")}{userName ? " 선생님" : "선생님"}
+                        {[userGradeClass, maskDisplayName(userName)].filter(Boolean).join(" ")}{userName ? " 선생님" : "선생님"}
                       </p>
                     </div>
                     <div className="relative hidden h-14 flex-shrink-0 overflow-hidden sm:block sm:w-28">
@@ -1050,7 +1175,7 @@ export default function DashboardPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setPointsDetailOwner({ name: userName ?? "", isAdminSelf: userRole === "admin" });
+                            setPointsDetailOwner({ name: maskDisplayName(userName) ?? "", isAdminSelf: userRole === "admin" });
                             setShowMileageDetail(true);
                           }}
                           className="absolute right-0 flex items-baseline justify-end gap-1 cursor-pointer hover:opacity-80 transition-opacity"
@@ -1493,19 +1618,18 @@ export default function DashboardPage() {
                       </div>
                       <div className="mt-3 flex flex-wrap justify-end gap-2 min-w-0">
                         {planCompleted ? (
-                          <Link href="/reflection/result-report" className="shrink-0">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={!reflectionDone}
-                              title={!reflectionDone ? "먼저 실시완료 하세요" : undefined}
-                              className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                            >
-                              <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                              결과 보기
-                            </Button>
-                          </Link>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={!reflectionDone}
+                            title={!reflectionDone ? "먼저 실시완료 하세요" : undefined}
+                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            onClick={() => reflectionDone && (window.location.href = "/reflection/result-report")}
+                          >
+                            <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                            결과 보기
+                          </Button>
                         ) : (
                           <Button
                             type="button"
@@ -1577,6 +1701,22 @@ export default function DashboardPage() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
+                        onClick={() => {
+                          setShowPointSettings(false);
+                          setShowDiagnosisSettings(false);
+                          setShowAiPromptSettings((v) => !v);
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          AI 프롬프트 설정
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         className="w-fit rounded-lg border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
                         disabled={resettingAllData}
                         onClick={async () => {
@@ -1629,8 +1769,190 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {showAdminView && (showPointSettings || showDiagnosisSettings) && (
+              {showAdminView && (showPointSettings || showDiagnosisSettings || showAiPromptSettings) && (
                 <div ref={settingsRef} className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                  {showAiPromptSettings && (
+                  <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-4 shadow-sm">
+                    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">AI 프롬프트 설정</p>
+                        <p className="mt-0.5 text-xs text-slate-500">각 항목별 AI 프롬프트를 수정할 수 있습니다. <span className="font-medium text-red-600">{"{{변수명}}"} 형태의 플레이스홀더는 삭제하지 마세요.</span></p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          disabled={aiPromptSettingsLoading || aiPromptSettingsSaving}
+                          onClick={async () => {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const token = session?.access_token;
+                            if (!token) return;
+                            setAiPromptSettingsSaving(true);
+                            try {
+                              const res = await fetch("/api/ai-prompt-settings", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ loadDefaults: true }),
+                              });
+                              if (res.ok) {
+                                const next: Record<string, { value: string; description: string; label: string }> = {};
+                                AI_PROMPT_KEYS.forEach((key) => {
+                                  const def = AI_PROMPT_DEFAULTS[key];
+                                  next[key] = { value: def.template, description: def.description, label: def.label };
+                                });
+                                setAiPromptSettings(next);
+                                alert("모든 프롬프트를 기본값으로 복원하여 저장했습니다.");
+                              } else {
+                                const j = await res.json().catch(() => ({}));
+                                alert(j?.error ?? "기본값 불러오기 실패");
+                              }
+                            } finally {
+                              setAiPromptSettingsSaving(false);
+                            }
+                          }}
+                        >
+                          모두 기본값으로 불러오기
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
+                          disabled={aiPromptSettingsLoading || aiPromptSettingsSaving}
+                          onClick={async () => {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const token = session?.access_token;
+                            if (!token) return;
+                            setAiPromptSettingsSaving(true);
+                            try {
+                              const prompts: Record<string, string> = {};
+                              AI_PROMPT_KEYS.forEach((key) => {
+                                const cur = aiPromptSettings[key];
+                                if (cur?.value != null) prompts[key] = cur.value;
+                              });
+                              const res = await fetch("/api/ai-prompt-settings", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ prompts }),
+                              });
+                              if (res.ok) {
+                                alert("저장되었습니다.");
+                              } else {
+                                const j = await res.json().catch(() => ({}));
+                                alert(j?.error ?? "저장 실패");
+                              }
+                            } finally {
+                              setAiPromptSettingsSaving(false);
+                            }
+                          }}
+                        >
+                          {aiPromptSettingsSaving ? "저장 중..." : "저장"}
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setShowAiPromptSettings(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      {AI_PROMPT_KEYS.map((key) => {
+                        const meta = aiPromptSettings[key] ?? AI_PROMPT_DEFAULTS[key];
+                        const label = meta?.label ?? key;
+                        const description = meta?.description ?? "";
+                        const value = (aiPromptSettings[key]?.value ?? AI_PROMPT_DEFAULTS[key]?.template) ?? "";
+                        return (
+                          <div key={key} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-slate-800">{label}</span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs text-violet-600 hover:bg-violet-50"
+                                  onClick={() => {
+                                    const def = AI_PROMPT_DEFAULTS[key as AiPromptKey];
+                                    if (def) {
+                                      setAiPromptSettings((prev) => ({
+                                        ...prev,
+                                        [key]: { ...prev[key], value: def.template, description: def.description, label: def.label },
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  기본값 불러오기
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 rounded-full bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                                disabled={aiPromptSettingsLoading || aiPromptSavingKey !== null}
+                                onClick={async () => {
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  const token = session?.access_token;
+                                  if (!token) return;
+                                  setAiPromptSavingKey(key);
+                                  try {
+                                    const res = await fetch("/api/ai-prompt-settings", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                      body: JSON.stringify({
+                                      prompts: AI_PROMPT_KEYS.reduce((acc, k) => {
+                                        const v = k === key ? value : (aiPromptSettings[k]?.value ?? AI_PROMPT_DEFAULTS[k]?.template);
+                                        if (v != null) acc[k] = v;
+                                        return acc;
+                                      }, {} as Record<string, string>),
+                                    }),
+                                    });
+                                    if (res.ok) {
+                                      alert("저장되었습니다.");
+                                    } else {
+                                      const j = await res.json().catch(() => ({}));
+                                      alert(j?.error ?? "저장 실패");
+                                    }
+                                  } finally {
+                                    setAiPromptSavingKey(null);
+                                  }
+                                }}
+                              >
+                                {aiPromptSavingKey === key ? "저장 중..." : "저장"}
+                              </Button>
+                              </div>
+                            </div>
+                            <p className="mb-2 text-xs text-slate-500">{description}</p>
+                            <div className="relative min-h-[360px] w-full rounded border border-slate-200 bg-slate-50/50 overflow-hidden">
+                              <div
+                                ref={(el) => { promptMirrorRefs.current[key] = el; }}
+                                className="absolute inset-0 overflow-auto whitespace-pre-wrap break-words p-2 text-xs font-mono text-slate-800 pointer-events-none select-none"
+                                aria-hidden
+                              >
+                                {highlightPlaceholders(value)}
+                              </div>
+                              <textarea
+                                ref={(el) => { promptTaRefs.current[key] = el; }}
+                                onScroll={() => {
+                                  const m = promptMirrorRefs.current[key];
+                                  const t = promptTaRefs.current[key];
+                                  if (m && t) { m.scrollTop = t.scrollTop; m.scrollLeft = t.scrollLeft; }
+                                }}
+                                className="relative block w-full min-h-[360px] p-2 text-xs font-mono bg-transparent text-transparent caret-slate-800 resize-none border-0 rounded focus:outline-none focus:ring-0"
+                                style={{ zIndex: 1 }}
+                                value={value}
+                                onChange={(e) => {
+                                  setAiPromptSettings((prev) => ({
+                                    ...prev,
+                                    [key]: { ...(prev[key] ?? { label: meta?.label ?? key, description: meta?.description ?? "" }), value: e.target.value },
+                                  }));
+                                }}
+                                spellCheck={false}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                  )}
                   {showPointSettings && (
                   <>
                   {/* 1) 교사 활동 영역(6가지) 설정: 영역명/단위 */}
@@ -2169,14 +2491,14 @@ export default function DashboardPage() {
                               <div className="flex min-w-0 flex-col justify-center gap-0.5" style={{ width: expanded ? "auto" : "5rem" }}>
                                 {t.gradeClass && <span className="truncate text-[10px] leading-tight text-slate-500">{t.gradeClass}</span>}
                                 <div className="flex flex-col gap-0.5">
-                                  <p className="truncate text-sm font-semibold text-slate-800">{t.name || "-"}</p>
+                                  <p className="truncate text-sm font-semibold text-slate-800">{t.name ? maskDisplayName(t.name) : "-"}</p>
                                   <button
                                     type="button"
                                     onClick={async () => {
                                       try {
                                         setIsLoadingPointsDetail(true);
                                         setShowMileageDetail(true);
-                                        setPointsDetailOwner({ name: t.name || t.email || "교사", isAdminSelf: false });
+                                        setPointsDetailOwner({ name: t.name ? maskDisplayName(t.name) : (t.email || "교사"), isAdminSelf: false });
                                         const { data: { session } } = await supabase.auth.getSession();
                                         const token = session?.access_token;
                                         if (!token) {
@@ -2275,7 +2597,7 @@ export default function DashboardPage() {
                                         const json = await res.json();
                                         if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
                                         setAdminMileageDetail({
-                                          teacherName: t.name || t.email || "교사",
+                                          teacherName: t.name ? maskDisplayName(t.name) : (t.email || "교사"),
                                           categoryLabel: c.label,
                                           entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
                                         });
@@ -2351,24 +2673,24 @@ export default function DashboardPage() {
                             )}
                             {t.reflectionDone ? (
                               <>
-                                <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=1`}>
-                                  <span
-                                    className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
-                                    title="(구)자기실적평가서"
-                                  >
-                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">(구)자기실적</span>
-                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">평가서</span>
-                                  </span>
-                                </Link>
-                                <Link href={`/reflection/result-report?email=${encodeURIComponent(t.email)}&type=2`}>
-                                  <span
-                                    className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5"
-                                    title="자기역량 개발 결과 보고서"
-                                  >
-                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">자기역량</span>
-                                    <span className="text-[9px] text-emerald-800 sm:text-[10px]">결과보고서</span>
-                                  </span>
-                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => { window.location.href = `/reflection/result-report?email=${encodeURIComponent(t.email)}&type=1`; }}
+                                  className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5 border-0 cursor-pointer"
+                                  title="(구)자기실적평가서"
+                                >
+                                  <span className="text-[9px] text-emerald-800 sm:text-[10px]">(구)자기실적</span>
+                                  <span className="text-[9px] text-emerald-800 sm:text-[10px]">평가서</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { window.location.href = `/reflection/result-report?email=${encodeURIComponent(t.email)}&type=2`; }}
+                                  className="inline-flex h-[30px] flex-col items-center justify-center rounded-md bg-emerald-100 px-2 py-1 leading-tight sm:h-[36px] sm:px-2.5 border-0 cursor-pointer"
+                                  title="자기역량 개발 결과 보고서"
+                                >
+                                  <span className="text-[9px] text-emerald-800 sm:text-[10px]">자기역량</span>
+                                  <span className="text-[9px] text-emerald-800 sm:text-[10px]">결과보고서</span>
+                                </button>
                               </>
                             ) : (
                               <>
@@ -2400,7 +2722,7 @@ export default function DashboardPage() {
                               title={t.isGoogleOnly ? "구글 로그인의 경우 초기화가 불가합니다." : undefined}
                               onClick={() => {
                                 if (!t.isGoogleOnly) {
-                                  handleAdminResetPassword(t.id, t.name);
+                                  handleAdminResetPassword(t.id, t.name ? maskDisplayName(t.name) : t.email || "회원");
                                 }
                               }}
                             >
@@ -2475,7 +2797,7 @@ export default function DashboardPage() {
                                         const json = await res.json();
                                         if (!res.ok) throw new Error(json?.error || "마일리지 기록을 불러오지 못했습니다.");
                                         setAdminMileageDetail({
-                                          teacherName: t.name || t.email || "교사",
+                                          teacherName: t.name ? maskDisplayName(t.name) : (t.email || "교사"),
                                           categoryLabel: c.label,
                                           entries: (json.entries ?? []) as { id: string; content: string; created_at: string }[],
                                         });

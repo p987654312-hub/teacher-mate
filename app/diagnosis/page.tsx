@@ -250,7 +250,7 @@ function DiagnosisContent() {
         return;
       }
 
-      // 진단 결과 저장 성공 후 자동으로 AI 분석 실행 (전체 분석)
+      // 진단 결과 저장 성공 후 자동으로 AI 분석 실행 (사후일 때는 사전·사후 비교, 사전일 때는 단일 분석)
       const savedResultId = data?.[0]?.id;
       if (savedResultId) {
         try {
@@ -262,6 +262,7 @@ function DiagnosisContent() {
           const counts = survey
             ? domainKeys.map((key) => survey.questions.filter((q) => q.domainKey === key).length || 1)
             : [5, 5, 5, 5, 5, 5];
+          const maxTotal = counts.reduce((sum, c) => sum + c * 5, 0) || 1;
           const domainAverages = domainKeys.map((domain, i) => {
             const key = domain as keyof typeof domainScores;
             return {
@@ -272,24 +273,78 @@ function DiagnosisContent() {
             };
           });
 
+          const { data: { session: diagSession } } = await supabase.auth.getSession();
+          const diagToken = diagSession?.access_token;
+          if (!diagToken) return;
+
+          if (isPost) {
+            // 사후 검사: 사전 결과를 조회한 뒤 사전·사후 비교 분석(analysis_post) 요청
+            const { data: { user: diagUser } } = await supabase.auth.getUser();
+            const email = diagUser?.email;
+            if (!email) return;
+            // 사후 검사 카드는 사전 완료 후에만 활성화되므로 사전 결과는 항상 존재함
+            const { data: preRow } = await supabase
+              .from("diagnosis_results")
+              .select("domain1, domain2, domain3, domain4, domain5, domain6, total_score, category_scores")
+              .eq("user_email", email)
+              .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (!preRow) return; // 비정상 케이스(UI상 불가능): AI 분석 생략
+
+            const postCat = (data?.[0] as { category_scores?: Record<string, { count?: number }> })?.category_scores;
+            const preCat = (preRow as { category_scores?: Record<string, { count?: number }> }).category_scores;
+            const getPostCount = (key: string) => (postCat?.[key]?.count ?? 5);
+            const getPreCount = (key: string) => (preCat?.[key]?.count ?? 5);
+            const preScoresAvg: Record<string, number> = {};
+            const postScoresAvg: Record<string, number> = {};
+            domainKeys.forEach((k) => {
+              const preRowAny = preRow as Record<string, unknown> | null;
+              preScoresAvg[k] = preRowAny?.[k] != null ? (preRowAny[k] as number) / (getPreCount(k) || 1) : 0;
+              postScoresAvg[k] = domainScores[k as keyof typeof domainScores] != null ? (domainScores[k as keyof typeof domainScores] ?? 0) / (getPostCount(k) || 1) : 0;
+            });
+            const preTotalNorm = maxTotal > 0 ? Math.round(((preRow as { total_score: number }).total_score / maxTotal) * 100) : 0;
+            const postTotalNorm = maxTotal > 0 ? Math.round((totalScore / maxTotal) * 100) : 0;
+            const labelsOnly: Record<string, string> = {};
+            domainKeys.forEach((k, i) => {
+              labelsOnly[k] = domainNames[i] ?? DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? k;
+            });
+
+            const analysisRes = await fetch("/api/ai-recommend", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${diagToken}` },
+              body: JSON.stringify({
+                type: "analysis_post",
+                preScores: preScoresAvg,
+                postScores: postScoresAvg,
+                preTotal: preTotalNorm,
+                postTotal: postTotalNorm,
+                domainLabels: labelsOnly,
+                domainKeys: [...domainKeys],
+              }),
+            });
+            if (analysisRes.ok) {
+              const result = await analysisRes.json();
+              if (result.recommendation && result.recommendation.trim()) {
+                await supabase.from("diagnosis_results").update({ ai_analysis: result.recommendation.trim() }).eq("id", savedResultId);
+              }
+            } else {
+              const err = await analysisRes.json().catch(() => ({}));
+              if (err?.code === "QUOTA_EXCEEDED") alert(err.error);
+            }
+          } else {
+          // 사전 검사: 단일 분석(analysis)
           const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
           const domainCount = domainKeys.length;
           const strengthN = Math.ceil(domainCount / 2);
           const weaknessN = domainCount - strengthN;
           const strengths = sorted.slice(0, strengthN).map((d) => d.label);
           const weaknesses = sorted.slice(-weaknessN).map((d) => d.label);
-
-          // 전체 영역 점수 정보 (역량별 1~5점 척도 평균)
-          const domainScoresText = domainAverages
-            .map((d) => `${d.label}: ${d.avg.toFixed(1)}점`)
-            .join(", ");
-          const maxTotal = counts.reduce((sum, c) => sum + c * 5, 0) || 1;
+          const domainScoresText = domainAverages.map((d) => `${d.label}: ${d.avg.toFixed(1)}점`).join(", ");
           const totalScoreNorm100 = Math.round((totalScore / maxTotal) * 100);
 
-          // AI 분석 요청 (전체 분석)
-          const { data: { session: diagSession } } = await supabase.auth.getSession();
-          const diagToken = diagSession?.access_token;
-          if (!diagToken) return;
           const analysisRes = await fetch("/api/ai-recommend", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${diagToken}` },
@@ -302,26 +357,21 @@ function DiagnosisContent() {
               domainCount: domainCount,
             }),
           });
-
           if (analysisRes.ok) {
             const result = await analysisRes.json();
             if (result.recommendation && result.recommendation.trim()) {
-              const { error: updateError } = await supabase
-                .from("diagnosis_results")
-                .update({ ai_analysis: result.recommendation.trim() })
-                .eq("id", savedResultId);
-              if (updateError) { /* 무시 */ }
+              await supabase.from("diagnosis_results").update({ ai_analysis: result.recommendation.trim() }).eq("id", savedResultId);
             }
           } else {
             const err = await analysisRes.json().catch(() => ({}));
             if (err?.code === "QUOTA_EXCEEDED") alert(err.error);
+          }
           }
         } catch {
           // AI 분석 실패해도 진단 결과 저장은 성공했으므로 계속 진행
         }
       }
 
-      alert("진단 결과가 저장되었습니다.");
       if (isPost) {
         router.push("/diagnosis/result?type=post");
       } else {

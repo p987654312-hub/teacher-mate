@@ -980,12 +980,12 @@ export default function PlanPage() {
   };
 
   const PLAN_CATEGORY_DEFAULTS: Record<string, { label: string; unit: string }> = {
-    training: { label: "연수(직무·자율)", unit: "시간" },
-    class_open: { label: "수업 공개", unit: "회" },
-    community: { label: "교원학습 공동체", unit: "회" },
-    book_edutech: { label: "전문 서적/에듀테크", unit: "회" },
-    health: { label: "건강/체력", unit: "시간" },
-    other: { label: "기타 계획", unit: "건" },
+    training: { label: "마일리지카드1", unit: "시간" },
+    class_open: { label: "마일리지카드2", unit: "회" },
+    community: { label: "마일리지카드3", unit: "회" },
+    book_edutech: { label: "마일리지카드4", unit: "회" },
+    health: { label: "마일리지카드5", unit: "시간" },
+    other: { label: "마일리지카드6", unit: "건" },
   };
   const getPlanCategoryLabel = (key: string) => schoolCategories.find((c) => c.key === key)?.label ?? PLAN_CATEGORY_DEFAULTS[key]?.label ?? key;
   const getPlanCategoryUnit = (key: string) => schoolCategories.find((c) => c.key === key)?.unit ?? PLAN_CATEGORY_DEFAULTS[key]?.unit ?? "회";
@@ -1001,7 +1001,7 @@ export default function PlanPage() {
       return { content: "예: 대학원 졸업", period: "예: 3월", method: "예: 논문 작성", remarks: "예: 석사 과정" };
     if (/\b연구회\b/.test(L))
       return { content: "예: 연구회 활동", period: "예: 4월", method: "예: 월 1회 모임", remarks: "예: 학회 발표" };
-    // 건강/체력 (공백 포함 가능)
+    // 마일리지카드5 (공백 포함 가능)
     if (/건강|체력|운동|등산|달리기|수영|헬스/.test(L))
       return { content: "예: 걷기·조깅 등 유산소 운동", period: "예: 3~7월, 주 3회", method: "예: 30분 이상 실천", remarks: "예: 체력 향상 및 스트레스 해소(기대효과)" };
     // 나머지는 키별 기본 예시
@@ -1013,7 +1013,7 @@ export default function PlanPage() {
         method: "예: 사례 중심 강의 및 실습",
         remarks: "예: 학급 학생 상담·학습 지원 역량 향상(기대효과)",
       },
-      // 수업 공개: 학부모·동료 공개수업 기본 예시
+      // 마일리지카드2: 학부모·동료 공개수업 기본 예시
       class_open: {
         content: "예: 학부모 공개 수업",
         period: "예: 3월, 학부모 전체 참관",
@@ -1047,7 +1047,7 @@ export default function PlanPage() {
     return defaults[key] ?? { content: "예: 내용", period: "예: 월", method: "예: 방법", remarks: "비고" };
   };
 
-  // 학교에서 설정한 카드명이 "수업 공개" 계열일 때만 기본 예시 2개(학부모/동료 공개수업)를 자동 채움
+  // 학교에서 설정한 카드명이 마일리지카드2 계열일 때만 기본 예시 2개(학부모/동료 공개수업)를 자동 채움
   useEffect(() => {
     if (!schoolCategories.length) return;
     const label = getPlanCategoryLabel("class_open");
@@ -1691,7 +1691,7 @@ export default function PlanPage() {
           </div>
         </Card>
 
-        {/* 연수(직무, 자율) 계획 */}
+        {/* 마일리지카드1 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1769,7 +1769,7 @@ export default function PlanPage() {
           </button>
         </Card>
 
-        {/* 수업 공개 계획 */}
+        {/* 마일리지카드2 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1847,7 +1847,7 @@ export default function PlanPage() {
           </button>
         </Card>
 
-        {/* 교원학습 공동체 활동 계획 */}
+        {/* 마일리지카드3 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1925,7 +1925,7 @@ export default function PlanPage() {
           </button>
         </Card>
 
-        {/* 전문 서적 / 에듀테크 등 구입 활용 계획 */}
+        {/* 마일리지카드4 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -2003,7 +2003,7 @@ export default function PlanPage() {
           </button>
         </Card>
 
-        {/* 건강/체력 향상 계획 */}
+        {/* 마일리지카드5 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -2083,7 +2083,7 @@ export default function PlanPage() {
           </button>
         </Card>
 
-        {/* 기타 계획 */}
+        {/* 마일리지카드6 계획 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

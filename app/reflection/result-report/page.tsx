@@ -7,7 +7,13 @@ import { useReactToPrint } from "react-to-print";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { MILEAGE_CATEGORIES } from "@/lib/mileageProgress";
+import { maskDisplayName } from "@/lib/displayName";
+import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
+import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { Card } from "@/components/ui/card";
 
 const ReflectionRadarCharts = dynamic(
   () => import("@/components/charts/ReflectionRadarCharts"),
@@ -23,14 +29,9 @@ const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
   domain6: "영역6",
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  training: "연수(직무·자율)",
-  class_open: "수업 공개",
-  community: "교원학습 공동체",
-  book_edutech: "전문 서적/에듀테크",
-  health: "건강/체력",
-  other: "기타",
-};
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  MILEAGE_CATEGORIES.map((c) => [c.key, c.label])
+);
 
 const SELF_EVAL_PERIOD = "2026년 3월 1일부터 2027년 2월 28일까지(학년도 단위)";
 
@@ -48,6 +49,7 @@ type DiagnosisRow = {
   diagnosis_type?: string | null;
   raw_answers?: Record<string, unknown> & { _schema?: string };
   category_scores?: Record<string, { score?: number; count?: number }>;
+  ai_analysis?: string | null;
 };
 
 type MileageEntry = { id: string; content: string; category: string; created_at: string };
@@ -70,7 +72,9 @@ function ResultReportContent() {
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>(CATEGORY_LABELS);
   const [domainLabels, setDomainLabels] = useState<Record<string, string>>(FALLBACK_DOMAIN_LABELS);
   const [domainCount, setDomainCount] = useState<number>(6);
+  const [diagnosisSurvey, setDiagnosisSurvey] = useState<DiagnosisSurvey | null>(null);
   const [selfEvalForm, setSelfEvalForm] = useState<any | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -79,38 +83,50 @@ function ResultReportContent() {
   });
 
   useEffect(() => {
-    const load = async () => {
-      await supabase.auth.refreshSession();
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        router.replace("/");
-        return;
-      }
-      const role = (user.user_metadata as { role?: string })?.role;
-      let email: string;
+    const ac = new AbortController();
+    const signal = ac.signal;
+    let isMounted = true;
 
-      if (role === "admin" && searchParams.get("email")) {
-        const viewEmail = searchParams.get("email")!.trim();
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) {
-          router.replace("/");
-          setLoading(false);
+    const load = async () => {
+      try {
+        setLoadError(null);
+        await supabase.auth.refreshSession();
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          if (isMounted) router.replace("/");
           return;
         }
-        const res = await fetch("/api/admin/result-report-by-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ email: viewEmail }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          alert(err?.error ?? "해당 교원 성찰 결과를 볼 수 없습니다.");
-          router.replace("/dashboard");
-          setLoading(false);
-          return;
-        }
-        const j = await res.json();
+        const role = (user.user_metadata as { role?: string })?.role;
+        let email: string;
+
+        if (role === "admin" && searchParams.get("email")) {
+          const viewEmail = searchParams.get("email")!.trim();
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          if (!token) {
+            if (isMounted) {
+              router.replace("/");
+              setLoading(false);
+            }
+            return;
+          }
+          const res = await fetch("/api/admin/result-report-by-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ email: viewEmail }),
+            signal,
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (isMounted) {
+              alert(err?.error ?? "해당 교원 성찰 결과를 볼 수 없습니다.");
+              router.replace("/dashboard");
+              setLoading(false);
+            }
+            return;
+          }
+          const j = await res.json();
+        if (!isMounted) return;
         setUserName(j.name ?? viewEmail ?? "");
         setUserSchool(j.schoolName ?? "");
         setUserEmail(j.email ?? viewEmail);
@@ -131,22 +147,22 @@ function ResultReportContent() {
           try {
             const parsed = typeof j.selfEvalForm === "string" ? JSON.parse(j.selfEvalForm) : j.selfEvalForm;
             setSelfEvalForm(parsed);
-          } catch {
+          } catch (_) {
             setSelfEvalForm(null);
           }
         }
         const { data: { session: adminSession } } = await supabase.auth.getSession();
         if (adminSession?.access_token) {
           try {
-            const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` } });
-            if (catRes.ok) {
+            const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` }, signal });
+            if (catRes.ok && isMounted) {
               const catJ = await catRes.json();
               if (Array.isArray(catJ.categories) && catJ.categories.length === 6) {
                 setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
               }
             }
-            const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` }, cache: "no-store" });
-            if (diagRes.ok) {
+            const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${adminSession.access_token}` }, cache: "no-store", signal });
+            if (diagRes.ok && isMounted) {
               const diagJ = await diagRes.json();
               if (Array.isArray(diagJ.domains) && diagJ.domains.length >= 2 && diagJ.domains.length <= 6) {
                 const defKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
@@ -159,12 +175,13 @@ function ResultReportContent() {
                 setDomainLabels(labels);
                 setDomainCount(diagJ.domains.length);
               }
+              if (diagJ.survey) setDiagnosisSurvey(diagJ.survey as DiagnosisSurvey);
             }
-          } catch {
-            // ignore
+          } catch (_) {
+            // ignore (abort or network)
           }
         }
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
 
@@ -172,20 +189,24 @@ function ResultReportContent() {
       if (role === "teacher" || role === "admin") {
         email = user.email!;
         const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
-        setUserName(meta.name ?? user.email ?? "");
-        setUserSchool(meta.schoolName ?? "");
-        setUserEmail(email);
+        if (isMounted) {
+          setUserName(meta.name ?? user.email ?? "");
+          setUserSchool(meta.schoolName ?? "");
+          setUserEmail(email);
+        }
       } else {
-        router.replace("/");
-        setLoading(false);
+        if (isMounted) {
+          router.replace("/");
+          setLoading(false);
+        }
         return;
       }
 
       const { data: preData } = await supabase.from("diagnosis_results").select("*").eq("user_email", email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (preData) setPreResult(preData as DiagnosisRow);
+      if (isMounted && preData) setPreResult(preData as DiagnosisRow);
 
       const { data: postData } = await supabase.from("diagnosis_results").select("*").eq("user_email", email).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (postData) setPostResult(postData as DiagnosisRow);
+      if (isMounted && postData) setPostResult(postData as DiagnosisRow);
 
       const { data: mileageData } = await supabase.from("mileage_entries").select("id, content, category, created_at").eq("user_email", email).order("created_at", { ascending: false });
       const byCat: Record<string, MileageEntry[]> = {};
@@ -194,46 +215,48 @@ function ResultReportContent() {
         if (!byCat[c]) byCat[c] = [];
         byCat[c].push(r);
       });
-      setMileageByCategory(byCat);
+      if (isMounted) setMileageByCategory(byCat);
 
       const { data: draftRow } = await supabase.from("reflection_drafts").select("goal_achievement_text, reflection_text").eq("user_email", email).maybeSingle();
-      if (draftRow) {
-        setGoalAchievementText((draftRow.goal_achievement_text as string) ?? "");
-        setReflectionText((draftRow.reflection_text as string) ?? "");
-      } else if (typeof window !== "undefined") {
-        setGoalAchievementText(localStorage.getItem("teacher_mate_goal_achievement_" + email) ?? "");
-        setReflectionText(localStorage.getItem("teacher_mate_reflection_text_" + email) ?? "");
+      if (isMounted) {
+        if (draftRow) {
+          setGoalAchievementText((draftRow.goal_achievement_text as string) ?? "");
+          setReflectionText((draftRow.reflection_text as string) ?? "");
+        } else if (typeof window !== "undefined") {
+          setGoalAchievementText(localStorage.getItem("teacher_mate_goal_achievement_" + email) ?? "");
+          setReflectionText(localStorage.getItem("teacher_mate_reflection_text_" + email) ?? "");
+        }
       }
       const { data: evidenceRow } = await supabase.from("user_preferences").select("pref_value").eq("user_email", email).eq("pref_key", "reflection_evidence_text").maybeSingle();
-      if (evidenceRow?.pref_value != null) setEvidenceText(String(evidenceRow.pref_value));
+      if (isMounted && evidenceRow?.pref_value != null) setEvidenceText(String(evidenceRow.pref_value));
       const { data: nextYearRow } = await supabase.from("user_preferences").select("pref_value").eq("user_email", email).eq("pref_key", "reflection_next_year_goal").maybeSingle();
-      if (nextYearRow?.pref_value != null) setNextYearGoalText(String(nextYearRow.pref_value));
+      if (isMounted && nextYearRow?.pref_value != null) setNextYearGoalText(String(nextYearRow.pref_value));
       const { data: selfEvalRow } = await supabase
         .from("user_preferences")
         .select("pref_value")
         .eq("user_email", email)
         .eq("pref_key", "reflection_self_eval_form")
         .maybeSingle();
-      if (selfEvalRow?.pref_value != null) {
+      if (isMounted && selfEvalRow?.pref_value != null) {
         try {
           const parsed = JSON.parse(String(selfEvalRow.pref_value));
           setSelfEvalForm(parsed);
-        } catch {
+        } catch (_) {
           setSelfEvalForm(null);
         }
       }
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
         try {
-          const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` } });
-          if (catRes.ok) {
+          const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, signal });
+          if (catRes.ok && isMounted) {
             const catJ = await catRes.json();
             if (Array.isArray(catJ.categories) && catJ.categories.length === 6) {
               setCategoryLabels(Object.fromEntries((catJ.categories as { key: string; label: string }[]).map((c) => [c.key, c.label])));
             }
           }
-          const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
-          if (diagRes.ok) {
+          const diagRes = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store", signal });
+          if (diagRes.ok && isMounted) {
             const diagJ = await diagRes.json();
             if (Array.isArray(diagJ.domains) && diagJ.domains.length >= 2 && diagJ.domains.length <= 6) {
               const defKeys = ["domain1", "domain2", "domain3", "domain4", "domain5", "domain6"] as const;
@@ -246,15 +269,26 @@ function ResultReportContent() {
               setDomainLabels(labels);
               setDomainCount(diagJ.domains.length);
             }
+            if (diagJ.survey) setDiagnosisSurvey(diagJ.survey as DiagnosisSurvey);
           }
-        } catch {
-          // ignore
+        } catch (_) {
+          // ignore (abort or network)
         }
       }
-      setLoading(false);
+      if (isMounted) setLoading(false);
+      } catch (e) {
+        if (!isMounted) return;
+        if (e instanceof Error && e.name === "AbortError") return;
+        setLoadError("데이터를 불러오는 중 문제가 발생했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+        setLoading(false);
+      }
     };
     load();
-  }, [router, searchParams]);
+    return () => {
+      isMounted = false;
+      ac.abort();
+    };
+  }, [router, searchParams.get("email") ?? "", searchParams.get("type") ?? ""]);
 
   const typeParam = searchParams.get("type") || "2";
   const isSelfEvalPreview = typeParam === "1";
@@ -430,6 +464,48 @@ function ResultReportContent() {
           return { name: domainLabels[key] ?? FALLBACK_DOMAIN_LABELS[key as keyof typeof FALLBACK_DOMAIN_LABELS], 사전: preVal, 사후: postVal };
         })
       : null;
+
+  // 소영역 사전·사후 막대그래프용 (대영역 개수만큼 칸)
+  type BarComparePoint = { name: string; 사전: number; 사후: number };
+  const to100 = (avg1to5: number) => Math.round(Math.max(0, Math.min(100, avg1to5 * 20)));
+  let barChartDataByDomain: { label: string; rows: BarComparePoint[] }[] = [];
+  if (preResult && postResult && diagnosisSurvey?.domains?.length && Array.isArray(diagnosisSurvey.questions) && diagnosisSurvey.questions.length > 0) {
+    const preRaw = (preResult.raw_answers ?? {}) as Record<string, unknown>;
+    const postRaw = (postResult.raw_answers ?? {}) as Record<string, unknown>;
+    const preRawForSub: Record<string, number> = {};
+    const postRawForSub: Record<string, number> = {};
+    for (const [k, v] of Object.entries(preRaw)) {
+      if (k === "_schema") continue;
+      const num = typeof v === "number" ? v : Number(v);
+      if (Number.isFinite(num) && num >= 1 && num <= 5) preRawForSub[String(k)] = num;
+    }
+    for (const [k, v] of Object.entries(postRaw)) {
+      if (k === "_schema") continue;
+      const num = typeof v === "number" ? v : Number(v);
+      if (Number.isFinite(num) && num >= 1 && num <= 5) postRawForSub[String(k)] = num;
+    }
+    const preSubByDomain = computeSubDomainScores(diagnosisSurvey, preRawForSub);
+    const postSubByDomain = computeSubDomainScores(diagnosisSurvey, postRawForSub);
+    domainKeys.forEach((key, i) => {
+      const label = domainLabels[key] ?? FALLBACK_DOMAIN_LABELS[key as keyof typeof FALLBACK_DOMAIN_LABELS];
+      const preAvg = (preResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
+      const postAvg = (postResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
+      const rows: BarComparePoint[] = [];
+      const postSubs = postSubByDomain[key] ?? [];
+      const preSubs = preSubByDomain[key] ?? [];
+      postSubs.forEach((postSub) => {
+        const preSub = preSubs.find((s) => s.name === postSub.name);
+        rows.push({
+          name: postSub.name.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(),
+          사전: to100(preSub ? preSub.avg : 0),
+          사후: to100(postSub.avg),
+        });
+      });
+      if (rows.length === 0) rows.push({ name: "평균", 사전: to100(preAvg), 사후: to100(postAvg) });
+      barChartDataByDomain.push({ label, rows });
+    });
+  }
+
   const maxTotal = totalQuestionCount * 5;
   const totalNorm = result && maxTotal > 0 ? (result.total_score / maxTotal) * 100 : 0;
   const preTotalNorm = preResult && maxTotal > 0 ? (preResult.total_score / maxTotal) * 100 : 0;
@@ -447,39 +523,16 @@ function ResultReportContent() {
     let includeRest = true;
     const flush = (): boolean => {
       if (title) {
-        if (bullets.length > 0) {
-          const first = bullets[0].trim();
-          const restCount = bullets.length - 1;
-          const bulletSuffix = restCount > 0 ? ` 외 ${restCount}건` : "";
-          let category = "";
-          let goalPart = "";
-          const alreadyBracket = title.match(/^\[\s*(.+?)\s*\]\s*목표\s*:\s*(.+)$/);
-          if (alreadyBracket) {
-            category = alreadyBracket[1].trim();
-            goalPart = alreadyBracket[2].trim();
-          } else {
-            const m = title.match(/^(.+?)\s+목표\s*:\s*(.+)$/);
-            if (m) {
-              category = m[1].trim();
-              goalPart = m[2].trim();
-            }
-          }
-          if (category && goalPart) {
-            out.push(`[ ${category} ] 목표 : ${goalPart} - ${first}${bulletSuffix}`);
-          } else {
-            out.push(`[ ${title} ] - ${first}${bulletSuffix}`);
-          }
+        // 실천내용(불릿)은 보고서에 표시하지 않고, 목표달성도 항목만 출력
+        const alreadyBracket = title.match(/^\[\s*(.+?)\s*\]\s*목표\s*:\s*(.+)$/);
+        if (alreadyBracket) {
+          out.push(`[ ${alreadyBracket[1].trim()} ] 목표 : ${alreadyBracket[2].trim()}`);
         } else {
-          const alreadyBracket = title.match(/^\[\s*(.+?)\s*\]\s*목표\s*:\s*(.+)$/);
-          if (alreadyBracket) {
-            out.push(`[ ${alreadyBracket[1].trim()} ] 목표 : ${alreadyBracket[2].trim()}`);
+          const m = title.match(/^(.+?)\s+목표\s*:\s*(.+)$/);
+          if (m) {
+            out.push(`[ ${m[1].trim()} ] 목표 : ${m[2].trim()}`);
           } else {
-            const m = title.match(/^(.+?)\s+목표\s*:\s*(.+)$/);
-            if (m) {
-              out.push(`[ ${m[1].trim()} ] 목표 : ${m[2].trim()}`);
-            } else {
-              out.push(`[ ${title} ]`);
-            }
+            out.push(`[ ${title} ]`);
           }
         }
         const isLastReportBlock = /기타/.test(title);
@@ -515,6 +568,17 @@ function ResultReportContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
         <p className="text-sm text-slate-500">불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-4">
+        <p className="text-center text-slate-700">{loadError}</p>
+        <Link href="/reflection">
+          <Button variant="outline">반성 페이지로 돌아가기</Button>
+        </Link>
       </div>
     );
   }
@@ -569,13 +633,13 @@ function ResultReportContent() {
                 return `${y}.${m}.${d}.(${요일})`;
               })()}
             </p>
-            <p className="text-base font-medium text-slate-800" style={{ fontSize: "90%" }}>{userSchool} {userName} 선생님</p>
+            <p className="text-base font-medium text-slate-800" style={{ fontSize: "90%" }}>{userSchool} {userName ? maskDisplayName(userName) : ""} 선생님</p>
           </div>
           <div className="mb-6">
-            <h2 className="mb-3 text-sm font-bold text-slate-800">역량 성장 변화</h2>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <h2 className="mb-2 text-sm font-bold text-slate-800">역량 성장 변화</h2>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start -mt-2">
               {domainAverages.length > 0 && (
-                <div className="w-full min-w-[280px] max-w-[320px] shrink-0 ml-0 sm:ml-[1cm] print:ml-[1cm] overflow-visible pr-2">
+                <div className="w-full sm:w-2/3 min-w-0 ml-0 sm:ml-[1cm] print:ml-[1cm] overflow-visible pr-2 -mt-1">
                   <ReflectionRadarCharts
                     radarCompareData={radarCompareData ?? null}
                     domainAverages={domainAverages}
@@ -593,7 +657,7 @@ function ResultReportContent() {
                   )}
                 </div>
               )}
-              <div className="min-w-0 flex-1 max-w-[50%] ml-[1cm] print:ml-[1cm]">
+              <div className="w-full sm:w-1/3 min-w-0 ml-0 sm:ml-[1cm] print:ml-[1cm] sm:mt-8 mt-0">
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
                     <tr className="bg-slate-100">
@@ -636,64 +700,113 @@ function ResultReportContent() {
                 </table>
               </div>
             </div>
+            {barChartDataByDomain.length > 0 && (
+              <div
+                className="mt-4 grid w-full gap-2"
+                style={{ gridTemplateColumns: `repeat(${barChartDataByDomain.length}, minmax(0, 1fr))` }}
+              >
+                {barChartDataByDomain.map(({ label, rows }) => (
+                  <Card key={label} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-2 pt-1.5 pb-1 shadow-sm print:shadow-none">
+                    <h3 className="text-xs font-semibold text-slate-800 leading-tight mb-1 truncate" title={label}>{label}</h3>
+                    <ResponsiveContainer width="100%" height={Math.max(80, Math.min(220, rows.length * 32))} minHeight={80}>
+                      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 4, left: 4, bottom: 4 }} barCategoryGap="12%" barGap={2}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
+                        <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 9 }} />
+                        <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={6} fill="#94a3b8" />
+                        <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={6} fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+                ))}
+              </div>
+            )}
+            {preResult && postResult && (postResult.ai_analysis ?? "").trim() && (
+              <div className="mt-4 rounded border border-slate-200 bg-slate-50/50 p-3">
+                <h3 className="mb-2 text-xs font-bold text-slate-800">결과 분석</h3>
+                <div className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">
+                  {postResult.ai_analysis!.trim()}
+                </div>
+              </div>
+            )}
           </div>
           <div className="mb-6">
-            <h2 className="mb-2 text-sm font-bold text-slate-800">실천 내용</h2>
+            <h2 className="mb-2 text-sm font-bold text-slate-800">목표달성도 및 실천 내용</h2>
             <div className="rounded border border-slate-200 bg-slate-50/50 p-3">
-              <div className="space-y-2 text-xs text-slate-700">
-                {categoryOrder.map((key) => {
-                  const items = mileageByCategory[key] ?? [];
-                  if (items.length === 0) return null;
-                  const first = items[0].content;
-                  const rest = items.length - 1;
+              <div className="text-xs text-slate-700">
+                {goalAchievementText ? (() => {
+                  const raw = toShortYear(goalAchievementText);
+                  const lines = raw.split(/\r?\n/);
+                  const blocks: { title: string; bullets: string[] }[] = [];
+                  let currentTitle = "";
+                  let currentBullets: string[] = [];
+                  const flush = () => {
+                    if (currentTitle.trim()) {
+                      blocks.push({ title: currentTitle.trim(), bullets: [...currentBullets] });
+                      currentBullets = [];
+                    }
+                    currentTitle = "";
+                  };
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    const isGoalLine = /^(\[\s*[^\]]+?\s*\]\s*)?목표\s*:/.test(trimmed) || /^\[.+\].*목표\s*:/.test(trimmed);
+                    if (isGoalLine) {
+                      flush();
+                      currentTitle = trimmed;
+                    } else if (currentTitle && /^[-–—]\s*/.test(trimmed)) {
+                      currentBullets.push(trimmed.replace(/^\s*[-–—]\s*/, ""));
+                    } else if (trimmed && !currentTitle) {
+                      flush();
+                      currentTitle = trimmed;
+                    }
+                  }
+                  flush();
+                  if (blocks.length === 0 && raw.trim()) {
+                    return <div className="whitespace-pre-wrap">{raw}</div>;
+                  }
                   return (
-                    <p key={key}>
-                      <span className="font-semibold text-slate-800">[{categoryLabels[key] ?? key}] </span>
-                      {rest > 0 ? `${toShortYear(first)} 외 ${rest}건` : toShortYear(first)}
-                    </p>
-                  );
-                })}
-                {categoryOrder.every((k) => (mileageByCategory[k] ?? []).length === 0) && <p className="text-slate-500">실천 기록이 없습니다.</p>}
-              </div>
-            </div>
-          </div>
-          <div className="mb-6">
-            <h2 className="mb-2 text-sm font-bold text-slate-800">목표 달성도</h2>
-            <div className="rounded border border-slate-200 bg-slate-50/50 p-3">
-              <div className="space-y-2 text-xs text-slate-700">
-                {goalAchievementText
-                  ? toShortYear(summarizeGoalAchievementText(goalAchievementText))
-                      .split(/\n/)
-                      .filter((line) => line.trim())
-                      .map((line, i) => {
-                        const m = line.match(/^\[\s*([^\]]+?)\s*\]\s*(.*)$/);
-                        if (m) {
-                          return (
-                            <p key={i}>
-                              <strong>[ {m[1]} ]</strong>{m[2] ? `   ${m[2]}` : ""}
+                    <div className="space-y-4">
+                      {blocks.map((block, bi) => {
+                        const titleMatch = block.title.match(/^(\[\s*[^\]]+?\s*\])(.*)$/);
+                        return (
+                          <div key={bi}>
+                            <p className="mb-1.5">
+                              {titleMatch ? <>{titleMatch[1]}{titleMatch[2]}</> : block.title}
                             </p>
-                          );
-                        }
-                        return <p key={i}>{line}</p>;
-                      })
-                  : <p className="text-slate-500">(작성된 내용 없음)</p>}
+                            {block.bullets.length > 0 && (
+                              <ul className="list-none pl-4 space-y-0.5">
+                                {block.bullets.map((b, j) => (
+                                  <li key={j} className="pl-0 flex items-baseline gap-1.5">
+                                    <span className="text-slate-700 shrink-0">▶</span>
+                                    <span>{b}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })() : <p className="text-slate-500">(작성된 내용 없음)</p>}
               </div>
             </div>
           </div>
           <div className="mb-6">
-            <h2 className="mb-2 text-sm font-bold text-slate-800">자기 성찰</h2>
-            <div className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700">
-              {reflectionText || "(작성된 내용 없음)"}
-            </div>
-          </div>
-          <div className="mb-6">
-            <h2 className="mb-2 text-sm font-bold text-slate-800">내년도 목표</h2>
-            <div className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700">
-              {nextYearGoalText || "(작성된 내용 없음)"}
+            <h2 className="mb-2 text-sm font-bold text-slate-800">성찰 및 내년 목표</h2>
+            <div className="rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700 space-y-4">
+              <div>
+                <p className="mb-1 text-[11px] font-semibold text-slate-600">성찰</p>
+                <div className="whitespace-pre-wrap">{reflectionText || "(작성된 내용 없음)"}</div>
+              </div>
+              <div className="pt-2 border-t border-slate-200">
+                <p className="mb-1 text-[11px] font-semibold text-slate-600">내년도 목표</p>
+                <div className="whitespace-pre-wrap">{nextYearGoalText || "(작성된 내용 없음)"}</div>
+              </div>
             </div>
           </div>
           <div>
-            <h2 className="mb-2 text-sm font-bold text-slate-800">(구)자기실적 평가서</h2>
+            <h2 className="mb-2 text-sm font-bold text-slate-800">자기실적 평가서</h2>
             <div className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700">
               {(evidenceText ?? "").trim() ? evidenceText : "별첨"}
             </div>

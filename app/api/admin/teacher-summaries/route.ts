@@ -15,19 +15,18 @@ function getSupabaseAdmin() {
 type PlanRow = {
   development_goal?: string | null;
   expected_outcome?: string | null;
-  training_plans?: Array<{ name?: string; period?: string; duration?: string; remarks?: string }> | null;
-  education_plans?: Array<{ area?: string; period?: string; duration?: string; remarks?: string }> | null;
-  book_plans?: Array<{ title?: string; period?: string; method?: string }> | null;
-  expense_requests?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
-  community_plans?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
-  other_plans?: Array<{ text?: string }> | null;
   annual_goal?: string | null;
   expense_annual_goal?: string | null;
   community_annual_goal?: string | null;
   book_annual_goal?: string | null;
   education_annual_goal?: string | null;
-  education_annual_goal_unit?: string | null;
   other_annual_goal?: string | null;
+  training_plans?: Array<{ name?: string; period?: string; duration?: string; remarks?: string }> | null;
+  education_plans?: Array<{ area?: string; period?: string; duration?: string; remarks?: string }> | null;
+  book_plans?: Array<{ title?: string; period?: string; method?: string; remarks?: string }> | null;
+  expense_requests?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
+  community_plans?: Array<{ activity?: string; period?: string; method?: string; remarks?: string }> | null;
+  other_plans?: Array<{ text?: string; content?: string; period?: string; method?: string; remarks?: string }> | null;
 };
 
 function getPlanFillRatio(row: PlanRow): number {
@@ -39,6 +38,12 @@ function getPlanFillRatio(row: PlanRow): number {
   };
   count(row.development_goal ?? "");
   count(row.expected_outcome ?? "");
+  count(row.annual_goal ?? "");
+  count(row.expense_annual_goal ?? "");
+  count(row.community_annual_goal ?? "");
+  count(row.book_annual_goal ?? "");
+  count(row.education_annual_goal ?? "");
+  count(row.other_annual_goal ?? "");
   (row.training_plans ?? []).forEach((r) => {
     count(r.name); count(r.period); count(r.duration); count(r.remarks);
   });
@@ -46,7 +51,7 @@ function getPlanFillRatio(row: PlanRow): number {
     count(r.area); count(r.period); count(r.duration); count(r.remarks);
   });
   (row.book_plans ?? []).forEach((r) => {
-    count(r.title); count(r.period); count(r.method);
+    count(r.title); count(r.period); count(r.method); count(r.remarks);
   });
   (row.expense_requests ?? []).forEach((r) => {
     count(r.activity); count(r.period); count(r.method); count(r.remarks);
@@ -54,17 +59,22 @@ function getPlanFillRatio(row: PlanRow): number {
   (row.community_plans ?? []).forEach((r) => {
     count(r.activity); count(r.period); count(r.method); count(r.remarks);
   });
-  (row.other_plans ?? []).forEach((r) => count(r.text));
+  (row.other_plans ?? []).forEach((r) => {
+    count(r.text ?? r.content);
+    count(r.period);
+    count(r.method);
+    count(r.remarks);
+  });
   return total > 0 ? filled / total : 0;
 }
 
 const MILEAGE_CATEGORIES = [
-  { key: "training", label: "연수(직무·자율)" },
-  { key: "class_open", label: "수업 공개" },
-  { key: "community", label: "교원학습 공동체" },
-  { key: "book_edutech", label: "전문 서적/에듀테크" },
-  { key: "health", label: "건강/체력" },
-  { key: "other", label: "기타 계획" },
+  { key: "training", label: "마일리지카드1" },
+  { key: "class_open", label: "마일리지카드2" },
+  { key: "community", label: "마일리지카드3" },
+  { key: "book_edutech", label: "마일리지카드4" },
+  { key: "health", label: "마일리지카드5" },
+  { key: "other", label: "마일리지카드6" },
 ] as const;
 
 const PLAN_GOAL_KEYS: Record<string, string> = {

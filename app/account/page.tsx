@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { maskDisplayName } from "@/lib/displayName";
 import { ChevronLeft } from "lucide-react";
 
 export default function AccountPage() {
@@ -33,6 +34,31 @@ export default function AccountPage() {
       const u = data.user;
       setEmail(u.email ?? null);
       const meta = (u.user_metadata ?? {}) as { name?: string; schoolName?: string; gradeClass?: string; role?: string };
+      // API로 저장된 프로필 우선 사용 (OAuth 재로그인 후에도 우리가 저장한 이름 유지)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const res = await fetch("/api/account/profile-overrides", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
+          if (res.ok) {
+            const overrides = (await res.json()) as { name?: string | null; schoolName?: string | null; gradeClass?: string | null };
+            if (overrides.name != null && overrides.name !== "" || overrides.schoolName != null || overrides.gradeClass != null) {
+              setName(String(overrides.name ?? meta.name ?? ""));
+              const sn = overrides.schoolName ?? meta.schoolName ?? "";
+              setSchoolName(sn ?? "");
+              setInitialSchoolName(sn ?? "");
+              setGradeClass(String(overrides.gradeClass ?? meta.gradeClass ?? ""));
+              setIsAdmin(meta.role === "admin");
+              const identities = (u as any).identities as Array<{ provider: string }> | undefined;
+              const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth") ?? false;
+              const hasEmailPassword = identities?.some((id) => id.provider === "email") ?? false;
+              setIsGoogleOnly(hasOAuthProvider && !hasEmailPassword);
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       setName(meta.name ?? "");
       const sn = meta.schoolName ?? "";
       setSchoolName(sn);
@@ -48,7 +74,11 @@ export default function AccountPage() {
   }, [router]);
 
   const handleSaveProfile = async () => {
-    if (!name.trim() || !schoolName.trim()) {
+    if (!schoolName.trim()) {
+      setMessage("학교명을 입력해 주세요.");
+      return;
+    }
+    if (!isGoogleOnly && !name.trim()) {
       setMessage("이름과 학교명을 모두 입력해 주세요.");
       return;
     }
@@ -73,6 +103,21 @@ export default function AccountPage() {
             setMessage(j?.error ?? "학교명 변경 처리에 실패했습니다.");
             return;
           }
+        }
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token && !isGoogleOnly) {
+        const res = await fetch("/api/account/profile-overrides", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ name: name.trim(), schoolName: newSn, gradeClass: gradeClass.trim() }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          setMessage(`저장 실패: ${j?.error ?? res.statusText}`);
+          setLoading(false);
+          return;
         }
       }
 
@@ -208,12 +253,20 @@ export default function AccountPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="name">성명</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="rounded-2xl"
-              />
+              {isGoogleOnly ? (
+                <>
+                  <p className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {name.trim() ? maskDisplayName(name) : "-"} (구글 가입자는 앱에서 성+** 로만 표시되며, 이름 변경 불가)
+                  </p>
+                </>
+              ) : (
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="rounded-2xl"
+                />
+              )}
             </div>
             <Button
               type="button"
