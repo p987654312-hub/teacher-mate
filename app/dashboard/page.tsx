@@ -510,7 +510,7 @@ export default function DashboardPage() {
       setUserName(meta.name ?? u.email ?? null);
       setUserSchool(schoolName);
       setUserGradeClass(gradeClass);
-      setUserRole(meta.role ?? null);
+      setUserRole(meta.role === "admin" || meta.role === "teacher" ? meta.role : null);
     };
     const onFocus = () => { refreshUserMetadata(); };
     if (typeof window !== "undefined") window.addEventListener("focus", onFocus);
