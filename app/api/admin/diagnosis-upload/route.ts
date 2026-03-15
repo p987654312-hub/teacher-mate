@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       ...existing,
       diagnosisSurvey: survey,
       diagnosisTitle: survey.title ?? (typeof existing.diagnosisTitle === "string" ? existing.diagnosisTitle : ""),
+      diagnosisUploadFileName: typeof file.name === "string" && file.name.trim() ? file.name.trim() : "",
     };
 
     const { error } = await supabase.from("school_point_settings").upsert(
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
       domains: survey.domains.map((d) => d.name),
       questionCount: survey.questions.length,
       title: survey.title,
+      uploadFileName: (file.name || "").trim() || undefined,
     });
   } catch (e) {
     console.error("diagnosis-upload POST:", e);

@@ -199,6 +199,7 @@ export default function DashboardPage() {
   const [diagnosisUploading, setDiagnosisUploading] = useState(false);
   const [diagnosisSurveyCurrent, setDiagnosisSurveyCurrent] = useState<{ questionCount: number; domains: string[]; title: string } | null>(null);
   const [diagnosisSurveyTitle, setDiagnosisSurveyTitle] = useState("");
+  const [diagnosisUploadFileName, setDiagnosisUploadFileName] = useState("");
   const [resettingAllData, setResettingAllData] = useState(false);
   const [planMissingGoals, setPlanMissingGoals] = useState<string[]>([]); // 계획서 누락된 연간 목표
   const [pointSettings, setPointSettings] = useState<Record<string, number>>({
@@ -679,7 +680,7 @@ export default function DashboardPage() {
         const res = await fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         if (res.ok) {
           const j = await res.json();
-          if (j.useSurvey && j.survey?.domains?.length === 4) {
+          if (j.useSurvey && j.survey?.domains?.length >= 2 && j.survey?.domains?.length <= 6) {
             const title = typeof j.title === "string" ? j.title : "";
             setDiagnosisSurveyCurrent({
               questionCount: j.survey.questions?.length ?? 0,
@@ -687,8 +688,10 @@ export default function DashboardPage() {
               title,
             });
             setDiagnosisSurveyTitle(title);
+            setDiagnosisUploadFileName(typeof j.uploadFileName === "string" ? j.uploadFileName : "");
           } else {
             setDiagnosisSurveyCurrent(null);
+            setDiagnosisUploadFileName("");
           }
           const resAdmin = await fetch("/api/admin/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` } });
           if (resAdmin.ok) {
@@ -2266,6 +2269,11 @@ export default function DashboardPage() {
                           현재 적용: {diagnosisSurveyCurrent.questionCount}문항, {diagnosisSurveyCurrent.domains.length}영역 ({diagnosisSurveyCurrent.domains.join(", ")})
                         </p>
                       )}
+                      {diagnosisUploadFileName && (
+                        <p className="mb-2 text-[11px] font-medium text-slate-700">
+                          업로드된 파일: <span className="font-normal text-slate-600">{diagnosisUploadFileName}</span>
+                        </p>
+                      )}
                       <div className="mb-2">
                         <Button
                           type="button"
@@ -2333,6 +2341,7 @@ export default function DashboardPage() {
                                 domains: j.domains ?? [],
                                 title: j.title ?? diagnosisUploadTitle.trim(),
                               });
+                              setDiagnosisUploadFileName(j.uploadFileName ?? diagnosisExcelFile?.name ?? "");
                               setDiagnosisExcelFile(null);
                               setDiagnosisUploadTitle("");
                               alert("설문이 적용되었습니다.");

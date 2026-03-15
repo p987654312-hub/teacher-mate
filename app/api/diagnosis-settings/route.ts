@@ -57,11 +57,13 @@ export async function GET(req: Request) {
     if (domainCount >= 2 && domainCount <= 6 && Array.isArray(survey?.questions) && survey.questions.length > 0) {
       const title = (survey.title ?? parsed.diagnosisTitle) as string;
       const domains = survey.domains.map((d) => ({ name: d.name, items: [] }));
+      const uploadFileName = typeof parsed.diagnosisUploadFileName === "string" ? parsed.diagnosisUploadFileName.trim() : "";
       return NextResponse.json({
         domains,
         title: typeof title === "string" ? title.trim() : "",
         useSurvey: true,
         survey,
+        uploadFileName: uploadFileName || undefined,
       }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
     }
 
