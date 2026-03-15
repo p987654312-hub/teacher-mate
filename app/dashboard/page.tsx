@@ -2905,7 +2905,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex-1">
                   <div className="text-sm font-medium text-slate-700">로그인 포인트</div>
-                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 로그인 시 +2점 (누계)</div>
+                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 로그인 시 +{pointSettings?.login_points ?? 2}점 (누계)</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-800 ml-4">
                   {pointsDetail.login.toLocaleString()}점
