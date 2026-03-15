@@ -154,11 +154,27 @@ export async function POST(req: Request) {
       };
     });
 
-    const payload = { points: filteredPoints, categories };
+    // 기존 settings_json을 유지한 채 points·categories만 갱신 (diagnosisSurvey, aiPromptTemplates 등 보존)
+    const { data: existingRow } = await supabase
+      .from("school_point_settings")
+      .select("settings_json")
+      .eq("school_name", schoolName)
+      .maybeSingle();
+
+    let merged: Record<string, unknown> = { points: filteredPoints, categories };
+    if (existingRow?.settings_json) {
+      try {
+        const existing = JSON.parse(existingRow.settings_json as string) as Record<string, unknown>;
+        merged = { ...existing, points: filteredPoints, categories };
+      } catch {
+        // parse 실패 시 points·categories만 저장
+      }
+    }
+
     const { error } = await supabase.from("school_point_settings").upsert(
       {
         school_name: schoolName,
-        settings_json: JSON.stringify(payload),
+        settings_json: JSON.stringify(merged),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "school_name" }
