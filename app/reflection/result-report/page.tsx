@@ -567,7 +567,7 @@ function ResultReportContent() {
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6">
-      <div className="mx-auto max-w-4xl px-[1cm] print:px-[1cm]">
+      <div className="mx-auto max-w-6xl px-[1cm] print:px-[0.7cm]">
         <div className="mb-4 flex flex-wrap items-center justify-end gap-2 print:hidden">
           <Button type="button" size="sm" variant="outline" onClick={() => handlePrint()} className="rounded-full border-slate-300">
             <Printer className="mr-1.5 h-3.5 w-3.5" /> 인쇄
@@ -601,7 +601,9 @@ function ResultReportContent() {
             )
           ) : (
             <>
-          <h1 className="mb-4 text-center font-bold text-slate-800 print:mb-4" style={{ fontSize: "120%" }}>자기역량 개발 결과 보고서</h1>
+          <h1 className="mb-4 text-center font-bold text-slate-800 print:mb-4" style={{ fontSize: "120%" }}>
+            목적지 Report(교사 성찰 기록) / 자기역량 개발 결과 보고서
+          </h1>
           <div className="mb-6 flex items-baseline justify-between border-b border-slate-200 pb-3">
             <p className="text-left text-xs text-slate-600" style={{ fontSize: "80%" }}>
               작성일 : {(() => {

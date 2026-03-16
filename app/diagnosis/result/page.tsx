@@ -691,7 +691,7 @@ function DiagnosisResultContent() {
           {/* 강점 영역(좌) / 개발 우선 영역(우) — 사전만 표시 */}
           {!isPost && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Card className="rounded-2xl border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm">
+            <Card className="rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm">
               <h3 className="text-xs font-bold text-blue-700 mb-2">
                 강점 영역
               </h3>
@@ -722,7 +722,7 @@ function DiagnosisResultContent() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl border-l-4 border-l-orange-500 bg-gradient-to-br from-orange-50 to-red-50 p-3 shadow-sm">
+            <Card className="rounded-2xl bg-gradient-to-br from-orange-50 to-red-50 p-3 shadow-sm">
               <h3 className="text-xs font-bold text-orange-700 mb-2">
                 개발 우선 영역
               </h3>

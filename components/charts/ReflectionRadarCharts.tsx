@@ -13,10 +13,11 @@ type Props = {
 
 export default function ReflectionRadarCharts({ radarCompareData, domainAverages, hasPrePost }: Props) {
   return (
-    <div className="min-h-[280px] min-w-[200px]" style={{ width: "100%" }}>
-    <ResponsiveContainer width="100%" height={280} minHeight={280} minWidth={200}>
+    // 보고서용: 현재 크기의 약 2/3 정도로 더 줄이기
+    <div className="min-h-[130px] min-w-[200px]" style={{ width: "100%" }}>
+    <ResponsiveContainer width="100%" height={130} minHeight={130} minWidth={200}>
       {hasPrePost && radarCompareData ? (
-        <RadarChart data={radarCompareData} outerRadius="70%" margin={{ top: 20, right: 80, bottom: 20, left: 36 }}>
+        <RadarChart data={radarCompareData} outerRadius="40%" margin={{ top: 16, right: 64, bottom: 16, left: 32 }}>
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis
             dataKey="name"
@@ -27,7 +28,7 @@ export default function ReflectionRadarCharts({ radarCompareData, domainAverages
               const first = parts[0] ?? "";
               const rest = parts.slice(1).join(" ");
               return (
-                <text x={x} y={y} textAnchor="middle" fill="#475569" fontSize={10}>
+                <text x={x} y={y} textAnchor="middle" fill="#475569" fontSize={8}>
                   <tspan x={x} dy="-0.3em">{first}</tspan>
                   {rest && <tspan x={x} dy="1.1em">{rest}</tspan>}
                 </text>
@@ -39,7 +40,7 @@ export default function ReflectionRadarCharts({ radarCompareData, domainAverages
           <Radar name="사후" dataKey="사후" stroke="#6366f1" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
         </RadarChart>
       ) : (
-        <RadarChart data={domainAverages} outerRadius="70%" margin={{ top: 20, right: 80, bottom: 20, left: 36 }}>
+        <RadarChart data={domainAverages} outerRadius="40%" margin={{ top: 16, right: 64, bottom: 16, left: 32 }}>
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis
             dataKey="name"
@@ -50,7 +51,7 @@ export default function ReflectionRadarCharts({ radarCompareData, domainAverages
               const first = parts[0] ?? "";
               const rest = parts.slice(1).join(" ");
               return (
-                <text x={x} y={y} textAnchor="middle" fill="#475569" fontSize={10}>
+                <text x={x} y={y} textAnchor="middle" fill="#475569" fontSize={8}>
                   <tspan x={x} dy="-0.3em">{first}</tspan>
                   {rest && <tspan x={x} dy="1.1em">{rest}</tspan>}
                 </text>
