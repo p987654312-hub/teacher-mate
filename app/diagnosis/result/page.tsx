@@ -624,27 +624,21 @@ function DiagnosisResultContent() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2 print:hidden">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handlePrint()}
-                  className="rounded-full border-slate-300"
+                <Link
+                  href={{
+                    pathname: "/diagnosis/result/report",
+                    query: Object.fromEntries(Array.from(searchParams.entries())),
+                  }}
                 >
-                  <Printer className="mr-1.5 h-3.5 w-3.5" />
-                  출력
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handlePrint()}
-                  title="인쇄 대화상자에서 대상을 'PDF로 저장'으로 선택하면 PDF 파일로 저장됩니다."
-                  className="rounded-full border-slate-300"
-                >
-                  <FileDown className="mr-1.5 h-3.5 w-3.5" />
-                  PDF 저장
-                </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-sky-300 text-sky-700 hover:bg-sky-50"
+                  >
+                    보고서보기
+                  </Button>
+                </Link>
               </div>
               <p className="text-sm text-slate-600 mt-[0.5cm]">
                 {userName ? maskDisplayName(userName) : ""} 님 / 진단 일시 : {formattedDate}
