@@ -82,8 +82,29 @@ function DiagnosisResultContent() {
     documentTitle: isPost ? "나의 교원 역량 사후 진단 결과" : "나의 교원 역량 사전 진단 결과",
     pageStyle: `
       @page { size: A4; margin: 12mm; }
-      html, body { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .print-content-area { background: #f8fafc !important; }
+      @media print {
+        html, body {
+          width: 186mm !important;
+          min-width: 186mm !important;
+          max-width: 186mm !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          background: #f8fafc !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          box-sizing: border-box;
+        }
+        .print-content-area {
+          width: 186mm !important;
+          min-width: 186mm !important;
+          max-width: 186mm !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          background: #f8fafc !important;
+          box-sizing: border-box;
+        }
+        .print-content-area * { box-sizing: border-box; }
+      }
     `,
   });
 
