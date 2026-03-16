@@ -949,7 +949,7 @@ export default function ReflectionPage() {
           <div className="min-w-0 flex-1">
             <CardPageHeader
               icon={<MessageCircle className="h-6 w-6" />}
-              title="자기역량 개발 결과 보고서 작성 기초 정보"
+              title="목적지 Report(교사 성찰 기록) / 자기역량 개발 결과 보고서 작성"
               subtitle="교사 성찰 기록장 · 성장의 결과를 서식에 맞게 작성하여 자기역량 개발 결과 보고서를 완성합니다."
             />
           </div>

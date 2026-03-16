@@ -12,13 +12,10 @@ import { maskDisplayName } from "@/lib/displayName";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { ResponsiveContainer } from "recharts";
 import { Card } from "@/components/ui/card";
-
-const ReflectionRadarCharts = dynamic(
-  () => import("@/components/charts/ReflectionRadarCharts"),
-  { ssr: false }
-);
+const ReflectionRadarCharts = dynamic(() => import("@/components/charts/ReflectionRadarCharts"), { ssr: false });
+const DiagnosisResultCharts = dynamic(() => import("@/components/charts/DiagnosisResultCharts"), { ssr: false });
 
 const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
   domain1: "영역1",
@@ -479,39 +476,53 @@ function ResultReportContent() {
   type BarComparePoint = { name: string; 사전: number; 사후: number };
   const to100 = (avg1to5: number) => Math.round(Math.max(0, Math.min(100, avg1to5 * 20)));
   let barChartDataByDomain: { label: string; rows: BarComparePoint[] }[] = [];
-  if (preResult && postResult && diagnosisSurvey?.domains?.length && Array.isArray(diagnosisSurvey.questions) && diagnosisSurvey.questions.length > 0) {
-    const preRaw = (preResult.raw_answers ?? {}) as Record<string, unknown>;
-    const postRaw = (postResult.raw_answers ?? {}) as Record<string, unknown>;
-    const preRawForSub: Record<string, number> = {};
-    const postRawForSub: Record<string, number> = {};
-    for (const [k, v] of Object.entries(preRaw)) {
-      if (k === "_schema") continue;
-      const num = typeof v === "number" ? v : Number(v);
-      if (Number.isFinite(num) && num >= 1 && num <= 5) preRawForSub[String(k)] = num;
+  if (preResult && postResult) {
+    let preSubByDomain: Record<string, { name: string; sum: number; count: number; avg: number }[]> | null = null;
+    let postSubByDomain: Record<string, { name: string; sum: number; count: number; avg: number }[]> | null = null;
+
+    // CSV 설문(2~6대영역)이 있고 문항 정보가 있을 때만 소영역 점수 계산
+    if (diagnosisSurvey?.domains?.length && Array.isArray(diagnosisSurvey.questions) && diagnosisSurvey.questions.length > 0) {
+      const preRaw = (preResult.raw_answers ?? {}) as Record<string, unknown>;
+      const postRaw = (postResult.raw_answers ?? {}) as Record<string, unknown>;
+      const preRawForSub: Record<string, number> = {};
+      const postRawForSub: Record<string, number> = {};
+      for (const [k, v] of Object.entries(preRaw)) {
+        if (k === "_schema") continue;
+        const num = typeof v === "number" ? v : Number(v);
+        if (Number.isFinite(num) && num >= 1 && num <= 5) preRawForSub[String(k)] = num;
+      }
+      for (const [k, v] of Object.entries(postRaw)) {
+        if (k === "_schema") continue;
+        const num = typeof v === "number" ? v : Number(v);
+        if (Number.isFinite(num) && num >= 1 && num <= 5) postRawForSub[String(k)] = num;
+      }
+      preSubByDomain = computeSubDomainScores(diagnosisSurvey, preRawForSub);
+      postSubByDomain = computeSubDomainScores(diagnosisSurvey, postRawForSub);
     }
-    for (const [k, v] of Object.entries(postRaw)) {
-      if (k === "_schema") continue;
-      const num = typeof v === "number" ? v : Number(v);
-      if (Number.isFinite(num) && num >= 1 && num <= 5) postRawForSub[String(k)] = num;
-    }
-    const preSubByDomain = computeSubDomainScores(diagnosisSurvey, preRawForSub);
-    const postSubByDomain = computeSubDomainScores(diagnosisSurvey, postRawForSub);
+
     domainKeys.forEach((key, i) => {
       const label = domainLabels[key] ?? FALLBACK_DOMAIN_LABELS[key as keyof typeof FALLBACK_DOMAIN_LABELS];
       const preAvg = (preResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
       const postAvg = (postResult[key as keyof DiagnosisRow] as number) / (getCount(key) || 1);
       const rows: BarComparePoint[] = [];
-      const postSubs = postSubByDomain[key] ?? [];
-      const preSubs = preSubByDomain[key] ?? [];
-      postSubs.forEach((postSub) => {
-        const preSub = preSubs.find((s) => s.name === postSub.name);
-        rows.push({
-          name: postSub.name.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(),
-          사전: to100(preSub ? preSub.avg : 0),
-          사후: to100(postSub.avg),
+
+      if (preSubByDomain && postSubByDomain) {
+        const postSubs = postSubByDomain[key] ?? [];
+        const preSubs = preSubByDomain[key] ?? [];
+        postSubs.forEach((postSub) => {
+          const preSub = preSubs.find((s) => s.name === postSub.name);
+          rows.push({
+            name: postSub.name.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(),
+            사전: to100(preSub ? preSub.avg : 0),
+            사후: to100(postSub.avg),
+          });
         });
-      });
-      if (rows.length === 0) rows.push({ name: "평균", 사전: to100(preAvg), 사후: to100(postAvg) });
+      }
+
+      // 소영역이 없거나 설문 정보가 없으면 대영역 평균 1개라도 표시
+      if (rows.length === 0) {
+        rows.push({ name: "평균", 사전: to100(preAvg), 사후: to100(postAvg) });
+      }
       barChartDataByDomain.push({ label, rows });
     });
   }
@@ -522,6 +533,16 @@ function ResultReportContent() {
   function toShortYear(text: string): string {
     return text.replace(/\b20(\d{2})\./g, "$1.");
   }
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    const y = String(d.getFullYear()).slice(-2);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}.${m}.${day}`;
+  };
+  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
+  const postDateStr = postResult ? formatDate(postResult.created_at) : "";
 
   if (loading) {
     return (
@@ -596,90 +617,27 @@ function ResultReportContent() {
           </div>
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-bold text-slate-800">역량 성장 변화</h2>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start -mt-2">
-              {domainAverages.length > 0 && (
-                <div className="w-full sm:w-2/3 min-w-0 ml-0 sm:ml-[1cm] print:ml-[1cm] overflow-visible pr-2 -mt-1">
-                  <ReflectionRadarCharts
-                    radarCompareData={radarCompareData ?? null}
-                    domainAverages={domainAverages}
-                    hasPrePost={!!(radarCompareData && preResult && postResult)}
-                  />
-                  {radarCompareData && preResult && postResult && (
-                    <div className="-mt-[7mm] flex justify-center gap-6 text-xs text-slate-600">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="rounded-sm bg-[#94a3b8]" style={{ width: 16, height: 2 }} /> 사전
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="rounded-sm bg-[#6366f1]" style={{ width: 16, height: 2.5 }} /> 사후
-                      </span>
+            <div className="-mt-1">
+              {preResult && postResult ? (
+                <DiagnosisResultCharts
+                  isPost
+                  radarCompareData={radarCompareData}
+                  barChartDataByDomain={barChartDataByDomain}
+                  domainAverages={[]}
+                  preDateStr={preDateStr}
+                  postDateStr={postDateStr}
+                />
+              ) : (
+                domainAverages.length > 0 && (
+                  <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 shadow-sm">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">역량 진단 결과</h3>
+                    <div className="w-full min-w-0">
+                      <ReflectionRadarCharts radarCompareData={null} domainAverages={domainAverages} hasPrePost={false} />
                     </div>
-                  )}
-                </div>
-              )}
-              <div className="w-full sm:w-1/3 min-w-0 ml-0 sm:ml-[1cm] print:ml-[1cm] sm:mt-8 mt-0">
-                <table className="w-full border-collapse border border-slate-300 text-xs">
-                  <thead>
-                    <tr className="bg-slate-100">
-                      <th className="border border-slate-300 px-2 py-1.5 text-left font-medium">영역</th>
-                      {preResult && postResult ? (
-                        <><th className="border border-slate-300 px-2 py-1.5 text-center font-medium">사전</th><th className="border border-slate-300 px-2 py-1.5 text-center font-medium">사후</th></>
-                      ) : (
-                        <th className="border border-slate-300 px-2 py-1.5 text-center font-medium">점수</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preResult && postResult
-                      ? domainAverages.map((d, i) => {
-                          const key = domainKeys[i];
-                          const div = getCount(key) || 1;
-                          return (
-                            <tr key={d.name}>
-                              <td className="border border-slate-300 px-2 py-1">{d.name}</td>
-                              <td className="border border-slate-300 px-2 py-1 text-center">{(((preResult[key as keyof DiagnosisRow] as number) ?? 0) / div).toFixed(1)}</td>
-                              <td className="border border-slate-300 px-2 py-1 text-center">{(((postResult[key as keyof DiagnosisRow] as number) ?? 0) / div).toFixed(1)}</td>
-                            </tr>
-                          );
-                        })
-                      : domainAverages.map((d) => (
-                          <tr key={d.name}>
-                            <td className="border border-slate-300 px-2 py-1">{d.name}</td>
-                            <td className="border border-slate-300 px-2 py-1 text-center">{d.score.toFixed(1)}</td>
-                          </tr>
-                        ))}
-                    <tr className="bg-slate-50 font-medium">
-                      <td className="border border-slate-300 px-2 py-1">총점(100점 환산)</td>
-                      {preResult && postResult ? (
-                        <><td className="border border-slate-300 px-2 py-1 text-center">{preTotalNorm.toFixed(1)}</td><td className="border border-slate-300 px-2 py-1 text-center">{totalNorm.toFixed(1)}</td></>
-                      ) : (
-                        <td className="border border-slate-300 px-2 py-1 text-center">{totalNorm.toFixed(1)}</td>
-                      )}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {barChartDataByDomain.length > 0 && (
-              <div
-                className="mt-4 grid w-full gap-2"
-                style={{ gridTemplateColumns: `repeat(${barChartDataByDomain.length}, minmax(0, 1fr))` }}
-              >
-                {barChartDataByDomain.map(({ label, rows }) => (
-                  <Card key={label} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-2 pt-1.5 pb-1 shadow-sm print:shadow-none">
-                    <h3 className="text-xs font-semibold text-slate-800 leading-tight mb-1 truncate" title={label}>{label}</h3>
-                    <ResponsiveContainer width="100%" height={Math.max(80, Math.min(220, rows.length * 32))} minHeight={80}>
-                      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 4, left: 4, bottom: 4 }} barCategoryGap="12%" barGap={2}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
-                        <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 9 }} />
-                        <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={6} fill="#94a3b8" />
-                        <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={6} fill="#6366f1" />
-                      </BarChart>
-                    </ResponsiveContainer>
                   </Card>
-                ))}
-              </div>
-            )}
+                )
+              )}
+            </div>
             {reportAnalysisText.trim() && (
               <div className="mt-4 rounded border border-slate-200 bg-slate-50/50 p-3">
                 <h3 className="mb-2 text-xs font-bold text-slate-800">결과 분석</h3>

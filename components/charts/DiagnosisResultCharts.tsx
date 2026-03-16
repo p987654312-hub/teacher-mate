@@ -97,7 +97,7 @@ export default function DiagnosisResultCharts({
                 <RadarChart outerRadius="70%" data={radarCompareData}>
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 12, fontWeight: 600 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} />
+                  <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
                   <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
                   <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#6366f1" strokeWidth={2} fill="transparent" fillOpacity={0} />
                   <Legend wrapperStyle={{ marginTop: "400px" }} />
@@ -160,16 +160,16 @@ export default function DiagnosisResultCharts({
   }
 
   return (
-    <div className="h-72 w-full mb-0 print:min-h-[16rem] print:h-[16rem]">
+    <div className="h-64 w-full mb-0 px-4 print:px-6 print:min-h-[12.8rem] print:h-[12.8rem]">
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart
-          outerRadius="58%"
+          outerRadius="45%"
           data={domainAverages}
-          margin={{ top: 24, right: 48, bottom: 24, left: 48 }}
+          margin={{ top: 24, right: 64, bottom: 24, left: 64 }}
         >
           <PolarGrid stroke="#e5e7eb" />
-          <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 22, fontWeight: 700 }} />
-          <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} />
+          <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 18, fontWeight: 700 }} />
+          <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
           <Radar name="역량 진단" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
         </RadarChart>
       </ResponsiveContainer>

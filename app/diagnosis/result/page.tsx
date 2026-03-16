@@ -603,46 +603,54 @@ function DiagnosisResultContent() {
     <div className="min-h-screen bg-white px-4 py-10">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         {/* 출력/PDF 대상: 헤더 + 본문 (우상단 버튼은 인쇄 시 숨김) */}
-        <div ref={contentRef} className="print-content-area flex flex-col gap-6 rounded-none print:bg-[#f8fafc]">
-          {/* 헤더: 왼쪽 돌아가기, 가운데 제목, 오른쪽 출력·PDF·날짜 */}
-          <header className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-            <div className="flex items-center print:hidden">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                돌아가기
-              </Link>
-            </div>
-            <div className="text-center">
-              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-                {diagnosisTitle
-                  ? (isPost ? `(사후) ${diagnosisTitle} 결과` : `(사전) ${diagnosisTitle} 결과`)
-                  : (isPost ? "(사후) 나의 교원 역량 진단 결과" : "나의 교원 역량 사전 진단 결과")}
-              </h1>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex gap-2 print:hidden">
+        <div ref={contentRef} className="print-content-area flex flex-col gap-5 rounded-none print:bg-[#f8fafc]">
+          {/* 헤더: 한 줄에 제목 + 이름/진단일시, 우측에 출력 버튼 */}
+          <header className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center print:hidden">
                 <Link
-                  href={{
-                    pathname: "/diagnosis/result/report",
-                    query: Object.fromEntries(Array.from(searchParams.entries())),
-                  }}
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
                 >
+                  <ArrowLeft className="h-4 w-4" />
+                  돌아가기
+                </Link>
+              </div>
+              <div className="flex-1 min-w-0 text-center">
+                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent truncate">
+                  {diagnosisTitle
+                    ? (isPost ? `(사후) ${diagnosisTitle} 결과` : `(사전) ${diagnosisTitle} 결과`)
+                    : (isPost ? "(사후) 나의 교원 역량 진단 결과" : "나의 교원 역량 사전 진단 결과")}
+                </h1>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex gap-2 print:hidden">
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-sky-300 text-sky-700 hover:bg-sky-50"
+                    className="rounded-full border-slate-300 text-slate-700 hover:bg-slate-50"
+                    onClick={() => handlePrint()}
                   >
-                    보고서보기
+                    <Printer className="mr-1.5 h-3.5 w-3.5" />
+                    인쇄
                   </Button>
-                </Link>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-slate-300 text-slate-700 hover:bg-slate-50"
+                    title="PDF로 저장"
+                    onClick={() => handlePrint()}
+                  >
+                    <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                    PDF
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-600 whitespace-nowrap">
+                  {userName ? maskDisplayName(userName) : ""} 님 / 진단 일시 : {formattedDate}
+                </p>
               </div>
-              <p className="text-sm text-slate-600 mt-[0.5cm]">
-                {userName ? maskDisplayName(userName) : ""} 님 / 진단 일시 : {formattedDate}
-              </p>
             </div>
           </header>
 

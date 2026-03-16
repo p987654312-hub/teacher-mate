@@ -1614,7 +1614,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">교사 성찰 기록장</h2>
+                        <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">목적지 Report(교사 성찰 기록)</h2>
                         <p className="mt-1 text-xs text-slate-500">
                           자기역량 개발 결과 보고서를 완성합니다.
                         </p>
