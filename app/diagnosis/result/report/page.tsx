@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { maskDisplayName } from "@/lib/displayName";
@@ -24,6 +25,11 @@ import {
   Bar,
   Tooltip,
 } from "recharts";
+
+const DiagnosisResultCharts = dynamic(
+  () => import("@/components/charts/DiagnosisResultCharts"),
+  { ssr: false }
+);
 
 type DiagnosisResult = {
   id: string;
@@ -259,12 +265,33 @@ function DiagnosisReportContent() {
   const category = diagnosisResult.category_scores ?? {};
   const getCount = (key: (typeof domainKeys)[number]) => (category[key]?.count ?? 5);
   const getScore = (key: (typeof domainKeys)[number]) => (diagnosisResult[key] as number) ?? 0;
+  const getAvg = (key: (typeof domainKeys)[number], score: number) => score / (getCount(key) || 1);
   const domainAverages = domainKeys.map((k, i) => {
     const label = domainLabels[k] ?? FALLBACK_DOMAIN_LABELS[k];
     const cnt = getCount(k) || 1;
     const avg = getScore(k) / cnt;
     return { key: k, label, avg, index: i };
   }).filter((d) => d.avg > 0 || d.label !== FALLBACK_DOMAIN_LABELS[d.key]);
+
+  const preAverages = preResult
+    ? domainKeys.map((key) => {
+        const dk = key as keyof Pick<DiagnosisResult, "domain1" | "domain2" | "domain3" | "domain4" | "domain5" | "domain6">;
+        return {
+          domain: key,
+          label: domainLabels[key],
+          avg: getAvg(key, (preResult[dk] as number) ?? 0),
+        };
+      })
+    : [];
+
+  const radarCompareData =
+    isPost && preResult && domainAverages.length > 0
+      ? domainAverages.map((d, i) => ({
+          name: d.label,
+          사전: preAverages.find((p) => p.domain === d.key)?.avg ?? 0,
+          사후: d.avg,
+        }))
+      : null;
 
   let subDomainScoresByDomain: Record<string, { name: string; avg: number }[]> | null = null;
   if (survey && diagnosisResult.raw_answers) {
@@ -278,6 +305,51 @@ function DiagnosisReportContent() {
     const subByDomain = computeSubDomainScores(survey, rawAnswers);
     subDomainScoresByDomain = subByDomain;
   }
+
+  const to100 = (avg1to5: number) => Math.round(Math.max(0, Math.min(100, avg1to5 * 20)));
+  type BarRow = { name: string; 사전: number; 사후: number };
+  let barChartDataByDomain: { label: string; rows: BarRow[] }[] = [];
+  if (isPost && preResult && survey?.domains?.length && Array.isArray(survey.questions) && subDomainScoresByDomain) {
+    const preRaw = (preResult.raw_answers ?? {}) as Record<string, unknown>;
+    const preRawForSub: Record<string, number> = {};
+    for (const [k, v] of Object.entries(preRaw)) {
+      if (k === "_schema") continue;
+      const num = typeof v === "number" ? v : Number(v);
+      if (Number.isFinite(num) && num >= 1 && num <= 5) preRawForSub[String(k)] = num;
+    }
+    const preSubByDomain = computeSubDomainScores(survey, preRawForSub);
+    domainKeys.forEach((key, i) => {
+      const label = domainLabels[key] ?? `역량${i + 1}`;
+      const preAvg = preAverages[i]?.avg ?? 0;
+      const postAvg = domainAverages.find((d) => d.key === key)?.avg ?? 0;
+      const rows: BarRow[] = [];
+      const postSubs = subDomainScoresByDomain?.[key] ?? [];
+      const preSubs = preSubByDomain[key] ?? [];
+      postSubs.forEach((postSub) => {
+        const preSub = preSubs.find((s) => s.name === postSub.name);
+        const preAvgSub = preSub ? preSub.avg : 0;
+        rows.push({
+          name: postSub.name.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(),
+          사전: to100(preAvgSub),
+          사후: to100(postSub.avg),
+        });
+      });
+      if (rows.length === 0) {
+        rows.push({ name: "평균", 사전: to100(preAvg), 사후: to100(postAvg) });
+      }
+      barChartDataByDomain.push({ label, rows });
+    });
+  }
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    const y = String(d.getFullYear()).slice(-2);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}.${m}.${day}`;
+  };
+  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
+  const postDateStr = formatDate(diagnosisResult.created_at);
 
   const aiText = (diagnosisResult.ai_analysis_report ?? diagnosisResult.ai_analysis ?? "") || "";
 
@@ -360,74 +432,88 @@ function DiagnosisReportContent() {
               </tbody>
             </table>
 
-            {/* 소영역까지 포함한 시각 요약 (방사형 + 소영역 막대) */}
+            {/* 소영역까지 포함한 시각 요약 (방사형 + 소영역 막대) — 사후일 때 사전·사후 비교 */}
             <div>
               <div className="border border-b-0 border-slate-300 bg-slate-100 px-2 py-1 font-medium">역량별 점수 (시각 요약)</div>
               {domainAverages.length > 0 && (
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* 방사형 그래프 (대영역 요약) */}
-                  <div className="h-56 border border-slate-200 bg-white rounded-md">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart
-                        data={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
-                        outerRadius="60%"
-                        margin={{ top: 16, right: 32, bottom: 16, left: 32 }}
-                      >
-                        <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis
-                          dataKey="name"
-                          tick={{ fill: "#4b5563", fontSize: 11 }}
-                        />
-                        <PolarRadiusAxis
-                          angle={90}
-                          domain={[0, 5]}
-                          tick={{ fill: "#9ca3af", fontSize: 10 }}
-                        />
-                        <Radar
-                          name="역량 평균"
-                          dataKey="score"
-                          stroke="#6366f1"
-                          fill="#6366f1"
-                          fillOpacity={0.35}
-                        />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="mt-3">
+                  {isPost && radarCompareData && barChartDataByDomain.length > 0 ? (
+                    <DiagnosisResultCharts
+                      isPost
+                      radarCompareData={radarCompareData}
+                      barChartDataByDomain={barChartDataByDomain}
+                      domainAverages={[]}
+                      preDateStr={preDateStr}
+                      postDateStr={postDateStr}
+                      compact
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* 방사형 그래프 (대영역 요약) */}
+                      <div className="h-56 border border-slate-200 bg-white rounded-md">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart
+                            data={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
+                            outerRadius="60%"
+                            margin={{ top: 16, right: 32, bottom: 16, left: 32 }}
+                          >
+                            <PolarGrid stroke="#e5e7eb" />
+                            <PolarAngleAxis
+                              dataKey="name"
+                              tick={{ fill: "#4b5563", fontSize: 11 }}
+                            />
+                            <PolarRadiusAxis
+                              angle={90}
+                              domain={[0, 5]}
+                              tick={{ fill: "#9ca3af", fontSize: 10 }}
+                            />
+                            <Radar
+                              name="역량 평균"
+                              dataKey="score"
+                              stroke="#6366f1"
+                              fill="#6366f1"
+                              fillOpacity={0.35}
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
 
-                  {/* 소영역별 막대 (보고서용 카드 레이아웃) */}
-                  <div className="border border-slate-200 bg-white rounded-md px-3 py-2 text-[11px] text-slate-800">
-                    {subDomainScoresByDomain ? (
-                      domainAverages.map((d) => {
-                        const subs = subDomainScoresByDomain?.[d.key] ?? [];
-                        if (!subs.length) return null;
-                        return (
-                          <div key={d.key} className="mb-2 last:mb-0">
-                            <div className="mb-1 text-[11px] font-semibold text-slate-700">
-                              {d.label}
-                            </div>
-                            <div className="space-y-1">
-                              {subs.map((s) => (
-                                <div key={s.name} className="flex items-center gap-2 pl-4">
-                                  <span className="w-24 truncate">{s.name}</span>
-                                  <div className="flex-1 h-1.5 rounded-full bg-slate-100">
-                                    <div
-                                      className="h-1.5 rounded-full bg-indigo-400"
-                                      style={{ width: `${Math.max(0, Math.min(100, (s.avg / 5) * 100))}%` }}
-                                    />
-                                  </div>
-                                  <span className="w-6 text-right text-[10px] text-slate-600">
-                                    {s.avg.toFixed(1)}
-                                  </span>
+                      {/* 소영역별 막대 (보고서용 카드 레이아웃) */}
+                      <div className="border border-slate-200 bg-white rounded-md px-3 py-2 text-[11px] text-slate-800">
+                        {subDomainScoresByDomain ? (
+                          domainAverages.map((d) => {
+                            const subs = subDomainScoresByDomain?.[d.key] ?? [];
+                            if (!subs.length) return null;
+                            return (
+                              <div key={d.key} className="mb-2 last:mb-0">
+                                <div className="mb-1 text-[11px] font-semibold text-slate-700">
+                                  {d.label}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-[11px] text-slate-500">소영역 설정이 없습니다.</p>
-                    )}
-                  </div>
+                                <div className="space-y-1">
+                                  {subs.map((s) => (
+                                    <div key={s.name} className="flex items-center gap-2 pl-4">
+                                      <span className="w-24 truncate">{s.name}</span>
+                                      <div className="flex-1 h-1.5 rounded-full bg-slate-100">
+                                        <div
+                                          className="h-1.5 rounded-full bg-indigo-400"
+                                          style={{ width: `${Math.max(0, Math.min(100, (s.avg / 5) * 100))}%` }}
+                                        />
+                                      </div>
+                                      <span className="w-6 text-right text-[10px] text-slate-600">
+                                        {s.avg.toFixed(1)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-[11px] text-slate-500">소영역 설정이 없습니다.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

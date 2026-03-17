@@ -299,11 +299,13 @@ export default function DashboardPage() {
       let schoolName = metadata?.schoolName ?? null;
       let gradeClass = metadata?.gradeClass ?? metadata?.schoolLevel ?? null;
 
+      // 세션 1회만 조회 후 토큰 재사용 (중복 getSession 제거로 체감 속도 개선)
       const { data: { session: initSession } } = await supabase.auth.getSession();
-      if (initSession?.access_token) {
+      const token = initSession?.access_token ?? null;
+      if (token) {
         try {
           const res = await fetch("/api/account/profile-overrides", {
-            headers: { Authorization: `Bearer ${initSession.access_token}` },
+            headers: { Authorization: `Bearer ${token}` },
             cache: "no-store",
           });
           if (res.ok) {
@@ -323,13 +325,10 @@ export default function DashboardPage() {
       setCurrentUserEmail(user.email ?? null);
       setIsChecking(false);
 
-      // 관리자: 교원 목록은 교사용 데이터와 병렬 요청 (체감 속도 개선)
+      // 관리자: 교원 목록 — 위에서 쓴 token 재사용 (getSession 재호출 제거)
       const adminTeachersPromise =
-        role === "admin" && schoolName
+        role === "admin" && schoolName && token
           ? (async () => {
-              const { data: { session } } = await supabase.auth.getSession();
-              const token = session?.access_token;
-              if (!token) return { ok: false as const, json: { error: "로그인이 필요합니다." } };
               const res = await fetch("/api/admin/teacher-summaries", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -339,29 +338,75 @@ export default function DashboardPage() {
             })()
           : null;
 
-      // 교사용: 초기 로드 시 병렬 요청으로 체감 속도 개선 (getSession 1회, DB/API 병렬)
+      // 교사용: 단일 API 1회 호출 + 재진입 시 캐시로 즉시 표시
       if ((role === "teacher" || role === "admin") && user.email) {
         try {
-          setIsLoadingDiagnosis(true);
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token ?? null;
+          const CACHE_KEY = "teacher_mate_dashboard_cache";
+          const CACHE_TTL_MS = 60_000; // 60초
+          let hadCacheHit = false;
+          if (typeof window !== "undefined") {
+            try {
+              const raw = sessionStorage.getItem(CACHE_KEY);
+              if (raw) {
+                const { ts, email: cacheEmail, ...cached } = JSON.parse(raw) as {
+                  ts: number;
+                  email: string;
+                  diagnosisSummary?: typeof diagnosisSummary;
+                  hasPostDiagnosis?: boolean;
+                  planCompleted?: boolean;
+                  mileageStarted?: boolean;
+                  mileageSummary?: typeof mileageSummary;
+                  relativeDifficulty?: Record<string, 1 | 2 | 3> | null;
+                  totalPoints?: number | null;
+                  pointsDetail?: typeof pointsDetail;
+                  mileagePointItems?: typeof mileagePointItems;
+                  diagnosisRadarLabels?: string[];
+                  schoolCategories?: CategoryConfigItem[];
+                  planMissingGoals?: string[];
+                };
+                if (cacheEmail === user.email && Date.now() - ts < CACHE_TTL_MS) {
+                  hadCacheHit = true;
+                  if (cached.diagnosisSummary != null) setDiagnosisSummary(cached.diagnosisSummary);
+                  if (cached.hasPostDiagnosis != null) setHasPostDiagnosis(cached.hasPostDiagnosis);
+                  if (cached.planCompleted != null) setPlanCompleted(cached.planCompleted);
+                  if (cached.mileageStarted != null) setMileageStarted(cached.mileageStarted);
+                  if (cached.mileageSummary != null) setMileageSummary(cached.mileageSummary);
+                  if (cached.relativeDifficulty !== undefined) setRelativeDifficulty(cached.relativeDifficulty);
+                  if (cached.totalPoints !== undefined) setTotalPoints(cached.totalPoints);
+                  if (cached.pointsDetail != null) setPointsDetail(cached.pointsDetail);
+                  if (cached.mileagePointItems != null) setMileagePointItems(cached.mileagePointItems);
+                  if (cached.diagnosisRadarLabels != null) setDiagnosisRadarLabels(cached.diagnosisRadarLabels);
+                  if (cached.schoolCategories != null) setSchoolCategories(cached.schoolCategories);
+                  if (cached.planMissingGoals != null) setPlanMissingGoals(cached.planMissingGoals);
+                }
+              }
+            } catch {
+              // ignore cache parse error
+            }
+          }
 
-          const [preRes, postRes, planRes, mileageRes, catRes, diagnosisSettingsRes, diffRes, pointsRes] = await Promise.all([
-            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,total_score,raw_answers,category_scores").eq("user_email", user.email).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-            supabase.from("diagnosis_results").select("id").eq("user_email", user.email).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-            supabase.from("development_plans").select("development_goal, expected_outcome, training_plans, education_plans, book_plans, expense_requests, community_plans, other_plans, annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal").eq("user_email", user.email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-            supabase.from("mileage_entries").select("id, content, category").eq("user_email", user.email),
-            token ? fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : { categories: null }).catch(() => ({ categories: null })) : Promise.resolve({ categories: null }),
-            token ? fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})) : Promise.resolve({}),
-            token ? fetch("/api/mileage-relative-difficulty", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
-            token ? fetch("/api/points/me", { headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
-          ]);
+          if (!hadCacheHit) setIsLoadingDiagnosis(true);
+          const res = token
+            ? await fetch("/api/dashboard-data", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
+            : null;
+          const payload = res?.ok ? await res.json() : null;
+          if (!payload) {
+            setIsLoadingDiagnosis(false);
+            return;
+          }
+
+          const preRes = { data: payload.preRes?.data, error: payload.preRes?.error };
+          const postRes = { data: payload.postRes?.data };
+          const planRes = { data: payload.planRes?.data };
+          const mileageRes = { data: payload.mileageRes?.data ?? [] };
+          const catJson = { categories: payload.categories ?? null } as { categories?: CategoryConfigItem[] };
+          const diagnosisSettingsRes = payload.diagnosisSettings ?? {};
+          const diffRes = payload.relativeDifficulty != null ? { ok: true, json: () => Promise.resolve(payload.relativeDifficulty) } : null;
+          const pointsRes = payload.points != null ? { ok: true, json: () => Promise.resolve(payload.points) } : null;
 
           const data = preRes.data;
           const { data: planRow } = planRes;
           const mileageRows = mileageRes.data ?? [];
-          const catJson = catRes as { categories?: CategoryConfigItem[] };
-
           const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[]; useSurvey?: boolean };
           const domainCount = Math.min(6, Math.max(2, Array.isArray(diagSettings?.domains) ? diagSettings.domains.length : 6));
 
@@ -450,6 +495,82 @@ export default function DashboardPage() {
                   setMileagePointItems(Array.isArray(pointsJ.mileageBreakdown) ? pointsJ.mileageBreakdown : []);
                 }
               }
+            } catch {
+              // ignore
+            }
+          }
+
+          // 재진입 시 즉시 표시용 캐시 저장 (60초 TTL)
+          if (typeof window !== "undefined" && user.email && token) {
+            try {
+              const cat = data?.category_scores as Record<string, { count?: number }> | undefined;
+              const getCount = (key: string) => (cat?.[key]?.count ?? 5);
+              const avg = (key: string, val: number) => (domainCount <= 6 && cat ? val / (getCount(key) || 1) : val / 5);
+              const diagnosisSummaryCache = !preRes.error && data
+                ? {
+                    domain1: avg("domain1", (data.domain1 as number) ?? 0),
+                    domain2: avg("domain2", (data.domain2 as number) ?? 0),
+                    domain3: avg("domain3", (data.domain3 as number) ?? 0),
+                    domain4: avg("domain4", (data.domain4 as number) ?? 0),
+                    domain5: domainCount >= 5 ? avg("domain5", (data.domain5 as number) ?? 0) : 0,
+                    domain6: domainCount >= 6 ? avg("domain6", (data.domain6 as number) ?? 0) : 0,
+                    totalScore: (data.total_score as number) ?? 0,
+                  }
+                : undefined;
+              const planGoalsRowInit = planRow as Record<string, string | null | undefined> | null | undefined;
+              const PLAN_CATEGORY_LABELS_INIT: Record<string, string> = { training: "마일리지카드1", class_open: "마일리지카드2", community: "마일리지카드3", book_edutech: "마일리지카드4", health: "마일리지카드5", other: "마일리지카드6" };
+              const goalsInit = [
+                { value: String(planGoalsRowInit?.annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.training },
+                { value: String(planGoalsRowInit?.expense_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.class_open },
+                { value: String(planGoalsRowInit?.community_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.community },
+                { value: String(planGoalsRowInit?.book_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.book_edutech },
+                { value: String(planGoalsRowInit?.education_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.health },
+                { value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
+              ];
+              const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
+              let categoriesForMileage: CategoryConfigItem[] | undefined;
+              if (Array.isArray(catJson.categories) && catJson.categories.length === 6) categoriesForMileage = catJson.categories;
+              const planGoals: Record<string, number> = {};
+              MILEAGE_CATEGORIES.forEach((c) => {
+                const key = PLAN_GOAL_KEYS[c.key];
+                const raw = String(planGoalsRowInit?.[key] ?? "").trim();
+                planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
+              });
+              let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
+              if (categoriesForMileage?.length === 6) {
+                const healthCat = categoriesForMileage.find((c) => c.key === "health");
+                if (healthCat?.unit === "km") healthGoalUnit = "거리";
+                else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
+              }
+              const { categories, overallProgress } = computeMileageProgress(
+                mileageRows as { content: string; category: string }[],
+                planGoals,
+                healthGoalUnit,
+                categoriesForMileage
+              );
+              const diagnosisRadarLabelsCache = Array.isArray(diagSettings?.domains) && diagSettings.domains.length >= 2 && diagSettings.domains.length <= 6
+                ? diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
+                : DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name);
+              const pointsJ = payload.points;
+              sessionStorage.setItem(
+                CACHE_KEY,
+                JSON.stringify({
+                  ts: Date.now(),
+                  email: user.email,
+                  diagnosisSummary: diagnosisSummaryCache,
+                  hasPostDiagnosis: !!postRes.data,
+                  planCompleted: planFilledRatio >= 0.7,
+                  mileageStarted: mileageRows.length > 0,
+                  mileageSummary: { overallProgress, categories },
+                  relativeDifficulty: payload.relativeDifficulty ?? null,
+                  totalPoints: typeof pointsJ?.total === "number" ? pointsJ.total : null,
+                  pointsDetail: typeof pointsJ?.total === "number" ? { base: pointsJ.base ?? 100, login: pointsJ.login ?? 0, mileage: pointsJ.mileage ?? 0, total: pointsJ.total } : null,
+                  mileagePointItems: Array.isArray(pointsJ?.mileageBreakdown) ? pointsJ.mileageBreakdown : [],
+                  diagnosisRadarLabels: diagnosisRadarLabelsCache,
+                  schoolCategories: categoriesForMileage ?? null,
+                  planMissingGoals: goalsInit.filter((g) => !g.value).map((g) => g.label),
+                })
+              );
             } catch {
               // ignore
             }
