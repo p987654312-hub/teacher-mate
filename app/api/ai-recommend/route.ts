@@ -93,7 +93,14 @@ export async function POST(req: Request) {
       }
     }
 
-    const getTemplate = (t: string) => (promptTemplates[t]?.trim() || ((AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? ""));
+    const getTemplate = (t: string) => {
+      // next_year_goal은 키워드 반영 규칙이 핵심이므로, DB 오버라이드가 남아있어도
+      // 현재 코드의 기본 템플릿을 강제로 사용해 동작을 안정화한다.
+      if (t === "next_year_goal") {
+        return (AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? "";
+      }
+      return promptTemplates[t]?.trim() || ((AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? "");
+    };
 
     // 프롬프트 구성 (1인칭 시점, 교사 본인의 자기성찰·다짐)
     let prompt = "";
@@ -253,6 +260,22 @@ export async function POST(req: Request) {
         ? goalKeywordsArray.map((k: string, idx: number) => `${idx + 1}) ${k}`).join("\n")
         : "";
       prompt = applyPromptTemplate(getTemplate("next_year_goal"), { resultAnalysis, goalKeywordsText, goalKeywordsExactLinesText });
+
+      // 관리자 템플릿이 바뀌어도 키워드 반영이 누락되지 않도록, 강제 규칙을 항상 프롬프트 끝에 덧붙임
+      if (goalKeywordsArray.length === 3) {
+        const lock = [
+          "",
+          "[강제 규칙: 사용자가 제공한 키워드 3개를 반드시 사용]",
+          `키워드 1: ${goalKeywordsArray[0]}`,
+          `키워드 2: ${goalKeywordsArray[1]}`,
+          `키워드 3: ${goalKeywordsArray[2]}`,
+          "- 동의어/요약/표현 변경 금지. 철자/띄어쓰기 그대로 사용.",
+          "- 출력은 1문단이며, 반드시 첫 부분에 (키워드: 키1, 키2, 키3) 형태를 그대로 포함할 것.",
+          "- 본문(목표 문장) 안에도 키워드 1/2/3을 각각 1회 이상 포함할 것.",
+          "",
+        ].join("\n");
+        prompt += lock;
+      }
     } else if (type === "plan_fill_rows") {
       const cardType = String((body as any)?.cardType ?? "").trim();
       const count = Math.min(Math.max(1, Number((body as any)?.count) || 1), 20);
