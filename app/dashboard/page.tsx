@@ -2164,63 +2164,13 @@ export default function DashboardPage() {
                           size="sm"
                           variant="outline"
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-                          disabled={savingCategoryConfig || JSON.stringify(categoryConfig) === JSON.stringify(categoryConfigSaved)}
-                          onClick={async () => {
-                            const changed = JSON.stringify(categoryConfig) !== JSON.stringify(categoryConfigSaved);
-                            if (!changed) return;
-                            const ok = confirm("영역명과 단위를 바꾸면 기존의 데이터가 뒤섞일 수 있습니다. 영역명을 바꾸시겠습니까?");
-                            if (!ok) return;
-                            setSavingCategoryConfig(true);
-                            try {
-                              await savePointAndCategorySettings({ categories: categoryConfig });
-                              setCategoryConfigSaved(categoryConfig);
-                              setSchoolCategories(categoryConfig); // 마일리지 카드에 즉시 반영
-                              setShowPointSettings(false);
-                              // 설정 저장 후 localStorage에 저장하여 다른 페이지에서도 즉시 반영
-                              if (userSchool) {
-                                localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(categoryConfig));
-                              }
-                              // 마일리지 요약 다시 계산하여 반영
-                              if (currentUserEmail) {
-                                const { data: mileageRows } = await supabase
-                                  .from("mileage_entries")
-                                  .select("id, content, category")
-                                  .eq("user_email", currentUserEmail);
-                                const { data: planRow } = await supabase
-                                  .from("development_plans")
-                                  .select("annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal")
-                                  .eq("user_email", currentUserEmail)
-                                  .order("created_at", { ascending: false })
-                                  .limit(1)
-                                  .maybeSingle();
-                                const planGoalsRowRefresh = planRow as Record<string, string | null | undefined> | null | undefined;
-                                const planGoals: Record<string, number> = {};
-                                MILEAGE_CATEGORIES.forEach((c) => {
-                                  const key = PLAN_GOAL_KEYS[c.key];
-                                  const raw = String(planGoalsRowRefresh?.[key] ?? "").trim();
-                                  planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
-                                });
-                                let healthGoalUnitForRefresh: "시간" | "거리" = (planGoalsRowRefresh?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
-                                const healthCat = categoryConfig.find(c => c.key === "health");
-                                if (healthCat?.unit === "km") {
-                                  healthGoalUnitForRefresh = "거리";
-                                } else if (healthCat?.unit === "시간") {
-                                  healthGoalUnitForRefresh = "시간";
-                                }
-                                const { categories: refreshedCategories, overallProgress: refreshedProgress } = computeMileageProgress(
-                                  (mileageRows ?? []) as { content: string; category: string }[],
-                                  planGoals,
-                                  healthGoalUnitForRefresh,
-                                  categoryConfig
-                                );
-                                setMileageSummary({ overallProgress: refreshedProgress, categories: refreshedCategories });
-                              }
-                            } finally {
-                              setSavingCategoryConfig(false);
-                            }
+                          onClick={() => {
+                            // 현재 화면에서 이름/단위가 이상해졌을 때, 최초 로드된(현재 학교) 저장값으로 즉시 되돌림
+                            setCategoryConfig(categoryConfigSaved);
+                            setSchoolCategories(categoryConfigSaved);
                           }}
                         >
-                          {savingCategoryConfig ? "저장 중..." : "저장"}
+                          초기화(S초등학교설정값)하기
                         </Button>
                         <Button
                           type="button"
@@ -2229,12 +2179,63 @@ export default function DashboardPage() {
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={savingCategoryConfig || JSON.stringify(categoryConfig) === JSON.stringify(categoryConfigSaved)}
                           onClick={() => {
-                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림(반영은 '저장' 버튼에서 수행)
-                            setCategoryConfig(categoryConfigSaved);
-                            setSchoolCategories(categoryConfigSaved);
+                            const changed = JSON.stringify(categoryConfig) !== JSON.stringify(categoryConfigSaved);
+                            if (!changed) return;
+                            const ok = confirm("영역명과 단위를 바꾸면 기존의 데이터가 뒤섞일 수 있습니다. 영역명을 바꾸시겠습니까?");
+                            if (!ok) return;
+                            setSavingCategoryConfig(true);
+                            (async () => {
+                              try {
+                                await savePointAndCategorySettings({ categories: categoryConfig });
+                                setCategoryConfigSaved(categoryConfig);
+                                setSchoolCategories(categoryConfig); // 마일리지 카드에 즉시 반영
+                                setShowPointSettings(false);
+                                // 설정 저장 후 localStorage에 저장하여 다른 페이지에서도 즉시 반영
+                                if (userSchool) {
+                                  localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(categoryConfig));
+                                }
+                                // 마일리지 요약 다시 계산하여 반영
+                                if (currentUserEmail) {
+                                  const { data: mileageRows } = await supabase
+                                    .from("mileage_entries")
+                                    .select("id, content, category")
+                                    .eq("user_email", currentUserEmail);
+                                  const { data: planRow } = await supabase
+                                    .from("development_plans")
+                                    .select("annual_goal, expense_annual_goal, community_annual_goal, book_annual_goal, education_annual_goal, education_annual_goal_unit, other_annual_goal")
+                                    .eq("user_email", currentUserEmail)
+                                    .order("created_at", { ascending: false })
+                                    .limit(1)
+                                    .maybeSingle();
+                                  const planGoalsRowRefresh = planRow as Record<string, string | null | undefined> | null | undefined;
+                                  const planGoals: Record<string, number> = {};
+                                  MILEAGE_CATEGORIES.forEach((c) => {
+                                    const key = PLAN_GOAL_KEYS[c.key];
+                                    const raw = String(planGoalsRowRefresh?.[key] ?? "").trim();
+                                    planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
+                                  });
+                                  let healthGoalUnitForRefresh: "시간" | "거리" = (planGoalsRowRefresh?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
+                                  const healthCat = categoryConfig.find(c => c.key === "health");
+                                  if (healthCat?.unit === "km") {
+                                    healthGoalUnitForRefresh = "거리";
+                                  } else if (healthCat?.unit === "시간") {
+                                    healthGoalUnitForRefresh = "시간";
+                                  }
+                                  const { categories: refreshedCategories, overallProgress: refreshedProgress } = computeMileageProgress(
+                                    (mileageRows ?? []) as { content: string; category: string }[],
+                                    planGoals,
+                                    healthGoalUnitForRefresh,
+                                    categoryConfig
+                                  );
+                                  setMileageSummary({ overallProgress: refreshedProgress, categories: refreshedCategories });
+                                }
+                              } finally {
+                                setSavingCategoryConfig(false);
+                              }
+                            })();
                           }}
                         >
-                          초기값(S초등학교) 설정값으로 설정
+                          {savingCategoryConfig ? "저장 중..." : "저장"}
                         </Button>
                         <Button
                           type="button"
@@ -2321,6 +2322,18 @@ export default function DashboardPage() {
                           size="sm"
                           variant="outline"
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          onClick={() => {
+                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림
+                            setPointSettings(pointSettingsSaved);
+                          }}
+                        >
+                          초기화(S초등학교설정값)하기
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={savingPointSettings || JSON.stringify(pointSettings) === JSON.stringify(pointSettingsSaved)}
                           onClick={async () => {
                             const changed = JSON.stringify(pointSettings) !== JSON.stringify(pointSettingsSaved);
@@ -2343,19 +2356,6 @@ export default function DashboardPage() {
                           }}
                         >
                           {savingPointSettings ? "저장 중..." : "저장"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-                          disabled={savingPointSettings || JSON.stringify(pointSettings) === JSON.stringify(pointSettingsSaved)}
-                          onClick={() => {
-                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림
-                            setPointSettings(pointSettingsSaved);
-                          }}
-                        >
-                          초기값(S초등학교) 설정값으로 설정
                         </Button>
                         <Button
                           type="button"
