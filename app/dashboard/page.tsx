@@ -231,6 +231,27 @@ export default function DashboardPage() {
     { key: "health", label: "마일리지카드5", unit: "시간" },
     { key: "other", label: "마일리지카드6", unit: "건" },
   ];
+  // 모든 학교에서 "초기화"를 누르면 항상 동일하게 보이도록 고정 프리셋
+  // (첨부 이미지의 1~6 영역 라벨 기준)
+  const RESET_CATEGORIES: CategoryConfigItem[] = [
+    { key: "training", label: "직무연수", unit: "시간" },
+    { key: "class_open", label: "수업 공개", unit: "회" },
+    { key: "community", label: "교원학습 공동체", unit: "회" },
+    { key: "book_edutech", label: "전문성개발Ⅰ(지원단, 연구대회, 컨설팅, 교육청 연계)", unit: "건" },
+    // 화면 5번째 카드가 전문성개발Ⅱ
+    { key: "health", label: "전문성개발Ⅱ(대학원, 연구회, 외부수업참관 등)", unit: "건" },
+    // 화면 6번째 카드가 건강/체력
+    { key: "other", label: "건강 / 체력", unit: "시간" },
+  ];
+  const RESET_POINT_SETTINGS: Record<string, number> = {
+    training: 1,
+    class_open: 1,
+    community: 1,
+    book_edutech: 1,
+    health: 1,
+    other: 1,
+    login_points: 2,
+  };
   const UNIT_OPTIONS = ["시간", "분", "회", "건", "권", "km"];
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfigItem[]>(() => [...DEFAULT_CATEGORIES]);
   const [categoryConfigSaved, setCategoryConfigSaved] = useState<CategoryConfigItem[]>(() => [...DEFAULT_CATEGORIES]);
@@ -258,7 +279,6 @@ export default function DashboardPage() {
     other: 1,
     login_points: 2,
   });
-  const [resettingPointSettings, setResettingPointSettings] = useState(false);
   const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
 
   const MILEAGE_CATEGORIES = [
@@ -2184,16 +2204,28 @@ export default function DashboardPage() {
                             (async () => {
                               try {
                                 setResettingCategoryConfig(true);
-                                const initCats = initialCategoryConfigRef.current.map((x) => ({ ...x }));
-                                await savePointAndCategorySettings({
-                                  categories: initCats,
-                                  settings: { ...initialPointSettingsRef.current },
-                                });
+                                const initCats = RESET_CATEGORIES.map((x) => ({ ...x }));
+                                const initSettings = { ...RESET_POINT_SETTINGS };
+
+                                // 모든 학교 공통 고정 프리셋으로 DB까지 되돌림
+                                await savePointAndCategorySettings({ categories: initCats, settings: initSettings });
+                                initialCategoryConfigRef.current = initCats;
+                                initialPointSettingsRef.current = initSettings;
+
                                 setCategoryConfig(initCats);
                                 setCategoryConfigSaved(initCats);
                                 setSchoolCategories(initCats);
+                                setPointSettings(initSettings);
+                                setPointSettingsSaved(initSettings);
                                 if (userSchool) {
-                                  localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(initCats));
+                                  localStorage.setItem(
+                                    `teacher_mate_category_settings_${userSchool}`,
+                                    JSON.stringify(initCats)
+                                  );
+                                  localStorage.setItem(
+                                    `teacher_mate_point_settings_${userSchool}`,
+                                    JSON.stringify(initSettings)
+                                  );
                                 }
                                 setEditingLabelKey(null);
                               } finally {
@@ -2349,34 +2381,6 @@ export default function DashboardPage() {
                         <p className="mt-0.5 text-xs text-slate-500">위에서 설정된 영역명·단위는 고정이며, 단위당 점수만 입력합니다.</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-                          disabled={resettingPointSettings}
-                          onClick={() => {
-                            (async () => {
-                              try {
-                                setResettingPointSettings(true);
-                                const initSettings = { ...initialPointSettingsRef.current };
-                              await savePointAndCategorySettings({
-                                settings: initSettings,
-                                categories: initialCategoryConfigRef.current,
-                              });
-                                setPointSettings(initSettings);
-                                setPointSettingsSaved(initSettings);
-                                if (userSchool && typeof window !== "undefined") {
-                                  localStorage.setItem(`teacher_mate_point_settings_${userSchool}`, JSON.stringify(initSettings));
-                                }
-                              } finally {
-                                setResettingPointSettings(false);
-                              }
-                            })();
-                          }}
-                        >
-                          {resettingPointSettings ? "초기화 중..." : "초기화(S초등학교설정값)하기"}
-                        </Button>
                         <Button
                           type="button"
                           size="sm"
