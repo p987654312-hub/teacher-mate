@@ -132,7 +132,6 @@ export default function DashboardPage() {
   const [teachers, setTeachers] = useState<
     { id: string; name: string; email: string; createdAt: string }[]
   >([]);
-  const [showTeacherPies, setShowTeacherPies] = useState(false);
   const [teachersTotalCount, setTeachersTotalCount] = useState<number>(0);
   const [teacherSummaries, setTeacherSummaries] = useState<
     {
@@ -198,15 +197,6 @@ export default function DashboardPage() {
   const [diagnosisRadarLabels, setDiagnosisRadarLabels] = useState<string[]>(() => DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name));
   const [savingDiagnosisSettings, setSavingDiagnosisSettings] = useState(false);
 
-  // 메인(교사) 대시보드에서는 방사형(레이다) 먼저 보이고, 파이는 뒤에 등장하도록 지연 렌더
-  useEffect(() => {
-    if (!showTeacherView) {
-      setShowTeacherPies(false);
-      return;
-    }
-    const t = window.setTimeout(() => setShowTeacherPies(true), 120);
-    return () => window.clearTimeout(t);
-  }, [showTeacherView]);
   const [diagnosisExcelFile, setDiagnosisExcelFile] = useState<File | null>(null);
   const [diagnosisUploadTitle, setDiagnosisUploadTitle] = useState("");
   const [diagnosisUploading, setDiagnosisUploading] = useState(false);
@@ -1564,7 +1554,7 @@ export default function DashboardPage() {
                             <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                             <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                               <div
-                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500"
+                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500 animate-pulse"
                                 style={{ width: `${Math.min(100, Math.max(0, mileageSummary.overallProgress))}%`, minWidth: mileageSummary.overallProgress > 0 ? 2 : 0 }}
                               />
                               <div
@@ -1574,7 +1564,7 @@ export default function DashboardPage() {
                                   transform: "translate(-50%, 0)",
                                 }}
                               >
-                                <div className="rotate-[20deg]">
+                                <div className="rotate-[20deg] animate-bounce">
                                   <Plane className="h-[27px] w-[27px] text-[#6366f1]" strokeWidth={2} />
                                 </div>
                                 <button
@@ -1613,27 +1603,23 @@ export default function DashboardPage() {
                                 return (
                                   <div key={c.key} className="flex flex-col items-center gap-1">
                                     <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-                                      {showTeacherPies ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                          <PieChart>
-                                            <Pie
-                                              data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
-                                              cx="50%"
-                                              cy="50%"
-                                              innerRadius="55%"
-                                              outerRadius="95%"
-                                              dataKey="value"
-                                              strokeWidth={0}
-                                              cursor="pointer"
-                                              isAnimationActive={showAdminView ? false : true}
-                                            >
-                                              {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
-                                            </Pie>
-                                          </PieChart>
-                                        </ResponsiveContainer>
-                                      ) : (
-                                        <div className="absolute inset-0 rounded-full border border-slate-200 bg-slate-50" />
-                                      )}
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                          <Pie
+                                            data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius="55%"
+                                            outerRadius="95%"
+                                            dataKey="value"
+                                            strokeWidth={0}
+                                            cursor="pointer"
+                                            isAnimationActive={showAdminView ? false : true}
+                                          >
+                                            {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
+                                          </Pie>
+                                        </PieChart>
+                                      </ResponsiveContainer>
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <span className="text-[10px] font-semibold text-slate-600 sm:text-xs">{Math.round(c.progress)}%</span>
                                       </div>
@@ -2898,11 +2884,11 @@ export default function DashboardPage() {
                               <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                               <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                                 <div
-                                  className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500"
+                                  className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500 animate-pulse"
                                   style={{ width: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`, minWidth: t.mileageSummary.overallProgress > 0 ? 2 : 0 }}
                                 />
                                 <div
-                                  className="absolute bottom-full left-0 mb-0.5 transition-all duration-500"
+                                  className="absolute bottom-full left-0 mb-0.5 transition-all duration-500 animate-bounce"
                                   style={{
                                     left: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`,
                                     transform: "translate(-50%, 0) rotate(20deg)",
