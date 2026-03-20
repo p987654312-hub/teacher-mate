@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const { type, weakDomains, strongDomains, weakItems } = body;
 
     // 입력 검증
-    if (!type || (type !== "goal" && type !== "effect" && type !== "analysis" && type !== "analysis_post" && type !== "mentor" && type !== "result_report" && type !== "plan_outline" && type !== "plan_fill_rows" && type !== "self_eval_sections" && type !== "analysis_post_rewrite" && type !== "next_year_goal_keywords" && type !== "next_year_goal")) {
+    if (!type || (type !== "goal" && type !== "effect" && type !== "analysis" && type !== "analysis_post" && type !== "mentor" && type !== "result_report" && type !== "plan_outline" && type !== "plan_fill_rows" && type !== "self_eval_sections" && type !== "analysis_post_rewrite" && type !== "next_year_goal")) {
       return NextResponse.json(
         { error: "올바른 type을 제공해주세요." },
         { status: 400 }
@@ -238,12 +238,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "text를 제공해주세요." }, { status: 400 });
       }
       prompt = applyPromptTemplate(getTemplate("analysis_post_rewrite"), { text });
-    } else if (type === "next_year_goal_keywords") {
-      const resultAnalysis = String((body as any)?.resultAnalysis ?? "").trim();
-      if (!resultAnalysis) {
-        return NextResponse.json({ error: "resultAnalysis(결과 분석)를 제공해주세요." }, { status: 400 });
-      }
-      prompt = applyPromptTemplate(getTemplate("next_year_goal_keywords"), { resultAnalysis });
     } else if (type === "next_year_goal") {
       const resultAnalysis = String((body as any)?.resultAnalysis ?? "").trim();
       const goalKeywords = Array.isArray((body as any)?.goalKeywords) ? (body as any)?.goalKeywords : [];
@@ -252,10 +246,13 @@ export async function POST(req: Request) {
       }
       const goalKeywordsArray = goalKeywords
         .map((k: unknown) => String(k ?? "").trim())
-        .filter(Boolean)
+        .filter((k: string) => Boolean(k))
         .slice(0, 3);
       const goalKeywordsText = goalKeywordsArray.join(", ");
-      prompt = applyPromptTemplate(getTemplate("next_year_goal"), { resultAnalysis, goalKeywordsText });
+      const goalKeywordsExactLinesText = goalKeywordsArray.length
+        ? goalKeywordsArray.map((k: string, idx: number) => `${idx + 1}) ${k}`).join("\n")
+        : "";
+      prompt = applyPromptTemplate(getTemplate("next_year_goal"), { resultAnalysis, goalKeywordsText, goalKeywordsExactLinesText });
     } else if (type === "plan_fill_rows") {
       const cardType = String((body as any)?.cardType ?? "").trim();
       const count = Math.min(Math.max(1, Number((body as any)?.count) || 1), 20);
@@ -395,36 +392,6 @@ export async function POST(req: Request) {
               { error: "AI가 반환한 형식을 파싱할 수 없습니다." },
               { status: 500 }
             );
-          }
-        }
-        if (type === "next_year_goal_keywords") {
-          const raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-          try {
-            const parsed = JSON.parse(raw) as { keywords?: unknown };
-            const arr = Array.isArray(parsed?.keywords) ? parsed.keywords : [];
-            const out = arr
-              .map((k: unknown) => String(k ?? "").trim())
-              .filter(Boolean)
-              .slice(0, 3);
-            const filled = [out[0] ?? "", out[1] ?? "", out[2] ?? ""];
-            if (!filled.filter(Boolean).length) {
-              return NextResponse.json({ error: "AI 키워드가 비어있습니다." }, { status: 500 });
-            }
-            return NextResponse.json({ keywords: filled });
-          } catch (parseErr) {
-            // JSON 파싱 실패 시: "키1, 키2, 키3" 형태라도 최대한 수습
-            console.error("next_year_goal_keywords parse error:", parseErr);
-            const parts = raw
-              .replace(/[\[\]\{\}]/g, "")
-              .split(/[,\\n]/g)
-              .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-              .filter(Boolean)
-              .slice(0, 3);
-            const filled = [parts[0] ?? "", parts[1] ?? "", parts[2] ?? ""];
-            if (!filled.filter(Boolean).length) {
-              return NextResponse.json({ error: "AI가 반환한 형식을 파싱할 수 없습니다." }, { status: 500 });
-            }
-            return NextResponse.json({ keywords: filled });
           }
         }
         return NextResponse.json({ recommendation });
