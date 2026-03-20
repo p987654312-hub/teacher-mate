@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     ] = await Promise.all([
       supabase
         .from("diagnosis_results")
-        .select("domain1,domain2,domain3,domain4,domain5,domain6,total_score,raw_answers,category_scores")
+        .select("domain1,domain2,domain3,domain4,domain5,domain6,total_score,category_scores")
         .eq("user_email", email)
         .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
         .order("created_at", { ascending: false })
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabase.from("mileage_entries").select("id, content, category").eq("user_email", email),
+      supabase.from("mileage_entries").select("content, category").eq("user_email", email),
       fetch(`${origin}/api/school-category-settings`, { headers: auth }).then((r) => (r.ok ? r.json() : { categories: null })).catch(() => ({ categories: null })),
       fetch(`${origin}/api/diagnosis-settings`, { headers: { ...auth }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
       fetch(`${origin}/api/mileage-relative-difficulty`, { method: "POST", headers: { "Content-Type": "application/json", ...auth } }).then((r) => (r.ok ? r.json() : null)).catch(() => null),

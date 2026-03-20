@@ -29,6 +29,7 @@ export default function DashboardDiagnosisRadar({ data }: Props) {
           stroke="#6366f1"
           fill="#6366f1"
           fillOpacity={0.35}
+          isAnimationActive={false}
         />
       </RadarChart>
     </ResponsiveContainer>

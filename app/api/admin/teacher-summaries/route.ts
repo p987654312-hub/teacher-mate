@@ -97,6 +97,10 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const schoolName = body?.schoolName;
+    const limitRaw = body?.limit;
+    const offsetRaw = body?.offset;
+    const limit = typeof limitRaw === "number" ? Math.max(1, Math.min(50, limitRaw)) : null;
+    const offset = typeof offsetRaw === "number" ? Math.max(0, offsetRaw) : 0;
     if (!schoolName || typeof schoolName !== "string") {
       return NextResponse.json({ error: "schoolName is required" }, { status: 400 });
     }
@@ -137,6 +141,14 @@ export async function POST(req: Request) {
       return (m.role === "teacher" || m.role === "admin") && (m.schoolName ?? "").trim() === callerSchool;
     });
 
+    const totalTeachers = teachers.length;
+    const sortedTeachers = [...teachers].sort((a, b) => {
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bt - at;
+    });
+    const slicedTeachers = limit != null ? sortedTeachers.slice(offset, offset + limit) : sortedTeachers;
+
     const { data: settingsRow } = await supabase
       .from("school_point_settings")
       .select("settings_json")
@@ -151,7 +163,7 @@ export async function POST(req: Request) {
     });
 
     const result = await Promise.all(
-      teachers.map(async (t) => {
+      slicedTeachers.map(async (t) => {
         const email = t.email ?? "";
         // 사용자의 provider 정보 확인 (구글 로그인 여부)
         // listUsers는 identities를 포함하지 않을 수 있으므로 getUserById로 확인
@@ -190,7 +202,7 @@ export async function POST(req: Request) {
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          supabase.from("mileage_entries").select("id, content, category").eq("user_email", email),
+          supabase.from("mileage_entries").select("content, category").eq("user_email", email),
           supabase.from("reflection_drafts").select("goal_achievement_text, reflection_text").eq("user_email", email).maybeSingle(),
           supabase.from("user_points").select("base_points, login_points").eq("user_email", email).maybeSingle(),
         ]);
@@ -265,7 +277,7 @@ export async function POST(req: Request) {
       return { ...rest, mileageSummary: { overallProgress: r.mileageSummary.overallProgress, categories } };
     });
 
-    return NextResponse.json({ teachers: teachersOut });
+    return NextResponse.json({ teachers: teachersOut, totalTeachers, offset, limit: limit ?? undefined });
   } catch (error) {
     console.error("teacher-summaries error:", error);
     return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { status: 500 });

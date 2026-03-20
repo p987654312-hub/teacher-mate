@@ -132,6 +132,7 @@ export default function DashboardPage() {
   const [teachers, setTeachers] = useState<
     { id: string; name: string; email: string; createdAt: string }[]
   >([]);
+  const [teachersTotalCount, setTeachersTotalCount] = useState<number>(0);
   const [teacherSummaries, setTeacherSummaries] = useState<
     {
       id: string;
@@ -155,6 +156,7 @@ export default function DashboardPage() {
   const TEACHER_PAGE_SIZE = 20;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [teachersError, setTeachersError] = useState<string | null>(null);
+  const [isLoadingTeachersMore, setIsLoadingTeachersMore] = useState(false);
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [diagnosisSummary, setDiagnosisSummary] = useState<{
     domain1: number;
@@ -332,7 +334,7 @@ export default function DashboardPage() {
               const res = await fetch("/api/admin/teacher-summaries", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ schoolName }),
+                body: JSON.stringify({ schoolName, limit: TEACHER_PAGE_SIZE, offset: 0 }),
               });
               return { ok: res.ok, json: await res.json() };
             })()
@@ -584,9 +586,12 @@ export default function DashboardPage() {
         setIsLoadingTeachers(true);
         setTeachersError(null);
         adminTeachersPromise
-          .then(({ ok, json }: { ok: boolean; json: { error?: string; teachers?: typeof teacherSummaries } }) => {
+          .then(({ ok, json }: { ok: boolean; json: { error?: string; teachers?: typeof teacherSummaries; totalTeachers?: number } }) => {
             if (!ok) throw new Error(json.error || "교원 목록을 불러오지 못했습니다.");
-            setTeacherSummaries(Array.isArray(json.teachers) ? json.teachers : []);
+            const nextTeachers = Array.isArray(json.teachers) ? json.teachers : [];
+            setTeacherSummaries(nextTeachers);
+            setTeachersTotalCount(typeof json.totalTeachers === "number" ? json.totalTeachers : nextTeachers.length);
+            setTeacherDisplayLimit(nextTeachers.length);
           })
           .catch((error) => {
             console.error(error);
@@ -596,6 +601,7 @@ export default function DashboardPage() {
                 : "교원 목록을 불러오지 못했습니다."
             );
             setTeacherSummaries([]);
+            setTeachersTotalCount(0);
           })
           .finally(() => setIsLoadingTeachers(false));
       }
@@ -1161,6 +1167,43 @@ export default function DashboardPage() {
       alert("요청 중 오류가 발생했습니다.");
     } finally {
       setResettingPasswordId(null);
+    }
+  };
+
+  const loadMoreTeachers = async () => {
+    if (!userSchool) return;
+    if (isLoadingTeachersMore) return;
+    const loadedCount = teacherSummaries.length;
+    const totalCount = teachersTotalCount || 0;
+    if (totalCount > 0 && loadedCount >= totalCount) return;
+
+    setIsLoadingTeachersMore(true);
+    setTeachersError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+
+      const nextOffset = loadedCount;
+      const res = await fetch("/api/admin/teacher-summaries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ schoolName: userSchool, limit: TEACHER_PAGE_SIZE, offset: nextOffset }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "교원 목록을 불러오지 못했습니다.");
+
+      const nextTeachers = Array.isArray(json.teachers) ? json.teachers : [];
+      if (nextTeachers.length === 0) return;
+
+      setTeacherSummaries((prev) => [...prev, ...nextTeachers]);
+      setTeacherDisplayLimit((prev) => prev + nextTeachers.length);
+      if (typeof json.totalTeachers === "number") setTeachersTotalCount(json.totalTeachers);
+    } catch (e) {
+      console.error(e);
+      setTeachersError(e instanceof Error ? e.message : "교원 목록 로딩에 실패했습니다.");
+    } finally {
+      setIsLoadingTeachersMore(false);
     }
   };
 
@@ -2973,16 +3016,17 @@ export default function DashboardPage() {
                       </Card>
                     );
                     })}
-                  {teacherSummaries.length > teacherDisplayLimit && (
+                  {teachersTotalCount > teacherDisplayLimit && (
                     <div className="py-3 text-center">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="rounded-full"
-                        onClick={() => setTeacherDisplayLimit((prev) => prev + TEACHER_PAGE_SIZE)}
+                        onClick={loadMoreTeachers}
+                        disabled={isLoadingTeachersMore}
                       >
-                        더 보기 ({Math.min(TEACHER_PAGE_SIZE, teacherSummaries.length - teacherDisplayLimit)}명)
+                        더 보기 ({Math.min(TEACHER_PAGE_SIZE, teachersTotalCount - teacherDisplayLimit)}명)
                       </Button>
                     </div>
                   )}
