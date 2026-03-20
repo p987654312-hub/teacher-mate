@@ -1601,6 +1601,7 @@ export default function DashboardPage() {
                                             dataKey="value"
                                             strokeWidth={0}
                                             cursor="pointer"
+                                            isAnimationActive={false}
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>
@@ -2738,24 +2739,23 @@ export default function DashboardPage() {
                                       }
                                           }}
                                         >
-                                          <ResponsiveContainer width={38} height={38}>
-                                            <PieChart>
-                                              <Pie
-                                                data={pieData.length ? pieData : [{ name: "a", value: 100, fill: "#e2e8f0" }]}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius="30%"
-                                                outerRadius="95%"
-                                                dataKey="value"
-                                                strokeWidth={0}
-                                                cursor="pointer"
-                                              >
-                                                {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
-                                                  <Cell key={j} fill={d.fill} />
-                                                ))}
-                                              </Pie>
-                                            </PieChart>
-                                          </ResponsiveContainer>
+                                          <PieChart width={38} height={38}>
+                                            <Pie
+                                              data={pieData.length ? pieData : [{ name: "a", value: 100, fill: "#e2e8f0" }]}
+                                              cx="50%"
+                                              cy="50%"
+                                              innerRadius="30%"
+                                              outerRadius="95%"
+                                              dataKey="value"
+                                              strokeWidth={0}
+                                              cursor="pointer"
+                                              isAnimationActive={false}
+                                            >
+                                              {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
+                                                <Cell key={j} fill={d.fill} />
+                                              ))}
+                                            </Pie>
+                                          </PieChart>
                                           <span className="w-full text-center leading-tight text-slate-500 text-[8px] sm:text-[9px]">
                                             {c.label.length > 7 ? `${c.label.slice(0, 7)}…` : c.label}
                                           </span>
@@ -2950,6 +2950,7 @@ export default function DashboardPage() {
                                             dataKey="value"
                                             strokeWidth={0}
                                             cursor="pointer"
+                                            isAnimationActive={false}
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>
