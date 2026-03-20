@@ -88,10 +88,16 @@ function AuthCallbackContent() {
         // 기존 사용자: 로그인 포인트는 비동기로 요청만 하고 대기하지 않음 (대시보드로 바로 이동)
         const token = session?.access_token;
         if (token) {
-          fetch("/api/points/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          }).catch(() => {});
+          // 로그인 포인트 반영이 끝난 뒤 대시보드로 이동해야
+          // 마일리지 현황/포인트 모달에서 "로그인 포인트"가 누락되지 않습니다.
+          try {
+            await fetch("/api/points/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            });
+          } catch {
+            // 포인트 적립 실패해도 로그인 자체는 유지
+          }
         }
 
         window.location.href = "/dashboard";
