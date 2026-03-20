@@ -3175,7 +3175,7 @@ export default function DashboardPage() {
             )}
 
             {/* 로그인 포인트 */}
-  {pointsDetail && pointsDetail.login > 0 && (
+            {pointsDetail && (
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex-1">
                   <div className="text-sm font-medium text-slate-700">로그인 포인트</div>

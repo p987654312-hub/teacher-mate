@@ -122,6 +122,20 @@ export default function CompleteProfilePage() {
         // ignore
       }
 
+      // 가입/프로필완료 직후에도 "당일 로그인" 포인트가 표시되도록 적립 처리
+      // (complete-profile 플로우에서는 auth/callback에서 /api/points/login이 호출되지 않는 경우가 있음)
+      try {
+        await fetch("/api/points/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+      } catch {
+        // ignore
+      }
+
       alert(`${name.trim()}님 가입되었습니다. 열정 포인트 100점으로 시작합니다.`);
       router.push("/dashboard");
     } catch (error) {
