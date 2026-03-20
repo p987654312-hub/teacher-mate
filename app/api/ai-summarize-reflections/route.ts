@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,21 +54,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const prompt = `[역할] 너는 교사가 작성한 연간 일일성찰일지를 요약 정리하는 전문가이다.
+    // 학교별 AI 프롬프트 오버라이드 반영
+    const meta = (user?.user_metadata ?? {}) as { schoolName?: string };
+    const schoolName = (meta.schoolName ?? "").trim();
+    let promptTemplates: Record<string, string> = {};
+    if (schoolName) {
+      const { data: settingsRow } = await supabase
+        .from("school_point_settings")
+        .select("settings_json")
+        .eq("school_name", schoolName)
+        .maybeSingle();
+      if (settingsRow?.settings_json) {
+        try {
+          const parsed = JSON.parse(settingsRow.settings_json as string) as Record<string, unknown>;
+          const raw = parsed.aiPromptTemplates;
+          if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+            promptTemplates = raw as Record<string, string>;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const getTemplate = (key: string) => {
+      const override = promptTemplates[key];
+      const base = (AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[key]?.template;
+      return (typeof override === "string" && override.trim() ? override.trim() : base) ?? "";
+    };
 
-[지시] 아래 일일성찰 기록들을 읽고, 교사의 성장 과정, 주요 경험, 깨달음, 개선점 등을 종합하여 500~1000자 정도의 성찰 요약문을 작성해줘.
-
-[형식 요구사항]
-- 자연스러운 문단 형태로 작성 (개조식 X)
-- 1인칭 시점("저는", "나는", "내가") 사용
-- 교사 본인의 성찰과 성장에 초점
-- 구체적인 경험과 배움을 포함
-- 전체적으로 긍정적이면서도 성찰적인 톤 유지
-
-[일일성찰 기록]
-${reflections}
-
-[출력] 위 일일성찰 기록을 바탕으로 500~1000자 정도의 성찰 요약문을 작성해줘. 인사말이나 제목 없이 바로 본문부터 시작할 것.`;
+    const template = getTemplate("reflection_summary");
+    if (!template) {
+      return NextResponse.json({ error: "reflection_summary 프롬프트 템플릿이 설정되어 있지 않습니다." }, { status: 500 });
+    }
+    const prompt = applyPromptTemplate(template, { reflections });
 
     // Gemini API 호출 - 키 로테이션(라운드로빈) + 한도 오류 시 다음 키로 재시도
     const { GoogleGenerativeAI } = await import("@google/generative-ai");

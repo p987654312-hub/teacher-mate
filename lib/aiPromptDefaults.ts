@@ -9,6 +9,7 @@ export type AiPromptKey =
   | "analysis_post"
   | "result_report"
   | "self_eval_sections"
+  | "reflection_summary"
   | "plan_outline"
   | "goal"
   | "effect"
@@ -37,6 +38,7 @@ export const AI_PROMPT_KEYS: AiPromptKey[] = [
   "plan_outline",       // 연간 계획 요약(개조식)
   "result_report",      // 5. 결과 보고서 작성
   "self_eval_sections", // 6. 자기실적평가서
+  "reflection_summary", // 성찰 탭 > 성찰 "AI로 요약"
   "analysis_post_rewrite", // 성찰 탭 > 사전사후결과분석 > AI로 글 다듬기
   "next_year_goal",       // 성찰 탭 > 내년 목표 > AI 작성
 ];
@@ -175,6 +177,25 @@ export const AI_PROMPT_DEFAULTS: Record<AiPromptKey, AiPromptMeta> = {
   "dutyGoal": "라. 담당 업무 추진 목표 (개조식, 간단명료 어미, 200자 내외)",
   "dutyResult": "라. 담당 업무 추진 실적 (개조식, ~함/~임, 200자 내외)"
 }`,
+  },
+
+  reflection_summary: {
+    key: "reflection_summary",
+    label: "성찰 기록 요약(일일성찰)",
+    description: "성찰 탭의 'AI로 작성'에서 사용. 마일리지의 일일성찰기록을 참고해 500자 이내로 요약합니다.",
+    template: `[역할] 너는 교사가 작성한 일일성찰기록을 요약·정리하는 전문가이다.
+
+[지시] 아래 [일일성찰 기록]을 읽고, 교사의 성장 과정과 주요 경험, 깨달음, 개선점을 종합하여 **500자 이내**의 성찰 요약문을 작성해 줘.
+
+[요구사항]
+- 1인칭 시점 사용: "저는", "나는", "내가"
+- 인사말이나 제목 없이, 바로 본문부터 시작
+- 500자 초과 금지(가능하면 450자 안쪽을 목표)
+
+[일일성찰 기록]
+{{reflections}}
+
+[출력] 위 기록을 바탕으로 500자 이내 성찰 요약문 1문단만 출력`,
   },
 
   plan_outline: {
@@ -358,15 +379,19 @@ export const AI_PROMPT_DEFAULTS: Record<AiPromptKey, AiPromptMeta> = {
   next_year_goal: {
     key: "next_year_goal",
     label: "내년도 목표 AI 작성",
-    description: "성찰 > 성찰·내년 목표 탭의 '내년 목표'에서 사용. 결과 분석을 참고해 필요한 역량 계발을 중점으로, 수업·학생지도 등을 적당히 다루어 300자 이내로 작성합니다.",
+    description: "성찰 > 성찰·내년 목표 탭의 '내년 목표'에서 사용. 결과 분석을 참고해 내년에 계발할 핵심 역량을 뽑고, 목표 키워드 3개를 반영해 300자 이내로 작성합니다.",
     template: `[역할] 너는 교원 역량 개발을 지원하는 전문가이다.
 
 [지시] 아래 [결과 분석]을 참고하여, 해당 교사가 **내년에 계발할 필요가 있는 내용**을 중점으로 하고, 일반적인 교사의 수업·학생 지도 등도 적당히 다루어 **내년도 목표**를 작성한다. **300자 이내**로 쓸 것. 인사말 없이 본문만 출력.
 
+1) 먼저 [목표 키워드 3개]를 뽑아라. 키워드는 짧은 표현(예: 수업 설계, 학생 맞춤지도, 전문성 신장 등)으로 작성하고, 서로 겹치지 않게 할 것.
+2) [목표 키워드 3개]를 **내년도 목표 문장 안에 각각 1회 이상**(있는 그대로) 반영해 작성할 것.
+3) 출력 형식은 1문단이며, 앞부분에 **(키워드: 키1, 키2, 키3)** 형태로 자연스럽게 넣고, 이어서 목표 문장을 작성하라.
+
 [결과 분석]
 {{resultAnalysis}}
 
-[출력] 300자 이내로 내년도 목표만 출력.`,
+[출력] 위 형식 그대로 300자 이내로 내년도 목표만 출력.`,
   },
 };
 

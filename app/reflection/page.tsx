@@ -1054,17 +1054,28 @@ export default function ReflectionPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-base font-semibold text-slate-800">정량 목표 달성도</h2>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90" onClick={generateReport} disabled={aiLoading}>
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    {aiLoading ? "작성 중..." : goalAchievementText.trim() ? "AI 어시스트 재작성" : "AI 어시스트 활용하여 초안 작성"}
-                  </Button>
+                  {!goalAchievementText.trim() && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                      onClick={generateReport}
+                      disabled={aiLoading}
+                    >
+                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                      {aiLoading ? "작성 중..." : "AI 어시스트 활용하여 초안 작성"}
+                    </Button>
+                  )}
                   <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={saveGoalAchievementAndReflection} disabled={savingStatus.report === "saving"}>
                     <Save className="mr-1.5 h-3.5 w-3.5" />
                     {savingStatus.report === "saving" ? "저장 중..." : savingStatus.report === "saved" ? "저장됨" : "저장"}
                   </Button>
                 </div>
               </div>
-              <p className="mt-1 text-xs text-slate-500">정량 목표 달성도 : 개조식으로 작성해 주세요. AI 버튼을 누르면 계획·마일리지 정보를 바탕으로 초안을 채워 줍니다. 필요한 내용으로 편집해 주세요.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                정량 목표 달성도 : 개조식으로 작성해 주세요.
+                {goalAchievementText.trim() ? "" : " AI 버튼은 계획·마일리지 정보를 바탕으로 초안을 작성할 때만 사용할 수 있습니다."}
+              </p>
               <Textarea
                 placeholder="정량 목표 달성도를 개조식으로 작성하세요."
                 value={goalAchievementText}
