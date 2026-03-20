@@ -179,7 +179,13 @@ export default function DashboardPage() {
   const [visibleMileagePieCount, setVisibleMileagePieCount] = useState(0);
   const [relativeDifficulty, setRelativeDifficulty] = useState<Record<string, 1 | 2 | 3> | null>(null);
   const [totalPoints, setTotalPoints] = useState<number | null>(null);
-  const [pointsDetail, setPointsDetail] = useState<{ base: number; login: number; mileage: number; total: number } | null>(null);
+  const [pointsDetail, setPointsDetail] = useState<{
+    base: number;
+    login: number;
+    mileage: number;
+    total: number;
+    loginPointsPerDay: number;
+  } | null>(null);
   const [mileagePointItems, setMileagePointItems] = useState<
     Array<{ key: string; label: string; unit: string; sum: number; pointPerUnit: number; points: number }>
   >([]);
@@ -507,7 +513,13 @@ export default function DashboardPage() {
                 const pointsJ = await pointsRes.json();
                 if (typeof pointsJ.total === "number") {
                   setTotalPoints(pointsJ.total);
-                  setPointsDetail({ base: pointsJ.base ?? 100, login: pointsJ.login ?? 0, mileage: pointsJ.mileage ?? 0, total: pointsJ.total });
+                  setPointsDetail({
+                    base: pointsJ.base ?? 100,
+                    login: pointsJ.login ?? 0,
+                    mileage: pointsJ.mileage ?? 0,
+                    total: pointsJ.total,
+                    loginPointsPerDay: pointsJ.loginPointsPerDay ?? 2,
+                  });
                   setMileagePointItems(Array.isArray(pointsJ.mileageBreakdown) ? pointsJ.mileageBreakdown : []);
                 }
               }
@@ -564,7 +576,16 @@ export default function DashboardPage() {
                   mileageSummary: mileageSummaryCache,
                   relativeDifficulty: payload.relativeDifficulty ?? null,
                   totalPoints: typeof pointsJ?.total === "number" ? pointsJ.total : null,
-                  pointsDetail: typeof pointsJ?.total === "number" ? { base: pointsJ.base ?? 100, login: pointsJ.login ?? 0, mileage: pointsJ.mileage ?? 0, total: pointsJ.total } : null,
+                  pointsDetail:
+                    typeof pointsJ?.total === "number"
+                      ? {
+                          base: pointsJ.base ?? 100,
+                          login: pointsJ.login ?? 0,
+                          mileage: pointsJ.mileage ?? 0,
+                          total: pointsJ.total,
+                          loginPointsPerDay: pointsJ.loginPointsPerDay ?? 2,
+                        }
+                      : null,
                   mileagePointItems: Array.isArray(pointsJ?.mileageBreakdown) ? pointsJ.mileageBreakdown : [],
                   diagnosisRadarLabels: diagnosisRadarLabelsCache,
                   schoolCategories: categoriesForMileage ?? null,
@@ -1063,13 +1084,14 @@ export default function DashboardPage() {
           const pointsRes = await fetch("/api/points/me", { headers: { Authorization: `Bearer ${token}` } });
           if (pointsRes.ok) {
             const pointsJ = await pointsRes.json();
-            if (typeof pointsJ.total === "number") {
+              if (typeof pointsJ.total === "number") {
               setTotalPoints(pointsJ.total);
               setPointsDetail({
                 base: pointsJ.base ?? 100,
                 login: pointsJ.login ?? 0,
                 mileage: pointsJ.mileage ?? 0,
                 total: pointsJ.total,
+                  loginPointsPerDay: pointsJ.loginPointsPerDay ?? 2,
               });
               setMileagePointItems(Array.isArray(pointsJ.mileageBreakdown) ? pointsJ.mileageBreakdown : []);
             }
@@ -2701,6 +2723,7 @@ export default function DashboardPage() {
                                           login: json.login ?? 0,
                                           mileage: json.mileage ?? 0,
                                           total: json.total ?? 0,
+                                          loginPointsPerDay: json.loginPointsPerDay ?? 2,
                                         });
                                         setMileagePointItems(Array.isArray(json.mileageBreakdown) ? json.mileageBreakdown : []);
                                       } catch (err: any) {
@@ -3073,11 +3096,11 @@ export default function DashboardPage() {
             )}
 
             {/* 로그인 포인트 */}
-            {pointsDetail && pointsDetail.login > 0 && (
+  {pointsDetail && pointsDetail.login > 0 && (
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex-1">
                   <div className="text-sm font-medium text-slate-700">로그인 포인트</div>
-                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 로그인 시 +{pointSettings?.login_points ?? 2}점 (누계)</div>
+                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 로그인 시 +{pointsDetail.loginPointsPerDay ?? 2}점 (누계)</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-800 ml-4">
                   {pointsDetail.login.toLocaleString()}점

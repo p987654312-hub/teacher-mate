@@ -687,7 +687,16 @@ export default function PlanPage() {
         try {
           const [catRes, preRes, diagnosisSettingsRes, planRes] = await Promise.all([
             fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
-            supabase.from("diagnosis_results").select("domain1,domain2,domain3,domain4,domain5,domain6,created_at,raw_answers,category_scores").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            // 사전검사 결과(= diagnosis_type이 pre이거나 null)만 가져온다.
+            // 사후검사를 실시하면 최근 row가 post가 되면서 사전 그래프가 덮어써지는 치명 오류를 방지한다.
+            supabase
+              .from("diagnosis_results")
+              .select("domain1,domain2,domain3,domain4,domain5,domain6,created_at,raw_answers,category_scores")
+              .eq("user_email", email)
+              .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
             fetch("/api/diagnosis-settings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
             supabase.from("development_plans").select("*").eq("user_email", email).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           ]);

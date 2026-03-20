@@ -59,6 +59,8 @@ export async function POST(req: Request) {
 
     let mileage = 0;
     let mileageBreakdown: MileageBreakdownItem[] = [];
+    // "하루 1회 로그인 시 +N점" 문구용: 학교 포인트 설정에서 읽는다.
+    let loginPointsPerDay = 2;
 
     if (schoolName) {
       const [settingsRes, entriesRes, planRes] = await Promise.all([
@@ -74,6 +76,7 @@ export async function POST(req: Request) {
       ]);
 
       const { points: settings, categories } = parseStored(settingsRes.data);
+      loginPointsPerDay = (settings.login_points ?? 2) as number;
       const unitByKey: Record<string, string> = {};
       const labelByKey: Record<string, string> = {};
       categories.forEach((c) => {
@@ -112,6 +115,7 @@ export async function POST(req: Request) {
       login,
       mileage,
       mileageBreakdown,
+      loginPointsPerDay,
     });
   } catch (e) {
     console.error("admin/points-by-email:", e);
