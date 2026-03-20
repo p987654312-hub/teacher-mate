@@ -289,31 +289,14 @@ export default function DashboardPage() {
     return () => window.clearTimeout(id);
   }, [showTeacherView, mileageSummary?.overallProgress]);
 
-  // 메인 대시보드(교사 보기): 파이 6개 순차 표시
+  // 메인 대시보드(교사 보기): 파이차트는 순차 표시하지 않고 동시에 표시
   useEffect(() => {
     if (!showTeacherView || !mileageSummary?.categories?.length) {
       setVisibleMileagePieCount(0);
       return;
     }
-    setVisibleMileagePieCount(0);
-    const total = mileageSummary.categories.length;
-    let timer: number | null = null;
-    const kickoff = window.setTimeout(() => {
-      timer = window.setInterval(() => {
-        setVisibleMileagePieCount((prev) => {
-          if (prev >= total) {
-            if (timer) window.clearInterval(timer);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 260);
-    }, 360);
-    return () => {
-      window.clearTimeout(kickoff);
-      if (timer) window.clearInterval(timer);
-    };
-  }, [showTeacherView, mileageSummary?.categories?.length, mileageSummary?.overallProgress]);
+    setVisibleMileagePieCount(mileageSummary.categories.length);
+  }, [showTeacherView, mileageSummary?.categories?.length]);
 
   // 보호된 라우트: 로그인하지 않은 사용자는 / 로 리다이렉트
   useEffect(() => {
@@ -500,8 +483,13 @@ export default function DashboardPage() {
             }
             if (mileageSummaryPayload) {
               setMileageSummary(mileageSummaryPayload);
+              // 파이차트가 순차 페이드 없이, 진단 레이더와 같은 타이밍에 같이 보이도록
+              const isTeacherViewForThisLoad = role === "teacher" || (role === "admin" && viewMode === "teacher");
+              if (isTeacherViewForThisLoad) setVisibleMileagePieCount(mileageSummaryPayload.categories.length);
             } else {
               setMileageSummary(null);
+              const isTeacherViewForThisLoad = role === "teacher" || (role === "admin" && viewMode === "teacher");
+              if (isTeacherViewForThisLoad) setVisibleMileagePieCount(0);
             }
           });
 
@@ -1406,16 +1394,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-3 h-[220px] w-full">
-                  {isLoadingDiagnosis ? (
-                    <p className="text-[11px] text-slate-400">
-                      진단 결과를 불러오는 중입니다...
-                    </p>
-                  ) : !diagnosisSummary ? (
-                    <p className="text-[11px] text-slate-400">
-                      아직 진단 결과가 없습니다. 아래 버튼을 눌러 첫 진단을
-                      시작해 보세요.
-                    </p>
-                  ) : (
+                  {diagnosisSummary ? (
                     <DashboardDiagnosisRadar
                       data={diagnosisRadarLabels.slice(0, 6).map((name, i) => ({
                         name,
@@ -1429,6 +1408,15 @@ export default function DashboardPage() {
                         ][i] ?? 0,
                       }))}
                     />
+                  ) : isLoadingDiagnosis ? (
+                    <p className="text-[11px] text-slate-400">
+                      진단 결과를 불러오는 중입니다...
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">
+                      아직 진단 결과가 없습니다. 아래 버튼을 눌러 첫 진단을
+                      시작해 보세요.
+                    </p>
                   )}
                 </div>
 
