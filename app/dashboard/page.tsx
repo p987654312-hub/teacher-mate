@@ -400,7 +400,6 @@ export default function DashboardPage() {
           const preRes = { data: payload.preRes?.data, error: payload.preRes?.error };
           const postRes = { data: payload.postRes?.data };
           const planRes = { data: payload.planRes?.data };
-          const mileageRes = { data: payload.mileageRes?.data ?? [] };
           const catJson = { categories: payload.categories ?? null } as { categories?: CategoryConfigItem[] };
           const diagnosisSettingsRes = payload.diagnosisSettings ?? {};
           const diffRes = payload.relativeDifficulty != null ? { ok: true, json: () => Promise.resolve(payload.relativeDifficulty) } : null;
@@ -408,7 +407,8 @@ export default function DashboardPage() {
 
           const data = preRes.data;
           const { data: planRow } = planRes;
-          const mileageRows = mileageRes.data ?? [];
+          const mileageStartedPayload = !!payload.mileageStarted;
+          const mileageSummaryPayload = payload.mileageSummary as typeof mileageSummary | null;
           const diagSettings = diagnosisSettingsRes as { domains?: { name?: string }[]; useSurvey?: boolean };
           const domainCount = Math.min(6, Math.max(2, Array.isArray(diagSettings?.domains) ? diagSettings.domains.length : 6));
 
@@ -449,7 +449,7 @@ export default function DashboardPage() {
               { value: String(planGoalsRowInit?.other_annual_goal ?? "").trim(), label: PLAN_CATEGORY_LABELS_INIT.other },
             ];
             setPlanMissingGoals(goalsInit.filter((g) => !g.value).map((g) => g.label));
-            if (mileageRows.length > 0) setMileageStarted(true);
+            if (mileageStartedPayload) setMileageStarted(true);
 
             let categoriesForMileage: CategoryConfigItem[] | undefined;
             if (Array.isArray(catJson.categories) && catJson.categories.length === 6) {
@@ -457,26 +457,11 @@ export default function DashboardPage() {
               setSchoolCategories(catJson.categories);
               if (schoolName) localStorage.setItem(`teacher_mate_category_settings_${schoolName}`, JSON.stringify(catJson.categories));
             }
-
-            const planGoals: Record<string, number> = {};
-            MILEAGE_CATEGORIES.forEach((c) => {
-              const key = PLAN_GOAL_KEYS[c.key];
-              const raw = String(planGoalsRowInit?.[key] ?? "").trim();
-              planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
-            });
-            let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
-            if (categoriesForMileage?.length === 6) {
-              const healthCat = categoriesForMileage.find((c) => c.key === "health");
-              if (healthCat?.unit === "km") healthGoalUnit = "거리";
-              else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
+            if (mileageSummaryPayload) {
+              setMileageSummary(mileageSummaryPayload);
+            } else {
+              setMileageSummary(null);
             }
-            const { categories, overallProgress } = computeMileageProgress(
-              mileageRows as { content: string; category: string }[],
-              planGoals,
-              healthGoalUnit,
-              categoriesForMileage
-            );
-            setMileageSummary({ overallProgress, categories });
           });
 
           if (token && diffRes) {
@@ -532,24 +517,8 @@ export default function DashboardPage() {
               const planFilledRatio = planRow ? getPlanFillRatio(planRow) : 0;
               let categoriesForMileage: CategoryConfigItem[] | undefined;
               if (Array.isArray(catJson.categories) && catJson.categories.length === 6) categoriesForMileage = catJson.categories;
-              const planGoals: Record<string, number> = {};
-              MILEAGE_CATEGORIES.forEach((c) => {
-                const key = PLAN_GOAL_KEYS[c.key];
-                const raw = String(planGoalsRowInit?.[key] ?? "").trim();
-                planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
-              });
-              let healthGoalUnit: "시간" | "거리" = (planGoalsRowInit?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
-              if (categoriesForMileage?.length === 6) {
-                const healthCat = categoriesForMileage.find((c) => c.key === "health");
-                if (healthCat?.unit === "km") healthGoalUnit = "거리";
-                else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
-              }
-              const { categories, overallProgress } = computeMileageProgress(
-                mileageRows as { content: string; category: string }[],
-                planGoals,
-                healthGoalUnit,
-                categoriesForMileage
-              );
+              const mileageStartedCache = !!payload.mileageStarted;
+              const mileageSummaryCache = (payload.mileageSummary as typeof mileageSummary | null) ?? null;
               const diagnosisRadarLabelsCache = Array.isArray(diagSettings?.domains) && diagSettings.domains.length >= 2 && diagSettings.domains.length <= 6
                 ? diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
                 : DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name);
@@ -562,8 +531,8 @@ export default function DashboardPage() {
                   diagnosisSummary: diagnosisSummaryCache,
                   hasPostDiagnosis: !!postRes.data,
                   planCompleted: planFilledRatio >= 0.7,
-                  mileageStarted: mileageRows.length > 0,
-                  mileageSummary: { overallProgress, categories },
+                  mileageStarted: mileageStartedCache,
+                  mileageSummary: mileageSummaryCache,
                   relativeDifficulty: payload.relativeDifficulty ?? null,
                   totalPoints: typeof pointsJ?.total === "number" ? pointsJ.total : null,
                   pointsDetail: typeof pointsJ?.total === "number" ? { base: pointsJ.base ?? 100, login: pointsJ.login ?? 0, mileage: pointsJ.mileage ?? 0, total: pointsJ.total } : null,
@@ -1644,7 +1613,6 @@ export default function DashboardPage() {
                                             dataKey="value"
                                             strokeWidth={0}
                                             cursor="pointer"
-                                            isAnimationActive={false}
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>
@@ -2792,7 +2760,6 @@ export default function DashboardPage() {
                                               dataKey="value"
                                               strokeWidth={0}
                                               cursor="pointer"
-                                              isAnimationActive={false}
                                             >
                                               {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
                                                 <Cell key={j} fill={d.fill} />
@@ -2993,7 +2960,6 @@ export default function DashboardPage() {
                                             dataKey="value"
                                             strokeWidth={0}
                                             cursor="pointer"
-                                            isAnimationActive={false}
                                           >
                                             {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
                                           </Pie>

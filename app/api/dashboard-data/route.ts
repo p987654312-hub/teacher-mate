@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { computeMileageProgress } from "@/lib/mileageProgress";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -7,6 +8,15 @@ function getSupabaseAdmin() {
   if (!url || !key) throw new Error("Missing Supabase env");
   return createClient(url, key);
 }
+
+const PLAN_GOAL_KEYS: Record<string, string> = {
+  training: "annual_goal",
+  class_open: "expense_annual_goal",
+  community: "community_annual_goal",
+  book_edutech: "book_annual_goal",
+  health: "education_annual_goal",
+  other: "other_annual_goal",
+};
 
 /** 교사/관리자 대시보드용 데이터를 한 번에 반환 (클라이언트 요청 1회로 체감 속도 개선) */
 export async function GET(req: Request) {
@@ -65,11 +75,38 @@ export async function GET(req: Request) {
       fetch(`${origin}/api/points/me`, { headers: auth }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
 
+    const planRow = planRes.data as any;
+    const healthGoalUnit =
+      planRow?.education_annual_goal_unit === "거리" ? "거리" : "시간";
+
+    const planGoals: Record<string, number> = {};
+    Object.entries(PLAN_GOAL_KEYS).forEach(([key, col]) => {
+      const raw = String(planRow?.[col] ?? "").trim();
+      planGoals[key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
+    });
+
+    const categoriesForMileage =
+      (catRes as { categories?: any }).categories &&
+      Array.isArray((catRes as { categories?: any }).categories) &&
+      (catRes as { categories?: any }).categories.length === 6
+        ? (catRes as { categories?: any }).categories
+        : undefined;
+
+    const mileageEntries = (mileageRes.data ?? []) as { content: string; category: string }[];
+    const { categories: mileageCategories, overallProgress } = computeMileageProgress(
+      mileageEntries,
+      planGoals,
+      healthGoalUnit,
+      categoriesForMileage
+    );
+    const mileageStarted = mileageEntries.length > 0;
+
     return NextResponse.json({
       preRes: { data: preRes.data, error: preRes.error },
       postRes: { data: postRes.data, error: postRes.error },
       planRes: { data: planRes.data, error: planRes.error },
-      mileageRes: { data: mileageRes.data ?? [], error: mileageRes.error },
+      mileageStarted,
+      mileageSummary: { overallProgress, categories: mileageCategories },
       categories: (catRes as { categories?: unknown }).categories ?? null,
       diagnosisSettings: diagnosisSettingsRes,
       relativeDifficulty: diffRes,
