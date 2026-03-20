@@ -2168,6 +2168,7 @@ export default function DashboardPage() {
                             // 현재 화면에서 이름/단위가 이상해졌을 때, 최초 로드된(현재 학교) 저장값으로 즉시 되돌림
                             setCategoryConfig(categoryConfigSaved);
                             setSchoolCategories(categoryConfigSaved);
+                            setEditingLabelKey(null);
                           }}
                         >
                           초기화(S초등학교설정값)하기
