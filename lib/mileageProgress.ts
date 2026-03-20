@@ -139,7 +139,9 @@ function parseByUnit(text: string, unit: string): number {
     case "분":
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*분/g) || 0;
     case "회":
-      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 0;
+      // "1회/2회"처럼 명시가 없더라도, 마일리지 기록 1건은 최소 1회로 반영
+      // (수업공개/학습공동체 AI 분류 결과가 "회" 표현을 누락하는 경우가 있어 누락 방지)
+      return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) || 1;
     case "건": {
       // 시간·거리 무관 1개당 1건. 내용에 N회·N건이 있으면 그 수만큼 건수 합산
       const from건 = collectUnitValues(text, /(\d+(?:\.\d+)?)\s*건/g);
