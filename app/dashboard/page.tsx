@@ -235,6 +235,8 @@ export default function DashboardPage() {
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfigItem[]>(() => [...DEFAULT_CATEGORIES]);
   const [categoryConfigSaved, setCategoryConfigSaved] = useState<CategoryConfigItem[]>(() => [...DEFAULT_CATEGORIES]);
   const [savingCategoryConfig, setSavingCategoryConfig] = useState(false);
+  const initialCategoryConfigRef = useRef<CategoryConfigItem[]>([...DEFAULT_CATEGORIES]);
+  const [resettingCategoryConfig, setResettingCategoryConfig] = useState(false);
   const [schoolCategories, setSchoolCategories] = useState<CategoryConfigItem[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [pointSettingsSaved, setPointSettingsSaved] = useState<Record<string, number>>({
@@ -247,6 +249,16 @@ export default function DashboardPage() {
     login_points: 2,
   });
   const [savingPointSettings, setSavingPointSettings] = useState(false);
+  const initialPointSettingsRef = useRef<Record<string, number>>({
+    training: 1,
+    class_open: 1,
+    community: 1,
+    book_edutech: 1,
+    health: 1,
+    other: 1,
+    login_points: 2,
+  });
+  const [resettingPointSettings, setResettingPointSettings] = useState(false);
   const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
 
   const MILEAGE_CATEGORIES = [
@@ -773,6 +785,7 @@ export default function DashboardPage() {
               const settings = { ...defaultSettings, ...j.settings };
               setPointSettings(settings);
               setPointSettingsSaved(settings);
+              initialPointSettingsRef.current = { ...settings };
             }
             if (Array.isArray(j.categories) && j.categories.length > 0) {
               const merged = DEFAULT_CATEGORIES.map((d) => {
@@ -781,6 +794,7 @@ export default function DashboardPage() {
               });
               setCategoryConfig(merged);
               setCategoryConfigSaved(merged);
+              initialCategoryConfigRef.current = merged.map((x) => ({ ...x }));
               setSchoolCategories(merged); // 마일리지 카드에도 즉시 반영
               // localStorage에도 저장
               localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(merged));
@@ -807,6 +821,7 @@ export default function DashboardPage() {
           const settings = { ...defaultSettings, ...parsed };
           setPointSettings(settings);
           setPointSettingsSaved(settings);
+          initialPointSettingsRef.current = { ...settings };
         }
       } catch {
         // ignore
@@ -2164,14 +2179,30 @@ export default function DashboardPage() {
                           size="sm"
                           variant="outline"
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          disabled={resettingCategoryConfig}
                           onClick={() => {
-                            // 현재 화면에서 이름/단위가 이상해졌을 때, 최초 로드된(현재 학교) 저장값으로 즉시 되돌림
-                            setCategoryConfig(categoryConfigSaved);
-                            setSchoolCategories(categoryConfigSaved);
-                            setEditingLabelKey(null);
+                            (async () => {
+                              try {
+                                setResettingCategoryConfig(true);
+                                const initCats = initialCategoryConfigRef.current.map((x) => ({ ...x }));
+                                await savePointAndCategorySettings({
+                                  categories: initCats,
+                                  settings: { ...initialPointSettingsRef.current },
+                                });
+                                setCategoryConfig(initCats);
+                                setCategoryConfigSaved(initCats);
+                                setSchoolCategories(initCats);
+                                if (userSchool) {
+                                  localStorage.setItem(`teacher_mate_category_settings_${userSchool}`, JSON.stringify(initCats));
+                                }
+                                setEditingLabelKey(null);
+                              } finally {
+                                setResettingCategoryConfig(false);
+                              }
+                            })();
                           }}
                         >
-                          초기화(S초등학교설정값)하기
+                          {resettingCategoryConfig ? "초기화 중..." : "초기화(S초등학교설정값)하기"}
                         </Button>
                         <Button
                           type="button"
@@ -2323,12 +2354,28 @@ export default function DashboardPage() {
                           size="sm"
                           variant="outline"
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          disabled={resettingPointSettings}
                           onClick={() => {
-                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림
-                            setPointSettings(pointSettingsSaved);
+                            (async () => {
+                              try {
+                                setResettingPointSettings(true);
+                                const initSettings = { ...initialPointSettingsRef.current };
+                              await savePointAndCategorySettings({
+                                settings: initSettings,
+                                categories: initialCategoryConfigRef.current,
+                              });
+                                setPointSettings(initSettings);
+                                setPointSettingsSaved(initSettings);
+                                if (userSchool && typeof window !== "undefined") {
+                                  localStorage.setItem(`teacher_mate_point_settings_${userSchool}`, JSON.stringify(initSettings));
+                                }
+                              } finally {
+                                setResettingPointSettings(false);
+                              }
+                            })();
                           }}
                         >
-                          초기화(S초등학교설정값)하기
+                          {resettingPointSettings ? "초기화 중..." : "초기화(S초등학교설정값)하기"}
                         </Button>
                         <Button
                           type="button"
