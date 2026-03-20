@@ -307,8 +307,8 @@ export default function DashboardPage() {
           }
           return prev + 1;
         });
-      }, 120);
-    }, 220);
+      }, 260);
+    }, 360);
     return () => {
       window.clearTimeout(kickoff);
       if (timer) window.clearInterval(timer);
