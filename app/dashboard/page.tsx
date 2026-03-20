@@ -175,6 +175,8 @@ export default function DashboardPage() {
     overallProgress: number;
     categories: { key: string; label: string; progress: number; sum?: number; goal?: number; unit?: string }[];
   } | null>(null);
+  const [animatedMileageProgress, setAnimatedMileageProgress] = useState(0);
+  const [visibleMileagePieCount, setVisibleMileagePieCount] = useState(0);
   const [relativeDifficulty, setRelativeDifficulty] = useState<Record<string, 1 | 2 | 3> | null>(null);
   const [totalPoints, setTotalPoints] = useState<number | null>(null);
   const [pointsDetail, setPointsDetail] = useState<{ base: number; login: number; mileage: number; total: number } | null>(null);
@@ -274,6 +276,44 @@ export default function DashboardPage() {
     entries: { id: string; content: string; created_at: string }[];
   } | null>(null);
   const [showAdminMileageDetail, setShowAdminMileageDetail] = useState(false);
+
+  // 메인 대시보드(교사 보기): 성장 여정 바/비행기 동시 이동 애니메이션
+  useEffect(() => {
+    if (!showTeacherView || !mileageSummary) {
+      setAnimatedMileageProgress(0);
+      return;
+    }
+    const target = Math.min(100, Math.max(0, mileageSummary.overallProgress));
+    setAnimatedMileageProgress(0);
+    const id = window.setTimeout(() => setAnimatedMileageProgress(target), 40);
+    return () => window.clearTimeout(id);
+  }, [showTeacherView, mileageSummary?.overallProgress]);
+
+  // 메인 대시보드(교사 보기): 파이 6개 순차 표시
+  useEffect(() => {
+    if (!showTeacherView || !mileageSummary?.categories?.length) {
+      setVisibleMileagePieCount(0);
+      return;
+    }
+    setVisibleMileagePieCount(0);
+    const total = mileageSummary.categories.length;
+    let timer: number | null = null;
+    const kickoff = window.setTimeout(() => {
+      timer = window.setInterval(() => {
+        setVisibleMileagePieCount((prev) => {
+          if (prev >= total) {
+            if (timer) window.clearInterval(timer);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 120);
+    }, 220);
+    return () => {
+      window.clearTimeout(kickoff);
+      if (timer) window.clearInterval(timer);
+    };
+  }, [showTeacherView, mileageSummary?.categories?.length, mileageSummary?.overallProgress]);
 
   // 보호된 라우트: 로그인하지 않은 사용자는 / 로 리다이렉트
   useEffect(() => {
@@ -1554,17 +1594,17 @@ export default function DashboardPage() {
                             <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                             <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                               <div
-                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500 animate-pulse"
-                                style={{ width: `${Math.min(100, Math.max(0, mileageSummary.overallProgress))}%`, minWidth: mileageSummary.overallProgress > 0 ? 2 : 0 }}
+                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-700"
+                                style={{ width: `${animatedMileageProgress}%`, minWidth: animatedMileageProgress > 0 ? 2 : 0 }}
                               />
                               <div
-                                className="absolute bottom-full left-0 mb-0.5 flex items-center gap-1 transition-all duration-500"
+                                className="absolute bottom-full left-0 mb-0.5 flex items-center gap-1 transition-all duration-700"
                                 style={{
-                                  left: `${Math.min(100, Math.max(0, mileageSummary.overallProgress))}%`,
+                                  left: `${animatedMileageProgress}%`,
                                   transform: "translate(-50%, 0)",
                                 }}
                               >
-                                <div className="rotate-[20deg] animate-bounce">
+                                <div className="rotate-[20deg]">
                                   <Plane className="h-[27px] w-[27px] text-[#6366f1]" strokeWidth={2} />
                                 </div>
                                 <button
@@ -1582,7 +1622,7 @@ export default function DashboardPage() {
                                 </button>
                               </div>
                             </div>
-                            <span className="shrink-0 text-sm text-slate-400">{Math.round(mileageSummary.overallProgress)}%</span>
+                            <span className="shrink-0 text-sm text-slate-400">{Math.round(animatedMileageProgress)}%</span>
                           </div>
                           {/* 6개 분야별 원그래프 (항목당 1개) */}
                           <div className="mt-[8px]">
@@ -1600,32 +1640,40 @@ export default function DashboardPage() {
                                 const progressText = goal > 0 || sum > 0
                                   ? `${Number(sum).toFixed(sum % 1 === 0 ? 0 : 1)}/${goal}${unit ? ` ${unit}` : ""}`
                                   : "";
+                                const isVisible = i < visibleMileagePieCount;
                                 return (
-                                  <div key={c.key} className="flex flex-col items-center gap-1">
+                                  <div
+                                    key={c.key}
+                                    className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
+                                  >
                                     <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-                                      <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                          <Pie
-                                            data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius="55%"
-                                            outerRadius="95%"
-                                            dataKey="value"
-                                            strokeWidth={0}
-                                            cursor="pointer"
-                                            isAnimationActive={showAdminView ? false : true}
-                                          >
-                                            {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
-                                          </Pie>
-                                        </PieChart>
-                                      </ResponsiveContainer>
+                                      {isVisible ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <PieChart>
+                                            <Pie
+                                              data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
+                                              cx="50%"
+                                              cy="50%"
+                                              innerRadius="55%"
+                                              outerRadius="95%"
+                                              dataKey="value"
+                                              strokeWidth={0}
+                                              cursor="pointer"
+                                              isAnimationActive={showAdminView ? false : true}
+                                            >
+                                              {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
+                                            </Pie>
+                                          </PieChart>
+                                        </ResponsiveContainer>
+                                      ) : (
+                                        <div className="absolute inset-0 rounded-full border border-slate-200 bg-slate-50" />
+                                      )}
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <span className="text-[10px] font-semibold text-slate-600 sm:text-xs">{Math.round(c.progress)}%</span>
                                       </div>
                                     </div>
-                                    <span className="text-[10px] font-medium text-slate-600 leading-tight sm:text-xs">{c.label}</span>
-                                    {progressText && (
+                                    {isVisible && <span className="text-[10px] font-medium text-slate-600 leading-tight sm:text-xs">{c.label}</span>}
+                                    {isVisible && progressText && (
                                       <span className="text-[10px] text-slate-500 sm:text-xs">
                                         {progressText}
                                       </span>
@@ -2884,11 +2932,11 @@ export default function DashboardPage() {
                               <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                               <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                                 <div
-                                  className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500 animate-pulse"
+                                  className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500"
                                   style={{ width: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`, minWidth: t.mileageSummary.overallProgress > 0 ? 2 : 0 }}
                                 />
                                 <div
-                                  className="absolute bottom-full left-0 mb-0.5 transition-all duration-500 animate-bounce"
+                                  className="absolute bottom-full left-0 mb-0.5 transition-all duration-500"
                                   style={{
                                     left: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`,
                                     transform: "translate(-50%, 0) rotate(20deg)",
