@@ -203,6 +203,35 @@ export function parseValueFromContent(
 export type MileageEntryLike = { content: string; category: string };
 export type PlanGoalsLike = Record<string, number>;
 
+function parseYyMmDdFromContent(content: string): Date | null {
+  const text = (content ?? "").trim();
+  // 예: "25.03.05(수)" 또는 "25.03.05 ..."
+  const m = text.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+  if (!m) return null;
+  const yy = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  const dd = parseInt(m[3], 10);
+  if (!Number.isFinite(yy) || !Number.isFinite(mm) || !Number.isFinite(dd)) return null;
+  const fullYear = yy >= 0 && yy <= 99 ? 2000 + yy : yy;
+  const d = new Date(fullYear, mm - 1, dd);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** 마일리지 카운트에서 제외해야 하는지 판정 */
+export function isMileageEntryCountable(content: string, now: Date = new Date()): boolean {
+  const text = (content ?? "").trim();
+  if (!text) return false;
+  // "예정"이 포함되면 미래 활동으로 보고 제외
+  if (text.includes("예정")) return false;
+
+  const entryDate = parseYyMmDdFromContent(text);
+  if (!entryDate) return true; // 날짜를 못 읽으면 "미래 제외" 판단은 보수적으로 스킵
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const entryDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
+  return entryDay.getTime() <= today.getTime();
+}
+
 function getCategoryUnit(categoryKey: string, healthGoalUnit: "시간" | "거리", unitOverride?: string): string {
   if (unitOverride) return unitOverride;
   if (categoryKey === "training") return "시간";
@@ -233,6 +262,8 @@ export function computeMileageProgress(
     unitByKey[c.key] = c.unit;
   });
   entries.forEach((e) => {
+    // "예정" 또는 미래 날짜면 합산에서 제외
+    if (!isMileageEntryCountable(e.content)) return;
     const k = e.category;
     if (k && sumByCategory[k] !== undefined) {
       const unit = unitByKey[k];

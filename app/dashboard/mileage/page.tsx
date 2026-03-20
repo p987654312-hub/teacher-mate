@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
-import { parseValueFromContent, hasValidMileageFormat } from "@/lib/mileageProgress";
+import { parseValueFromContent, hasValidMileageFormat, isMileageEntryCountable } from "@/lib/mileageProgress";
 import { ArrowLeft, Calendar, Maximize2, Minimize2, NotebookPen, Pencil, Plane, Plus, Trash2 } from "lucide-react";
 
 const PLAN_GOAL_KEYS: Record<string, string> = {
@@ -1054,7 +1054,10 @@ export default function MileagePage() {
                         isEditing={editingId === e.id}
                         isNew={isNewEntry(e.created_at)}
                         isMoved={isRecentlyMoved(e.id)}
-                        isInvalidFormat={!hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit)}
+                        isInvalidFormat={
+                          !isMileageEntryCountable(e.content) ||
+                          !hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit)
+                        }
                       >
                         {editingId === e.id ? (
                           <>
@@ -1095,11 +1098,19 @@ export default function MileagePage() {
                           <>
                             <span
                               className={`min-w-0 flex-1 line-clamp-2 whitespace-pre-wrap ${
-                                !hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit) ? "text-slate-500" : "text-slate-700"
+                                !isMileageEntryCountable(e.content) || !hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit)
+                                  ? "text-slate-500"
+                                  : "text-slate-700"
                               }`}
-                              title={!hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit) ? "기록합산 불가, 적절한 양식으로 수정요망." : undefined}
+                              title={
+                                !isMileageEntryCountable(e.content) || !hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit)
+                                  ? "기록합산 불가(예정/미래 또는 형식 오류), 적절히 수정요망."
+                                  : undefined
+                              }
                             >
-                              {!hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit) ? `⚠️ ${e.content}` : e.content}
+                              {!isMileageEntryCountable(e.content) || !hasValidMileageFormat(e.content, c.key, healthGoalUnit, c.unit)
+                                ? `⚠️ ${e.content}`
+                                : e.content}
                             </span>
                             <div className="flex shrink-0 gap-0.5">
                               <button

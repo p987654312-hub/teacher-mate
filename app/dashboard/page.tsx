@@ -2226,6 +2226,20 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          disabled={savingCategoryConfig || JSON.stringify(categoryConfig) === JSON.stringify(categoryConfigSaved)}
+                          onClick={() => {
+                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림(반영은 '저장' 버튼에서 수행)
+                            setCategoryConfig(categoryConfigSaved);
+                            setSchoolCategories(categoryConfigSaved);
+                          }}
+                        >
+                          초기값(S초등학교) 설정값으로 설정
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
                           className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                           onClick={() => setShowPointSettings(false)}
                         >
@@ -2329,6 +2343,19 @@ export default function DashboardPage() {
                           }}
                         >
                           {savingPointSettings ? "저장 중..." : "저장"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          disabled={savingPointSettings || JSON.stringify(pointSettings) === JSON.stringify(pointSettingsSaved)}
+                          onClick={() => {
+                            // 현재 학교의 저장된 설정값으로 폼만 즉시 되돌림
+                            setPointSettings(pointSettingsSaved);
+                          }}
+                        >
+                          초기값(S초등학교) 설정값으로 설정
                         </Button>
                         <Button
                           type="button"
