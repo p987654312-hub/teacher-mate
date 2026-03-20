@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
 import { FileDown, MessageCircle, Printer, Save, Sparkles } from "lucide-react";
 
@@ -194,6 +195,10 @@ export default function ReflectionPage() {
   const [postResultId, setPostResultId] = useState<string | null>(null);
   const [analysisRewriteLoading, setAnalysisRewriteLoading] = useState(false);
   const [nextYearGoalAiLoading, setNextYearGoalAiLoading] = useState(false);
+  const [nextYearGoalKeywordsOpen, setNextYearGoalKeywordsOpen] = useState(false);
+  const [nextYearGoalKeywordsMode, setNextYearGoalKeywordsMode] = useState<"auto" | "manual">("auto");
+  const [nextYearGoalKeywords, setNextYearGoalKeywords] = useState<string[]>(["", "", ""]);
+  const nextYearGoalKeywordsRequestIdRef = useRef(0);
   const saveDraftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveEvidenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveNextYearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1118,38 +1123,14 @@ export default function ReflectionPage() {
                     size="sm"
                     className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
                     disabled={nextYearGoalAiLoading}
-                    onClick={async () => {
+                    onClick={() => {
                       if (!analysisPostText.trim()) {
                         alert("결과 분석이 없습니다. 먼저 「사전·사후 결과 분석」 탭에서 결과 분석을 작성하거나 AI로 생성해 주세요.");
                         return;
                       }
-                      setNextYearGoalAiLoading(true);
-                      try {
-                        const token = (await supabase.auth.getSession()).data.session?.access_token;
-                        if (!token) {
-                          alert("로그인이 필요합니다.");
-                          return;
-                        }
-                        const res = await fetch("/api/ai-recommend", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ type: "next_year_goal", resultAnalysis: analysisPostText }),
-                        });
-                        const json = await res.json();
-                        if (!res.ok) {
-                          alert(json?.error ?? "AI 작성에 실패했습니다.");
-                          return;
-                        }
-                        const text = (json.recommendation ?? "").trim();
-                        if (text) {
-                          hasUserEditedNextYearRef.current = true;
-                          setNextYearGoalText(text);
-                        }
-                      } catch {
-                        alert("AI 작성 중 오류가 발생했습니다.");
-                      } finally {
-                        setNextYearGoalAiLoading(false);
-                      }
+                      setNextYearGoalKeywordsMode("auto");
+                      setNextYearGoalKeywords(["", "", ""]);
+                      setNextYearGoalKeywordsOpen(true);
                     }}
                   >
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -1169,6 +1150,148 @@ export default function ReflectionPage() {
                 className="mt-3 min-h-[140px] resize-y rounded-lg border-slate-200 text-sm"
               />
             </Card>
+            <Dialog open={nextYearGoalKeywordsOpen} onOpenChange={setNextYearGoalKeywordsOpen}>
+              <DialogContent className="sm:max-w-[560px]">
+                <DialogHeader>
+                  <DialogTitle>내년도 목표 작성 방식(1 또는 2)</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">선택</Label>
+                    <RadioGroup
+                      className="flex flex-col gap-2"
+                      value={nextYearGoalKeywordsMode}
+                      onValueChange={(v) => {
+                        const nextMode = v === "manual" ? "manual" : "auto";
+                        setNextYearGoalKeywordsMode(nextMode);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <RadioGroupItem value="manual" id="nextYearGoalKeywordsManual" />
+                        <Label htmlFor="nextYearGoalKeywordsManual" className="cursor-pointer text-sm">
+                          1) 키워드 3개 입력
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <RadioGroupItem value="auto" id="nextYearGoalKeywordsAuto" />
+                        <Label htmlFor="nextYearGoalKeywordsAuto" className="cursor-pointer text-sm">
+                          2) 연간활동 결과 기반 자동 생성(AI)
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {nextYearGoalKeywordsMode === "manual" ? (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700">
+                        키워드 3개 (각각 1회 이상 목표 문장에 반영됩니다)
+                      </Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        <Input
+                          placeholder="키워드 1"
+                          value={nextYearGoalKeywords[0] ?? ""}
+                          onChange={(e) =>
+                            setNextYearGoalKeywords((prev) => [e.target.value, prev[1] ?? "", prev[2] ?? ""])
+                          }
+                          className="h-9 rounded-lg border-slate-200 text-sm"
+                        />
+                        <Input
+                          placeholder="키워드 2"
+                          value={nextYearGoalKeywords[1] ?? ""}
+                          onChange={(e) =>
+                            setNextYearGoalKeywords((prev) => [prev[0] ?? "", e.target.value, prev[2] ?? ""])
+                          }
+                          className="h-9 rounded-lg border-slate-200 text-sm"
+                        />
+                        <Input
+                          placeholder="키워드 3"
+                          value={nextYearGoalKeywords[2] ?? ""}
+                          onChange={(e) =>
+                            setNextYearGoalKeywords((prev) => [prev[0] ?? "", prev[1] ?? "", e.target.value])
+                          }
+                          className="h-9 rounded-lg border-slate-200 text-sm"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500">키워드는 직접 수정해도 됩니다.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-500">
+                        자동 생성은 결과 분석을 바탕으로 AI가 목표 키워드 3개와 내년도 목표를 함께 작성합니다.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-full border-slate-300"
+                      onClick={() => setNextYearGoalKeywordsOpen(false)}
+                      disabled={nextYearGoalAiLoading}
+                    >
+                      닫기
+                    </Button>
+                    <Button
+                      type="button"
+                      className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                      disabled={nextYearGoalAiLoading}
+                      onClick={async () => {
+                        if (!analysisPostText.trim()) {
+                          alert("결과 분석이 없습니다.");
+                          return;
+                        }
+                        const reqMode = nextYearGoalKeywordsMode;
+                        const cleaned = reqMode === "manual" ? nextYearGoalKeywords.map((k) => k.trim()).filter(Boolean) : [];
+                        if (reqMode === "manual" && cleaned.length !== 3) {
+                          alert("키워드 3개를 모두 입력해 주세요.");
+                          return;
+                        }
+                        setNextYearGoalAiLoading(true);
+                        try {
+                          const token = (await supabase.auth.getSession()).data.session?.access_token;
+                          if (!token) {
+                            alert("로그인이 필요합니다.");
+                            return;
+                          }
+                          const res = await fetch("/api/ai-recommend", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({
+                              type: "next_year_goal",
+                              resultAnalysis: analysisPostText,
+                              goalKeywords: cleaned,
+                            }),
+                          });
+                          const json = await res.json();
+                          if (!res.ok) {
+                            alert(json?.error ?? "AI 작성에 실패했습니다.");
+                            return;
+                          }
+                          const text = (json.recommendation ?? "").trim();
+                          if (text) {
+                            hasUserEditedNextYearRef.current = true;
+                            setNextYearGoalText(text);
+                            setNextYearGoalKeywordsOpen(false);
+                          }
+                        } catch {
+                          alert("AI 작성 중 오류가 발생했습니다.");
+                        } finally {
+                          setNextYearGoalAiLoading(false);
+                        }
+                      }}
+                    >
+                      {nextYearGoalAiLoading
+                        ? "작성 중..."
+                        : nextYearGoalKeywordsMode === "manual"
+                          ? "선택한 키워드로 목표 작성"
+                          : "자동 추천글로 목표 작성"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
           <TabsContent value="evidence" className="mt-0 space-y-4">
             <Card className="rounded-2xl border-slate-200/80 bg-white p-5 shadow-sm">

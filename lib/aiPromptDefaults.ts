@@ -17,6 +17,7 @@ export type AiPromptKey =
   | "plan_fill_rows"
   | "mileage_classify"
   | "analysis_post_rewrite"
+  | "next_year_goal_keywords"
   | "next_year_goal";
 
 export interface AiPromptMeta {
@@ -40,6 +41,7 @@ export const AI_PROMPT_KEYS: AiPromptKey[] = [
   "self_eval_sections", // 6. 자기실적평가서
   "reflection_summary", // 성찰 탭 > 성찰 "AI로 요약"
   "analysis_post_rewrite", // 성찰 탭 > 사전사후결과분석 > AI로 글 다듬기
+  "next_year_goal_keywords", // 성찰 탭 > 내년 목표 > 키워드 추천
   "next_year_goal",       // 성찰 탭 > 내년 목표 > AI 작성
 ];
 
@@ -379,12 +381,13 @@ export const AI_PROMPT_DEFAULTS: Record<AiPromptKey, AiPromptMeta> = {
   next_year_goal: {
     key: "next_year_goal",
     label: "내년도 목표 AI 작성",
-    description: "성찰 > 성찰·내년 목표 탭의 '내년 목표'에서 사용. 결과 분석을 참고해 내년에 계발할 핵심 역량을 뽑고, 목표 키워드 3개를 반영해 300자 이내로 작성합니다.",
+    description: "성찰 > 성찰·내년 목표 탭의 '내년 목표'에서 사용. 제공된(또는 AI가 추출한) 목표 키워드 3개를 반영해 300자 이내로 내년도 목표를 작성합니다.",
     template: `[역할] 너는 교원 역량 개발을 지원하는 전문가이다.
 
 [지시] 아래 [결과 분석]을 참고하여, 해당 교사가 **내년에 계발할 필요가 있는 내용**을 중점으로 하고, 일반적인 교사의 수업·학생 지도 등도 적당히 다루어 **내년도 목표**를 작성한다. **300자 이내**로 쓸 것. 인사말 없이 본문만 출력.
 
-1) 먼저 [목표 키워드 3개]를 뽑아라. 키워드는 짧은 표현(예: 수업 설계, 학생 맞춤지도, 전문성 신장 등)으로 작성하고, 서로 겹치지 않게 할 것.
+1) [목표 키워드 3개] (사용자가 제공): {{goalKeywordsText}}
+   - 만약 값이 비어있다면, 결과 분석에서 키워드 3개를 직접 뽑아 사용해도 된다.
 2) [목표 키워드 3개]를 **내년도 목표 문장 안에 각각 1회 이상**(있는 그대로) 반영해 작성할 것.
 3) 출력 형식은 1문단이며, 앞부분에 **(키워드: 키1, 키2, 키3)** 형태로 자연스럽게 넣고, 이어서 목표 문장을 작성하라.
 
@@ -392,6 +395,26 @@ export const AI_PROMPT_DEFAULTS: Record<AiPromptKey, AiPromptMeta> = {
 {{resultAnalysis}}
 
 [출력] 위 형식 그대로 300자 이내로 내년도 목표만 출력.`,
+  },
+  next_year_goal_keywords: {
+    key: "next_year_goal_keywords",
+    label: "내년도 목표 키워드 추천",
+    description: "성찰 > 성찰·내년 목표 탭의 '내년 목표'에서 사용. 결과 분석을 참고해 목표 키워드 3개를 추천합니다.",
+    template: `[역할] 너는 교원 역량 개발을 지원하는 전문가이다.
+
+[지시] 아래 [결과 분석]을 참고하여 해당 교사가 내년에 계발할 필요가 있는 내용을 3개의 목표 키워드로 도출하라.
+- 키워드는 짧은 표현(예: 수업 설계, 학생 맞춤지도, 전문성 신장 등)으로 작성
+- 서로 겹치지 않게(중복 금지) 3개를 구성
+- 각 키워드는 8~15자 내외의 명사/명사구 형태
+
+[결과 분석]
+{{resultAnalysis}}
+
+[출력 형식 – JSON만 출력]
+\`\`\`json
+{ "keywords": ["키1", "키2", "키3"] }
+\`\`\`
+그 외 설명/문장 금지`,
   },
 };
 
