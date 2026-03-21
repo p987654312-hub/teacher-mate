@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
+import { generateGeminiText, getAiSetupError } from "@/lib/aiGemini";
 
 /** 개발 환경에서만 env 설정·연결 상태를 확인합니다. 키 값은 절대 반환하지 않습니다. */
 export async function GET() {
@@ -29,8 +29,8 @@ export async function GET() {
     }
   }
 
-  const vertexSetup = getVertexGeminiSetupError();
-  status["VERTEX_AI(사용가능)"] = vertexSetup ? "비어있음" : "설정됨";
+  const aiSetup = await getAiSetupError();
+  status["AI(사용가능)"] = aiSetup ? "비어있음" : "설정됨";
 
   const connectivity: Record<string, "ok" | "fail" | "skip"> = {};
   let vertexError: string | null = null;
@@ -51,17 +51,17 @@ export async function GET() {
   }
 
   // Vertex AI 최소 호출 (응답 내용은 사용하지 않음)
-  if (!vertexSetup) {
+  if (!aiSetup) {
     try {
-      await generateVertexGeminiText("ping");
-      connectivity.vertex_ai = "ok";
+      await generateGeminiText("ping");
+      connectivity.ai_backend = "ok";
     } catch (err) {
-      connectivity.vertex_ai = "fail";
+      connectivity.ai_backend = "fail";
       vertexError = err instanceof Error ? err.message : String(err);
     }
   } else {
-    connectivity.vertex_ai = "skip";
-    vertexError = vertexSetup;
+    connectivity.ai_backend = "skip";
+    vertexError = aiSetup;
   }
 
   return NextResponse.json({

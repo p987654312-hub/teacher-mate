@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
+import { generateGeminiText, getAiSetupError } from "@/lib/aiGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,9 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const vertexErr = getVertexGeminiSetupError();
-  if (vertexErr) {
-    return NextResponse.json({ error: vertexErr }, { status: 500 });
+  const aiErr = await getAiSetupError();
+  if (aiErr) {
+    return NextResponse.json({ error: aiErr }, { status: 500 });
   }
 
   try {
@@ -60,7 +60,7 @@ ${text}
 
 출력 (한 줄에 한 건씩, 여러 건이면 줄바꿈으로 구분):`;
 
-    const raw = (await generateVertexGeminiText(prompt)).trim();
+    const raw = (await generateGeminiText(prompt)).trim();
     const refinedList = raw
       .split(/\n+/)
       .map((s) => s.trim())

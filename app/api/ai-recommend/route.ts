@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
-import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
+import { generateGeminiText, getAiSetupError } from "@/lib/aiGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,9 +23,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const vertexErr = getVertexGeminiSetupError();
-  if (vertexErr) {
-    return NextResponse.json({ error: vertexErr }, { status: 500 });
+  const aiErr = await getAiSetupError();
+  if (aiErr) {
+    return NextResponse.json({ error: aiErr }, { status: 500 });
   }
 
   try {
@@ -298,7 +298,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const recommendation = (await generateVertexGeminiText(prompt)).trim();
+    const recommendation = (await generateGeminiText(prompt)).trim();
 
     if (!recommendation || recommendation === "") {
       return NextResponse.json(

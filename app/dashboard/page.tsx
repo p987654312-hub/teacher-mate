@@ -194,6 +194,12 @@ export default function DashboardPage() {
   const [showPointSettings, setShowPointSettings] = useState(false);
   const [showDiagnosisSettings, setShowDiagnosisSettings] = useState(false);
   const [showAiPromptSettings, setShowAiPromptSettings] = useState(false);
+  /** 슈퍼관리자(SUPER_ADMIN_EMAIL)만 GET /api/admin/ai-provider 성공 시 ready */
+  const [superAdminAi, setSuperAdminAi] = useState<{
+    status: "idle" | "loading" | "forbidden" | "ready";
+    provider?: "vertex" | "gemini";
+  }>({ status: "idle" });
+  const [superAdminAiSaving, setSuperAdminAiSaving] = useState(false);
   const [aiPromptSettings, setAiPromptSettings] = useState<Record<string, { value: string; description: string; label: string }>>({});
   const [aiPromptSettingsLoading, setAiPromptSettingsLoading] = useState(false);
   const [aiPromptSettingsSaving, setAiPromptSettingsSaving] = useState(false);
@@ -670,6 +676,39 @@ export default function DashboardPage() {
 
     checkSession();
   }, [router]);
+
+  // 슈퍼관리자(SUPER_ADMIN_EMAIL)만 AI 백엔드(Vertex / Gemini API) 전환 UI 표시
+  useEffect(() => {
+    if (!showAdminView) {
+      setSuperAdminAi({ status: "idle" });
+      return;
+    }
+    setSuperAdminAi({ status: "loading" });
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        if (!cancelled) setSuperAdminAi({ status: "forbidden" });
+        return;
+      }
+      const res = await fetch("/api/admin/ai-provider", { headers: { Authorization: `Bearer ${token}` } });
+      if (cancelled) return;
+      if (res.status === 403) {
+        setSuperAdminAi({ status: "forbidden" });
+        return;
+      }
+      if (!res.ok) {
+        setSuperAdminAi({ status: "forbidden" });
+        return;
+      }
+      const j = (await res.json()) as { provider: "vertex" | "gemini" };
+      setSuperAdminAi({ status: "ready", provider: j.provider });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showAdminView]);
 
   // 개인정보(이름 등) 수정 후 우측 상단 표시 갱신: 포커스 시·auth 업데이트 시 사용자 재조회
   useEffect(() => {
@@ -1994,6 +2033,91 @@ export default function DashboardPage() {
                         </span>
                       </Button>
                     </div>
+                  )}
+                  {superAdminAi.status === "loading" && (
+                    <p className="text-xs text-slate-500">AI 백엔드 권한 확인 중...</p>
+                  )}
+                  {superAdminAi.status === "ready" && superAdminAi.provider && (
+                    <Card className="rounded-xl border-violet-200/80 bg-violet-50/40 p-3 shadow-sm">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800">AI 호출 방식 (슈퍼관리자 전용)</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            Vertex AI(GCP) 또는 Gemini API(키) 중 하나를 선택합니다. Vercel에 두 방식 모두 환경 변수가 있어야 전환이 동작합니다.
+                          </p>
+                        </div>
+                        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className={
+                              superAdminAi.provider === "vertex"
+                                ? "rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700"
+                                : "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            }
+                            disabled={superAdminAiSaving}
+                            onClick={async () => {
+                              if (superAdminAi.provider === "vertex") return;
+                              setSuperAdminAiSaving(true);
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const token = session?.access_token;
+                                if (!token) return;
+                                const res = await fetch("/api/admin/ai-provider", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ provider: "vertex" }),
+                                });
+                                const j = await res.json().catch(() => ({}));
+                                if (!res.ok) {
+                                  alert(j?.error ?? "저장에 실패했습니다.");
+                                  return;
+                                }
+                                setSuperAdminAi({ status: "ready", provider: "vertex" });
+                              } finally {
+                                setSuperAdminAiSaving(false);
+                              }
+                            }}
+                          >
+                            Vertex AI
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className={
+                              superAdminAi.provider === "gemini"
+                                ? "rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700"
+                                : "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            }
+                            disabled={superAdminAiSaving}
+                            onClick={async () => {
+                              if (superAdminAi.provider === "gemini") return;
+                              setSuperAdminAiSaving(true);
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const token = session?.access_token;
+                                if (!token) return;
+                                const res = await fetch("/api/admin/ai-provider", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ provider: "gemini" }),
+                                });
+                                const j = await res.json().catch(() => ({}));
+                                if (!res.ok) {
+                                  alert(j?.error ?? "저장에 실패했습니다.");
+                                  return;
+                                }
+                                setSuperAdminAi({ status: "ready", provider: "gemini" });
+                              } finally {
+                                setSuperAdminAiSaving(false);
+                              }
+                            }}
+                          >
+                            Gemini API (키)
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
