@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
+import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -8,20 +9,6 @@ function getSupabaseAdmin() {
   if (!url || !key) throw new Error("Missing Supabase env");
   return createClient(url, key);
 }
-
-/** 등록된 Gemini API 키 목록 (GEMINI_API_KEY_1 ~ _5 또는 GEMINI_API_KEY) */
-function getGeminiKeys(): string[] {
-  const keys: string[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`];
-    if (k && k.trim()) keys.push(k.trim());
-  }
-  const single = process.env.GEMINI_API_KEY;
-  if (keys.length === 0 && single?.trim()) keys.push(single.trim());
-  return keys;
-}
-
-let keyIndex = 0;
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -36,12 +23,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const geminiKeys = getGeminiKeys();
-  if (geminiKeys.length === 0) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY 또는 GEMINI_API_KEY_1~5 중 하나 이상 설정해주세요." },
-      { status: 500 }
-    );
+  const vertexErr = getVertexGeminiSetupError();
+  if (vertexErr) {
+    return NextResponse.json({ error: vertexErr }, { status: 500 });
   }
 
   try {
@@ -314,128 +298,99 @@ export async function POST(req: Request) {
       });
     }
 
-    // Gemini API 호출 - 키 로테이션(라운드로빈) + 한도 오류 시 다음 키로 재시도
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const startIdx = keyIndex % geminiKeys.length;
-    keyIndex += 1;
-    let lastError: any = null;
+    const recommendation = (await generateVertexGeminiText(prompt)).trim();
 
-    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
-      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const recommendation = response.text().trim();
-
-        if (!recommendation || recommendation === "") {
-          return NextResponse.json(
-            { error: "AI 추천 결과가 비어있습니다." },
-            { status: 500 }
-          );
-        }
-        if (type === "plan_fill_rows") {
-          let raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-          try {
-            let parsed = JSON.parse(raw) as any;
-            // 모델이 { "rows": [...] } 형태로 줄 수도 있으니 보완
-            let rows: unknown[] | null = null;
-            if (Array.isArray(parsed)) {
-              rows = parsed;
-            } else if (parsed && Array.isArray(parsed.rows)) {
-              rows = parsed.rows;
-            } else {
-              // 그래도 배열이 아니면, 텍스트에서 대괄호 부분만 추출해서 한 번 더 시도
-              const start = raw.indexOf("[");
-              const end = raw.lastIndexOf("]");
-              if (start !== -1 && end !== -1 && end > start) {
-                const slice = raw.slice(start, end + 1);
-                const again = JSON.parse(slice);
-                if (Array.isArray(again)) {
-                  rows = again;
-                }
-              }
-            }
-            if (!rows) throw new Error("배열이 아님");
-
-            // 1단계: AI 응답을 공통 포맷(content, periodMethod, effect)으로 정규화
-            const normalized = rows.map((item) => {
-              const obj = (item ?? {}) as any;
-              const content =
-                (obj.content ??
-                  obj.name ??
-                  obj.title ??
-                  obj.activity ??
-                  obj.area ??
-                  obj.text ??
-                  "") as string;
-              const periodMethod =
-                (obj.periodMethod ??
-                  obj.period ??
-                  obj.method ??
-                  obj.duration ??
-                  "") as string;
-              const effect = (obj.effect ?? obj.remarks ?? "") as string;
-              return {
-                content: String(content ?? "").trim(),
-                periodMethod: String(periodMethod ?? "").trim(),
-                effect: String(effect ?? "").trim(),
-              };
-            });
-
-            // 2단계: 모든 카드에 공통된 키(activity, period, remarks)로 통일
-            const mapped = normalized.map((r) => ({
-              activity: r.content,
-              period: r.periodMethod,
-              remarks: r.effect,
-            }));
-
-            return NextResponse.json({ rows: mapped });
-          } catch (parseErr) {
-            console.error("plan_fill_rows parse error:", parseErr);
-            return NextResponse.json(
-              { error: "AI가 반환한 형식을 파싱할 수 없습니다." },
-              { status: 500 }
-            );
-          }
-        }
-        if (type === "self_eval_sections") {
-          let raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-          try {
-            const parsed = JSON.parse(raw) as Record<string, string>;
-            const out: Record<string, string> = {};
-            const keys = ["learningGoal", "learningResult", "lifeGoal", "lifeResult", "professionalGoal", "professionalResult", "dutyGoal", "dutyResult"];
-            for (const k of keys) {
-              out[k] = typeof parsed[k] === "string" ? parsed[k].trim() : "";
-            }
-            return NextResponse.json(out);
-          } catch (parseErr) {
-            console.error("self_eval_sections parse error:", parseErr);
-            return NextResponse.json(
-              { error: "AI가 반환한 형식을 파싱할 수 없습니다." },
-              { status: 500 }
-            );
-          }
-        }
-        return NextResponse.json({ recommendation });
-      } catch (err: any) {
-        lastError = err;
-        const msg = (err?.message ?? "").toLowerCase();
-        const isQuotaOrRate =
-          err?.status === 429 ||
-          msg.includes("quota") ||
-          msg.includes("rate") ||
-          msg.includes("limit") ||
-          msg.includes("resource_exhausted");
-        if (isQuotaOrRate && attempt < geminiKeys.length - 1) {
-          continue;
-        }
-        throw err;
-      }
+    if (!recommendation || recommendation === "") {
+      return NextResponse.json(
+        { error: "AI 추천 결과가 비어있습니다." },
+        { status: 500 }
+      );
     }
 
-    throw lastError;
+    if (type === "plan_fill_rows") {
+      let raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      try {
+        let parsed = JSON.parse(raw) as any;
+        // 모델이 { "rows": [...] } 형태로 줄 수도 있으니 보완
+        let rows: unknown[] | null = null;
+        if (Array.isArray(parsed)) {
+          rows = parsed;
+        } else if (parsed && Array.isArray(parsed.rows)) {
+          rows = parsed.rows;
+        } else {
+          // 그래도 배열이 아니면, 텍스트에서 대괄호 부분만 추출해서 한 번 더 시도
+          const start = raw.indexOf("[");
+          const end = raw.lastIndexOf("]");
+          if (start !== -1 && end !== -1 && end > start) {
+            const slice = raw.slice(start, end + 1);
+            const again = JSON.parse(slice);
+            if (Array.isArray(again)) {
+              rows = again;
+            }
+          }
+        }
+        if (!rows) throw new Error("배열이 아님");
+
+        // 1단계: AI 응답을 공통 포맷(content, periodMethod, effect)으로 정규화
+        const normalized = rows.map((item) => {
+          const obj = (item ?? {}) as any;
+          const content =
+            (obj.content ??
+              obj.name ??
+              obj.title ??
+              obj.activity ??
+              obj.area ??
+              obj.text ??
+              "") as string;
+          const periodMethod =
+            (obj.periodMethod ??
+              obj.period ??
+              obj.method ??
+              obj.duration ??
+              "") as string;
+          const effect = (obj.effect ?? obj.remarks ?? "") as string;
+          return {
+            content: String(content ?? "").trim(),
+            periodMethod: String(periodMethod ?? "").trim(),
+            effect: String(effect ?? "").trim(),
+          };
+        });
+
+        // 2단계: 모든 카드에 공통된 키(activity, period, remarks)로 통일
+        const mapped = normalized.map((r) => ({
+          activity: r.content,
+          period: r.periodMethod,
+          remarks: r.effect,
+        }));
+
+        return NextResponse.json({ rows: mapped });
+      } catch (parseErr) {
+        console.error("plan_fill_rows parse error:", parseErr);
+        return NextResponse.json(
+          { error: "AI가 반환한 형식을 파싱할 수 없습니다." },
+          { status: 500 }
+        );
+      }
+    }
+    if (type === "self_eval_sections") {
+      let raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      try {
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        const out: Record<string, string> = {};
+        const keys = ["learningGoal", "learningResult", "lifeGoal", "lifeResult", "professionalGoal", "professionalResult", "dutyGoal", "dutyResult"];
+        for (const k of keys) {
+          out[k] = typeof parsed[k] === "string" ? parsed[k].trim() : "";
+        }
+        return NextResponse.json(out);
+      } catch (parseErr) {
+        console.error("self_eval_sections parse error:", parseErr);
+        return NextResponse.json(
+          { error: "AI가 반환한 형식을 파싱할 수 없습니다." },
+          { status: 500 }
+        );
+      }
+    }
+    return NextResponse.json({ recommendation });
   } catch (error: any) {
     console.error("Error in /api/ai-recommend:", error);
     const msg = (error?.message ?? "").toLowerCase();
@@ -450,7 +405,7 @@ export async function POST(req: Request) {
       if (process.env.NODE_ENV === "development") {
         return NextResponse.json(
           {
-            error: "Gemini 호출이 제한되었습니다(쿼터/레이트리밋 가능).",
+            error: "Vertex AI 호출이 제한되었습니다(쿼터/레이트리밋 가능).",
             code: "QUOTA_EXCEEDED",
             debug: {
               status: error?.status ?? null,
@@ -474,7 +429,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       process.env.NODE_ENV === "development"
         ? {
-            error: `Gemini API 호출 실패: ${errorMessage}`,
+            error: `Vertex AI 호출 실패: ${errorMessage}`,
             debug: {
               status: error?.status ?? null,
               name: error?.name ?? null,
@@ -482,7 +437,7 @@ export async function POST(req: Request) {
               details: error?.errorDetails ?? error?.details ?? null,
             },
           }
-        : { error: `Gemini API 호출 실패: ${errorMessage}` },
+        : { error: `Vertex AI 호출 실패: ${errorMessage}` },
       { status: 500 }
     );
   }

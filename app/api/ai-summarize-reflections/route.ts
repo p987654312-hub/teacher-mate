@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
+import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -8,20 +9,6 @@ function getSupabaseAdmin() {
   if (!url || !key) throw new Error("Missing Supabase env");
   return createClient(url, key);
 }
-
-/** 등록된 Gemini API 키 목록 (GEMINI_API_KEY_1 ~ _5 또는 GEMINI_API_KEY) */
-function getGeminiKeys(): string[] {
-  const keys: string[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`];
-    if (k && k.trim()) keys.push(k.trim());
-  }
-  const single = process.env.GEMINI_API_KEY;
-  if (keys.length === 0 && single?.trim()) keys.push(single.trim());
-  return keys;
-}
-
-let keyIndex = 0;
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -35,12 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const geminiKeys = getGeminiKeys();
-  if (geminiKeys.length === 0) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY 또는 GEMINI_API_KEY_1~5 중 하나 이상 설정해주세요." },
-      { status: 500 }
-    );
+  const vertexErr = getVertexGeminiSetupError();
+  if (vertexErr) {
+    return NextResponse.json({ error: vertexErr }, { status: 500 });
   }
 
   try {
@@ -88,46 +72,16 @@ export async function POST(req: Request) {
     }
     const prompt = applyPromptTemplate(template, { reflections });
 
-    // Gemini API 호출 - 키 로테이션(라운드로빈) + 한도 오류 시 다음 키로 재시도
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const startIdx = keyIndex % geminiKeys.length;
-    keyIndex += 1;
-    let lastError: any = null;
+    const summary = (await generateVertexGeminiText(prompt)).trim();
 
-    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
-      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const summary = response.text().trim();
-
-        if (!summary || summary === "") {
-          return NextResponse.json(
-            { error: "AI 요약 결과가 비어있습니다." },
-            { status: 500 }
-          );
-        }
-
-        return NextResponse.json({ summary });
-      } catch (err: any) {
-        lastError = err;
-        const msg = (err?.message ?? "").toLowerCase();
-        const isQuotaOrRate =
-          err?.status === 429 ||
-          msg.includes("quota") ||
-          msg.includes("rate") ||
-          msg.includes("limit") ||
-          msg.includes("resource_exhausted");
-        if (isQuotaOrRate && attempt < geminiKeys.length - 1) {
-          continue;
-        }
-        throw err;
-      }
+    if (!summary || summary === "") {
+      return NextResponse.json(
+        { error: "AI 요약 결과가 비어있습니다." },
+        { status: 500 }
+      );
     }
 
-    throw lastError;
+    return NextResponse.json({ summary });
   } catch (error: any) {
     console.error("Error in /api/ai-summarize-reflections:", error);
     const errorMessage = error?.message || "알 수 없는 오류가 발생했습니다.";

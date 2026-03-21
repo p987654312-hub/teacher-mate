@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -7,19 +8,6 @@ function getSupabaseAdmin() {
   if (!url || !key) throw new Error("Missing Supabase env");
   return createClient(url, key);
 }
-
-function getGeminiKeys(): string[] {
-  const keys: string[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`];
-    if (k?.trim()) keys.push(k.trim());
-  }
-  const single = process.env.GEMINI_API_KEY;
-  if (keys.length === 0 && single?.trim()) keys.push(single.trim());
-  return keys;
-}
-
-let keyIndex = 0;
 
 /** 기록 내용을 한 번 필터링·정리해서 짧은 문장으로 반환 */
 export async function POST(req: Request) {
@@ -34,12 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const geminiKeys = getGeminiKeys();
-  if (geminiKeys.length === 0) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY 또는 GEMINI_API_KEY_1~5 중 하나 이상 설정해주세요." },
-      { status: 500 }
-    );
+  const vertexErr = getVertexGeminiSetupError();
+  if (vertexErr) {
+    return NextResponse.json({ error: vertexErr }, { status: 500 });
   }
 
   try {
@@ -75,40 +60,14 @@ ${text}
 
 출력 (한 줄에 한 건씩, 여러 건이면 줄바꿈으로 구분):`;
 
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const startIdx = keyIndex % geminiKeys.length;
-    keyIndex += 1;
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
-      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const raw = response.text().trim();
-        const refinedList = raw
-          .split(/\n+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const refined = refinedList.length > 0 ? refinedList : [text];
+    const raw = (await generateVertexGeminiText(prompt)).trim();
+    const refinedList = raw
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const refined = refinedList.length > 0 ? refinedList : [text];
 
-        return NextResponse.json({ refined });
-      } catch (err: unknown) {
-        lastError = err;
-        const msg = (err instanceof Error ? err.message : "").toLowerCase();
-        const isQuotaOrRate =
-          (err as { status?: number })?.status === 429 ||
-          msg.includes("quota") ||
-          msg.includes("rate") ||
-          msg.includes("limit") ||
-          msg.includes("resource_exhausted");
-        if (isQuotaOrRate && attempt < geminiKeys.length - 1) continue;
-        throw err;
-      }
-    }
-    const finalError = lastError instanceof Error ? lastError : new Error(String(lastError ?? "모든 API 키로 시도했으나 실패"));
-    throw finalError;
+    return NextResponse.json({ refined });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";
     console.error("Error in /api/ai-refine-mileage:", error);

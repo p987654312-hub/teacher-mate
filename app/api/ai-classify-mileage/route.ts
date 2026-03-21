@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
+import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -8,19 +9,6 @@ function getSupabaseAdmin() {
   if (!url || !key) throw new Error("Missing Supabase env");
   return createClient(url, key);
 }
-
-function getGeminiKeys(): string[] {
-  const keys: string[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`];
-    if (k?.trim()) keys.push(k.trim());
-  }
-  const single = process.env.GEMINI_API_KEY;
-  if (keys.length === 0 && single?.trim()) keys.push(single.trim());
-  return keys;
-}
-
-let keyIndex = 0;
 
 const CATEGORY_KEYS = ["training", "class_open", "community", "book_edutech", "health", "other"] as const;
 
@@ -153,12 +141,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const geminiKeys = getGeminiKeys();
-  if (geminiKeys.length === 0) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY를 설정해주세요." },
-      { status: 500 }
-    );
+  const vertexErr = getVertexGeminiSetupError();
+  if (vertexErr) {
+    return NextResponse.json({ error: vertexErr }, { status: 500 });
   }
 
   try {
@@ -280,112 +265,86 @@ ${customCategories.map((c) => `- ${c.key}: ${c.label} (관리자 설정 단위: 
       dateListOutputRule,
     });
 
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const startIdx = keyIndex % geminiKeys.length;
-    keyIndex += 1;
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < geminiKeys.length; attempt++) {
-      const key = geminiKeys[(startIdx + attempt) % geminiKeys.length];
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let raw = response.text().trim();
-        const jsonMatch = raw.match(/\[[\s\S]*\]/);
-        if (jsonMatch) raw = jsonMatch[0];
-        let parsed = JSON.parse(raw) as { category: string; content: string }[];
-        
-        // 날짜 범위가 계산된 경우, AI 응답을 후처리하여 모든 날짜가 포함되도록 보강
-        if (dateList.length > 0) {
-          // AI가 생성한 항목에서 활동 내용 추출 (날짜 제거)
-          let activityText = "";
-          let category = "";
-          
-          if (parsed.length > 0) {
-            const firstEntry = parsed[0];
-            category = firstEntry.category;
-            // 날짜 부분 제거하여 활동 내용만 추출
-            activityText = firstEntry.content.replace(/^\d{2}\.\d{2}\.\d{2}\([^)]+\)\s*/, "").trim();
-          } else {
-            // AI가 아무것도 생성하지 않은 경우, 원문에서 활동 내용 추출
-            activityText = text
-              .replace(/\d+월\s*부터\s*(지금까지|현재까지|오늘까지|\d+월\s*까지)/g, "")
-              .replace(/매주\s*[일월화수목금토]요일/g, "")
-              .replace(/매\s*[일월화수목금토]요일/g, "")
-              .trim();
-            
-            // 카테고리는 텍스트 분석으로 추정
-            category = "health"; // 기본값
-            if (text.includes("연수") || text.includes("수강") || text.includes("연수원")) category = "training";
-            else if (text.includes("수업") || text.includes("공개") || text.includes("장학")) category = "class_open";
-            else if (text.includes("공동체") || text.includes("동아리") || text.includes("연구회")) category = "community";
-            else if (text.includes("독서") || text.includes("책") || text.includes("서적") || text.includes("에듀테크")) category = "book_edutech";
-            else if (text.includes("헬스") || text.includes("근력") || text.includes("운동") || text.includes("달리기") || text.includes("등산") || text.includes("수영") || text.includes("체력") || text.includes("러닝") || text.includes("조깅") || text.includes("걷기")) category = "health";
-            
-            // 활동 내용에서 수치 추출 (예: "1시간", "10km" 등)
-            const timeMatch = text.match(/(\d+(?:\.\d+)?)\s*시간/);
-            const kmMatch = text.match(/(\d+(?:\.\d+)?)\s*km/i);
-            if (timeMatch && !activityText.includes("시간")) {
-              activityText = `${activityText} ${timeMatch[0]}`.trim();
-            } else if (kmMatch && !activityText.includes("km")) {
-              activityText = `${activityText} ${kmMatch[0]}`.trim();
-            } else if (!timeMatch && !kmMatch) {
-              // 수치가 없으면 기본값 추가 (단위는 나중에 수정됨)
-              const numMatch = text.match(/(\d+)/);
-              if (numMatch) {
-                activityText = `${activityText} ${numMatch[1]}`.trim();
-              }
-            }
-          }
-          
-          // 각 날짜에 대해 항목 생성 (날짜 리스트를 우선 사용)
-          const expandedEntries: { category: string; content: string }[] = dateList.map((dateStr) => ({
-            category,
-            content: `${dateStr} ${activityText}`.trim(),
-          }));
-          
-          // AI가 생성한 항목의 날짜 추출
-          const existingDates = new Set(parsed.map(e => {
-            const dateMatch = e.content.match(/^(\d{2}\.\d{2}\.\d{2}\([^)]+\))/);
-            return dateMatch ? dateMatch[1] : null;
-          }).filter(Boolean));
-          
-          // 날짜 리스트에서 AI가 생성하지 않은 날짜만 추가
-          const finalEntries = expandedEntries.filter(e => {
-            const dateMatch = e.content.match(/^(\d{2}\.\d{2}\.\d{2}\([^)]+\))/);
-            return dateMatch && !existingDates.has(dateMatch[1]);
-          });
-          
-          // 날짜 리스트를 우선 사용 (AI 응답보다 우선)
-          parsed = [...finalEntries, ...parsed];
-        }
-        
-        // 단위 변환은 하지 않음 - 사용자가 입력한 그대로 유지
-        // 단위가 맞지 않으면 경고 아이콘만 표시하고 계산에서 제외됨
-        
-        const entries = (Array.isArray(parsed) ? parsed : [])
-          .filter((e) => e && typeof e.category === "string" && typeof e.content === "string")
-          .filter((e) => CATEGORY_KEYS.includes(e.category as (typeof CATEGORY_KEYS)[number]))
-          .map((e) => ({ category: e.category, content: String(e.content).trim() }))
-          .filter((e) => e.content.length > 0);
+    let raw = (await generateVertexGeminiText(prompt)).trim();
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (jsonMatch) raw = jsonMatch[0];
+    let parsed = JSON.parse(raw) as { category: string; content: string }[];
 
-        return NextResponse.json({ entries });
-      } catch (err: unknown) {
-        lastError = err;
-        const msg = (err instanceof Error ? err.message : "").toLowerCase();
-        const isQuotaOrRate =
-          (err as { status?: number })?.status === 429 ||
-          msg.includes("quota") ||
-          msg.includes("rate") ||
-          msg.includes("limit") ||
-          msg.includes("resource_exhausted");
-        if (isQuotaOrRate && attempt < geminiKeys.length - 1) continue;
-        throw err;
+    // 날짜 범위가 계산된 경우, AI 응답을 후처리하여 모든 날짜가 포함되도록 보강
+    if (dateList.length > 0) {
+      // AI가 생성한 항목에서 활동 내용 추출 (날짜 제거)
+      let activityText = "";
+      let category = "";
+
+      if (parsed.length > 0) {
+        const firstEntry = parsed[0];
+        category = firstEntry.category;
+        // 날짜 부분 제거하여 활동 내용만 추출
+        activityText = firstEntry.content.replace(/^\d{2}\.\d{2}\.\d{2}\([^)]+\)\s*/, "").trim();
+      } else {
+        // AI가 아무것도 생성하지 않은 경우, 원문에서 활동 내용 추출
+        activityText = text
+          .replace(/\d+월\s*부터\s*(지금까지|현재까지|오늘까지|\d+월\s*까지)/g, "")
+          .replace(/매주\s*[일월화수목금토]요일/g, "")
+          .replace(/매\s*[일월화수목금토]요일/g, "")
+          .trim();
+
+        // 카테고리는 텍스트 분석으로 추정
+        category = "health"; // 기본값
+        if (text.includes("연수") || text.includes("수강") || text.includes("연수원")) category = "training";
+        else if (text.includes("수업") || text.includes("공개") || text.includes("장학")) category = "class_open";
+        else if (text.includes("공동체") || text.includes("동아리") || text.includes("연구회")) category = "community";
+        else if (text.includes("독서") || text.includes("책") || text.includes("서적") || text.includes("에듀테크")) category = "book_edutech";
+        else if (text.includes("헬스") || text.includes("근력") || text.includes("운동") || text.includes("달리기") || text.includes("등산") || text.includes("수영") || text.includes("체력") || text.includes("러닝") || text.includes("조깅") || text.includes("걷기")) category = "health";
+
+        // 활동 내용에서 수치 추출 (예: "1시간", "10km" 등)
+        const timeMatch = text.match(/(\d+(?:\.\d+)?)\s*시간/);
+        const kmMatch = text.match(/(\d+(?:\.\d+)?)\s*km/i);
+        if (timeMatch && !activityText.includes("시간")) {
+          activityText = `${activityText} ${timeMatch[0]}`.trim();
+        } else if (kmMatch && !activityText.includes("km")) {
+          activityText = `${activityText} ${kmMatch[0]}`.trim();
+        } else if (!timeMatch && !kmMatch) {
+          // 수치가 없으면 기본값 추가 (단위는 나중에 수정됨)
+          const numMatch = text.match(/(\d+)/);
+          if (numMatch) {
+            activityText = `${activityText} ${numMatch[1]}`.trim();
+          }
+        }
       }
+
+      // 각 날짜에 대해 항목 생성 (날짜 리스트를 우선 사용)
+      const expandedEntries: { category: string; content: string }[] = dateList.map((dateStr) => ({
+        category,
+        content: `${dateStr} ${activityText}`.trim(),
+      }));
+
+      // AI가 생성한 항목의 날짜 추출
+      const existingDates = new Set(parsed.map(e => {
+        const dateMatch = e.content.match(/^(\d{2}\.\d{2}\.\d{2}\([^)]+\))/);
+        return dateMatch ? dateMatch[1] : null;
+      }).filter(Boolean));
+
+      // 날짜 리스트에서 AI가 생성하지 않은 날짜만 추가
+      const finalEntries = expandedEntries.filter(e => {
+        const dateMatch = e.content.match(/^(\d{2}\.\d{2}\.\d{2}\([^)]+\))/);
+        return dateMatch && !existingDates.has(dateMatch[1]);
+      });
+
+      // 날짜 리스트를 우선 사용 (AI 응답보다 우선)
+      parsed = [...finalEntries, ...parsed];
     }
-    const finalError = lastError instanceof Error ? lastError : new Error(String(lastError ?? "모든 API 키로 시도했으나 실패"));
-    throw finalError;
+
+    // 단위 변환은 하지 않음 - 사용자가 입력한 그대로 유지
+    // 단위가 맞지 않으면 경고 아이콘만 표시하고 계산에서 제외됨
+
+    const entries = (Array.isArray(parsed) ? parsed : [])
+      .filter((e) => e && typeof e.category === "string" && typeof e.content === "string")
+      .filter((e) => CATEGORY_KEYS.includes(e.category as (typeof CATEGORY_KEYS)[number]))
+      .map((e) => ({ category: e.category, content: String(e.content).trim() }))
+      .filter((e) => e.content.length > 0);
+
+    return NextResponse.json({ entries });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";
     console.error("Error in /api/ai-classify-mileage:", error);

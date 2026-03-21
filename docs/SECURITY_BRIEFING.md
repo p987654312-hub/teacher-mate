@@ -10,7 +10,7 @@
 
 ### 노출되면 안 되는 것 (서버 전용, .env에만 두고 Git에 넣지 말 것)
 - `SUPABASE_SERVICE_ROLE_KEY` : DB/Admin API 전체 권한
-- `GEMINI_API_KEY` (및 `GEMINI_API_KEY_1`~`_5`) : AI 호출·과금
+- `GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON` 등 Vertex AI 설정 : AI 호출·GCP 과금
 - `ADMIN_CODE` / `NEXT_PUBLIC_ADMIN_CODE` : 관리자 코드 (가능하면 `ADMIN_CODE`만 사용 권장)
 
 ### 클라이언트에 노출돼도 되는 것 (NEXT_PUBLIC_)
