@@ -86,6 +86,15 @@ const initialSelfEvalForm: SelfEvalFormState = {
   dateDay: "",
 };
 
+const SELF_EVAL_REQUIRED_FIELDS: Array<keyof SelfEvalFormState> = [
+  "affiliation", "position", "evaluatorName", "gradeClass", "subject", "isHomeroom", "assignedDuties", "isPositionTeacher",
+  "hoursPerWeek", "openClassResult", "studentCounselResult", "parentCounselResult", "otherResult",
+  "learningGoal", "learningResult", "lifeGoal", "lifeResult", "professionalGoal", "professionalResult",
+  "dutyGoal", "dutyResult", "creativeImprovement",
+  "goalAchievement", "creativity", "timeliness", "effort",
+  "preparerName", "dateYear", "dateMonth", "dateDay",
+];
+
 const CATEGORY_LABELS: Record<string, string> = {
   training: "마일리지카드1",
   class_open: "마일리지카드2",
@@ -190,6 +199,7 @@ export default function ReflectionPage() {
     creative_improvement: "",
   });
   const [selfEvalForm, setSelfEvalForm] = useState<SelfEvalFormState>(initialSelfEvalForm);
+  const [showSelfEvalValidation, setShowSelfEvalValidation] = useState(false);
   const [selfEvalAiLoading, setSelfEvalAiLoading] = useState(false);
   const [analysisPostText, setAnalysisPostText] = useState("");
   const [postResultId, setPostResultId] = useState<string | null>(null);
@@ -210,6 +220,13 @@ export default function ReflectionPage() {
   latestRef.current = { goalAchievementText, reflectionText, evidenceText, nextYearGoalText, userEmail };
   const selfEvalFormRef = useRef<SelfEvalFormState>(initialSelfEvalForm);
   selfEvalFormRef.current = selfEvalForm;
+  const selfEvalMissingFields = new Set(
+    SELF_EVAL_REQUIRED_FIELDS.filter((k) => String(selfEvalForm[k] ?? "").trim() === "")
+  );
+  const isSelfEvalFieldMissing = (k: keyof SelfEvalFormState) =>
+    showSelfEvalValidation && selfEvalMissingFields.has(k);
+  const selfEvalFieldClass = (k: keyof SelfEvalFormState, base: string) =>
+    `${base} ${isSelfEvalFieldMissing(k) ? "border-red-500 focus-visible:ring-red-500" : "border-slate-200"}`;
   const navigatingToReportRef = useRef(false);
 
   useEffect(() => {
@@ -685,6 +702,11 @@ export default function ReflectionPage() {
 
   const saveSelfEvalForm = async () => {
     if (!userEmail) return;
+    setShowSelfEvalValidation(true);
+    if (selfEvalMissingFields.size > 0) {
+      const ok = window.confirm("아직 작성하지 않은 칸이 있습니다. 저장하시겠습니까?");
+      if (!ok) return;
+    }
     setSavingStatus((prev) => ({ ...prev, evidence: "saving" }));
     try {
       await supabase.from("user_preferences").upsert(
@@ -837,7 +859,7 @@ export default function ReflectionPage() {
       <div class="footer">
         <div class="footer-date">${esc(f.dateYear)}년 ${esc(f.dateMonth)}월 ${esc(f.dateDay)}일</div>
         <div class="footer-row">
-          <span class="label">작성자(본인) 성명</span><span class="line"></span>
+          <span class="label">작성자(본인) 성명</span><span class="line">${esc(f.preparerName)}</span>
           <span class="label" style="margin-left:20px">서명(인)</span>
         </div>
       </div>
@@ -1324,15 +1346,15 @@ export default function ReflectionPage() {
                   <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
                     <div>
                       <Label className="text-xs text-slate-600">소속</Label>
-                      <Input value={selfEvalForm.affiliation} onChange={(e) => setSelfEvalForm((p) => ({ ...p, affiliation: e.target.value }))} placeholder="예: 초등학교" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.affiliation} onChange={(e) => setSelfEvalForm((p) => ({ ...p, affiliation: e.target.value }))} placeholder="예: 초등학교" className={selfEvalFieldClass("affiliation", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">직위</Label>
-                      <Input value={selfEvalForm.position} onChange={(e) => setSelfEvalForm((p) => ({ ...p, position: e.target.value }))} placeholder="예: 교사" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.position} onChange={(e) => setSelfEvalForm((p) => ({ ...p, position: e.target.value }))} placeholder="예: 교사" className={selfEvalFieldClass("position", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">성명</Label>
-                      <Input value={selfEvalForm.evaluatorName} onChange={(e) => setSelfEvalForm((p) => ({ ...p, evaluatorName: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.evaluatorName} onChange={(e) => setSelfEvalForm((p) => ({ ...p, evaluatorName: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("evaluatorName", "h-8 rounded text-sm")} />
                     </div>
                   </div>
                 </div>
@@ -1341,23 +1363,23 @@ export default function ReflectionPage() {
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
                     <div>
                       <Label className="text-xs text-slate-600">담당 학년·학급</Label>
-                      <Input value={selfEvalForm.gradeClass} onChange={(e) => setSelfEvalForm((p) => ({ ...p, gradeClass: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.gradeClass} onChange={(e) => setSelfEvalForm((p) => ({ ...p, gradeClass: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("gradeClass", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">담당 과목</Label>
-                      <Input value={selfEvalForm.subject} onChange={(e) => setSelfEvalForm((p) => ({ ...p, subject: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.subject} onChange={(e) => setSelfEvalForm((p) => ({ ...p, subject: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("subject", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">담당 업무</Label>
-                      <Input value={selfEvalForm.assignedDuties} onChange={(e) => setSelfEvalForm((p) => ({ ...p, assignedDuties: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.assignedDuties} onChange={(e) => setSelfEvalForm((p) => ({ ...p, assignedDuties: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("assignedDuties", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">주당 수업시간</Label>
-                      <Input type="number" value={selfEvalForm.hoursPerWeek} onChange={(e) => setSelfEvalForm((p) => ({ ...p, hoursPerWeek: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input type="number" value={selfEvalForm.hoursPerWeek} onChange={(e) => setSelfEvalForm((p) => ({ ...p, hoursPerWeek: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("hoursPerWeek", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">담임 여부</Label>
-                      <div className="flex gap-1">
+                      <div className={`flex gap-1 rounded ${isSelfEvalFieldMissing("isHomeroom") ? "border border-red-500 p-1" : ""}`}>
                         {(["예", "아니오"] as const).map((opt) => (
                           <Button key={opt} type="button" variant={selfEvalForm.isHomeroom === opt ? "default" : "outline"} size="sm" className="h-8 rounded px-2 text-xs" onClick={() => setSelfEvalForm((p) => ({ ...p, isHomeroom: opt }))}>{opt}</Button>
                         ))}
@@ -1365,7 +1387,7 @@ export default function ReflectionPage() {
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">보직교사 여부</Label>
-                      <div className="flex gap-1">
+                      <div className={`flex gap-1 rounded ${isSelfEvalFieldMissing("isPositionTeacher") ? "border border-red-500 p-1" : ""}`}>
                         {(["예", "아니오"] as const).map((opt) => (
                           <Button key={opt} type="button" variant={selfEvalForm.isPositionTeacher === opt ? "default" : "outline"} size="sm" className="h-8 rounded px-2 text-xs" onClick={() => setSelfEvalForm((p) => ({ ...p, isPositionTeacher: opt }))}>{opt}</Button>
                         ))}
@@ -1373,19 +1395,19 @@ export default function ReflectionPage() {
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">수업공개(회)</Label>
-                      <Input value={selfEvalForm.openClassResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, openClassResult: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.openClassResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, openClassResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("openClassResult", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">학생 상담(시간)</Label>
-                      <Input value={selfEvalForm.studentCounselResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, studentCounselResult: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.studentCounselResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, studentCounselResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("studentCounselResult", "h-8 rounded text-sm")} />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-600">학부모 상담(시간)</Label>
-                      <Input value={selfEvalForm.parentCounselResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, parentCounselResult: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.parentCounselResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, parentCounselResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("parentCounselResult", "h-8 rounded text-sm")} />
                     </div>
                     <div className="sm:col-span-3">
                       <Label className="text-xs text-slate-600">그 밖의 실적</Label>
-                      <Input value={selfEvalForm.otherResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, otherResult: e.target.value }))} placeholder="기재" className="h-8 rounded border-slate-200 text-sm" />
+                      <Input value={selfEvalForm.otherResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, otherResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("otherResult", "h-8 rounded text-sm")} />
                     </div>
                   </div>
                 </div>
@@ -1410,11 +1432,11 @@ export default function ReflectionPage() {
                       <div className="mt-1 grid gap-2">
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">학습지도 추진 목표(학년 초에 계획되었던 학습지도 목표)</Label>
-                          <Textarea value={selfEvalForm.learningGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, learningGoal: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.learningGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, learningGoal: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("learningGoal", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">학습지도 추진 실적</Label>
-                          <Textarea value={selfEvalForm.learningResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, learningResult: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.learningResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, learningResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("learningResult", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                       </div>
                     </div>
@@ -1423,11 +1445,11 @@ export default function ReflectionPage() {
                       <div className="mt-1 grid gap-2">
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">생활지도 추진 목표</Label>
-                          <Textarea value={selfEvalForm.lifeGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, lifeGoal: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.lifeGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, lifeGoal: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("lifeGoal", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">생활지도 추진 실적</Label>
-                          <Textarea value={selfEvalForm.lifeResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, lifeResult: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.lifeResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, lifeResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("lifeResult", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                       </div>
                     </div>
@@ -1436,11 +1458,11 @@ export default function ReflectionPage() {
                       <div className="mt-1 grid gap-2">
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">전문성개발 추진 목표</Label>
-                          <Textarea value={selfEvalForm.professionalGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, professionalGoal: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.professionalGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, professionalGoal: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("professionalGoal", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">전문성개발 추진 실적</Label>
-                          <Textarea value={selfEvalForm.professionalResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, professionalResult: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.professionalResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, professionalResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("professionalResult", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                       </div>
                     </div>
@@ -1449,15 +1471,15 @@ export default function ReflectionPage() {
                       <div className="mt-1 grid gap-2">
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">담당 업무 추진 목표</Label>
-                          <Textarea value={selfEvalForm.dutyGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dutyGoal: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.dutyGoal} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dutyGoal: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("dutyGoal", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">담당 업무 추진 실적</Label>
-                          <Textarea value={selfEvalForm.dutyResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dutyResult: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.dutyResult} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dutyResult: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("dutyResult", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                         <div className="grid gap-1">
                           <Label className="text-xs text-slate-500">창의적 업무개선 사항</Label>
-                          <Textarea value={selfEvalForm.creativeImprovement} onChange={(e) => setSelfEvalForm((p) => ({ ...p, creativeImprovement: e.target.value }))} placeholder="기재" className="min-h-[80px] resize-y rounded-lg border-slate-200 text-sm" />
+                          <Textarea value={selfEvalForm.creativeImprovement} onChange={(e) => setSelfEvalForm((p) => ({ ...p, creativeImprovement: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("creativeImprovement", "min-h-[80px] resize-y rounded-lg text-sm")} />
                         </div>
                       </div>
                     </div>
@@ -1478,7 +1500,7 @@ export default function ReflectionPage() {
                       </thead>
                       <tbody>
                         <tr className="border-b border-slate-100">
-                          <td className="p-2 text-slate-600">목표달성도 (설정한 목표에 대한 달성 정도)</td>
+                          <td className={`p-2 ${isSelfEvalFieldMissing("goalAchievement") ? "text-red-600" : "text-slate-600"}`}>목표달성도 (설정한 목표에 대한 달성 정도)</td>
                           <td className="p-2 text-center" colSpan={3}>
                             <RadioGroup value={selfEvalForm.goalAchievement} onValueChange={(v) => setSelfEvalForm((p) => ({ ...p, goalAchievement: v as SelfEvalRating }))} className="flex flex-row justify-center gap-6">
                               {SELF_EVAL_RATINGS.map((r) => (
@@ -1491,7 +1513,7 @@ export default function ReflectionPage() {
                           </td>
                         </tr>
                         <tr className="border-b border-slate-100">
-                          <td className="p-2 text-slate-600">창의성 (학습지도·생활지도·전문성계발·담당 업무 등의 창의적 수행 정도)</td>
+                          <td className={`p-2 ${isSelfEvalFieldMissing("creativity") ? "text-red-600" : "text-slate-600"}`}>창의성 (학습지도·생활지도·전문성계발·담당 업무 등의 창의적 수행 정도)</td>
                           <td className="p-2 text-center" colSpan={3}>
                             <RadioGroup value={selfEvalForm.creativity} onValueChange={(v) => setSelfEvalForm((p) => ({ ...p, creativity: v as SelfEvalRating }))} className="flex flex-row justify-center gap-6">
                               {SELF_EVAL_RATINGS.map((r) => (
@@ -1504,7 +1526,7 @@ export default function ReflectionPage() {
                           </td>
                         </tr>
                         <tr className="border-b border-slate-100">
-                          <td className="p-2 text-slate-600">적시성 (기한 내 효과적 처리 정도)</td>
+                          <td className={`p-2 ${isSelfEvalFieldMissing("timeliness") ? "text-red-600" : "text-slate-600"}`}>적시성 (기한 내 효과적 처리 정도)</td>
                           <td className="p-2 text-center" colSpan={3}>
                             <RadioGroup value={selfEvalForm.timeliness} onValueChange={(v) => setSelfEvalForm((p) => ({ ...p, timeliness: v as SelfEvalRating }))} className="flex flex-row justify-center gap-6">
                               {SELF_EVAL_RATINGS.map((r) => (
@@ -1517,7 +1539,7 @@ export default function ReflectionPage() {
                           </td>
                         </tr>
                         <tr>
-                          <td className="p-2 text-slate-600">노력도 (목표 달성을 위한 노력·공헌도)</td>
+                          <td className={`p-2 ${isSelfEvalFieldMissing("effort") ? "text-red-600" : "text-slate-600"}`}>노력도 (목표 달성을 위한 노력·공헌도)</td>
                           <td className="p-2 text-center" colSpan={3}>
                             <RadioGroup value={selfEvalForm.effort} onValueChange={(v) => setSelfEvalForm((p) => ({ ...p, effort: v as SelfEvalRating }))} className="flex flex-row justify-center gap-6">
                               {SELF_EVAL_RATINGS.map((r) => (
@@ -1536,15 +1558,15 @@ export default function ReflectionPage() {
                 <div className="flex flex-wrap items-end justify-between gap-4 border-t border-slate-200 pt-4">
                   <div className="grid gap-1">
                     <Label className="text-xs text-slate-600">작성자(본인) 성명</Label>
-                    <Input value={selfEvalForm.preparerName} onChange={(e) => setSelfEvalForm((p) => ({ ...p, preparerName: e.target.value }))} placeholder="기재" className="w-40 rounded-lg border-slate-200 text-sm" />
+                    <Input value={selfEvalForm.preparerName} onChange={(e) => setSelfEvalForm((p) => ({ ...p, preparerName: e.target.value }))} placeholder="기재" className={selfEvalFieldClass("preparerName", "w-40 rounded-lg text-sm")} />
                   </div>
                   <div className="flex items-center gap-2">
                     <Label className="text-xs text-slate-600">년</Label>
-                    <Input value={selfEvalForm.dateYear} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateYear: e.target.value }))} placeholder="2026" className="w-14 rounded-lg border-slate-200 text-sm" />
+                    <Input value={selfEvalForm.dateYear} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateYear: e.target.value }))} placeholder="2026" className={selfEvalFieldClass("dateYear", "w-14 rounded-lg text-sm")} />
                     <Label className="text-xs text-slate-600">월</Label>
-                    <Input value={selfEvalForm.dateMonth} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateMonth: e.target.value }))} placeholder="월" className="w-10 rounded-lg border-slate-200 text-sm" />
+                    <Input value={selfEvalForm.dateMonth} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateMonth: e.target.value }))} placeholder="월" className={selfEvalFieldClass("dateMonth", "w-10 rounded-lg text-sm")} />
                     <Label className="text-xs text-slate-600">일</Label>
-                    <Input value={selfEvalForm.dateDay} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateDay: e.target.value }))} placeholder="일" className="w-10 rounded-lg border-slate-200 text-sm" />
+                    <Input value={selfEvalForm.dateDay} onChange={(e) => setSelfEvalForm((p) => ({ ...p, dateDay: e.target.value }))} placeholder="일" className={selfEvalFieldClass("dateDay", "w-10 rounded-lg text-sm")} />
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end border-t border-slate-200 pt-4">
