@@ -433,7 +433,7 @@ export default function ReflectionPage() {
   }, [userEmail, nextYearGoalText]);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || !initialLoadDoneRef.current) return;
     if (saveDraftTimeoutRef.current) clearTimeout(saveDraftTimeoutRef.current);
     saveDraftTimeoutRef.current = setTimeout(() => {
       saveDraftTimeoutRef.current = null;
@@ -448,7 +448,7 @@ export default function ReflectionPage() {
   }, [userEmail, goalAchievementText, reflectionText]);
 
   useEffect(() => {
-    if (!userEmail || typeof window === "undefined") return;
+    if (!userEmail || !initialLoadDoneRef.current || typeof window === "undefined") return;
     const saveToServer = () => {
       supabase.from("reflection_drafts").upsert(
         { user_email: userEmail, goal_achievement_text: goalAchievementText, reflection_text: reflectionText, updated_at: new Date().toISOString() },
@@ -481,7 +481,7 @@ export default function ReflectionPage() {
   }, [userEmail, goalAchievementText, reflectionText, evidenceText, nextYearGoalText]);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || !initialLoadDoneRef.current) return;
     if (saveEvidenceTimeoutRef.current) clearTimeout(saveEvidenceTimeoutRef.current);
     saveEvidenceTimeoutRef.current = setTimeout(() => {
       saveEvidenceTimeoutRef.current = null;
@@ -496,7 +496,7 @@ export default function ReflectionPage() {
   }, [userEmail, evidenceText]);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || !initialLoadDoneRef.current) return;
     if (saveNextYearTimeoutRef.current) clearTimeout(saveNextYearTimeoutRef.current);
     saveNextYearTimeoutRef.current = setTimeout(() => {
       saveNextYearTimeoutRef.current = null;
