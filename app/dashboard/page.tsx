@@ -220,7 +220,7 @@ export default function DashboardPage() {
     book_edutech: 1,
     health: 1,
     other: 1,
-    login_points: 2, // 1일 로그인 점수
+    login_points: 2, // 1일 방문 점수
   });
   type CategoryConfigItem = { key: string; label: string; unit: string };
   const DEFAULT_CATEGORIES: CategoryConfigItem[] = [
@@ -367,6 +367,16 @@ export default function DashboardPage() {
       const { data: { session: initSession } } = await supabase.auth.getSession();
       const token = initSession?.access_token ?? null;
       if (token) {
+        // 자동 로그인 포함: 대시보드에 들어오면 방문 포인트 적립을 시도한다(하루 1회).
+        try {
+          await fetch("/api/points/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          });
+        } catch {
+          // 방문 포인트 반영 실패해도 대시보드 진입은 유지
+        }
+
         try {
           const res = await fetch("/api/account/profile-overrides", {
             headers: { Authorization: `Bearer ${token}` },
@@ -2444,11 +2454,11 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ))}
-                      {/* 1일 로그인 점수 설정 */}
+                      {/* 1일 방문 점수 설정 */}
                       <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <div className="min-w-0">
-                          <div className="truncate text-xs font-medium text-slate-700">1일 로그인</div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">하루 1회 로그인 시</div>
+                          <div className="truncate text-xs font-medium text-slate-700">1일 방문</div>
+                          <div className="mt-0.5 text-[11px] text-slate-500">하루 1회 대시보드 방문 시</div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Input
@@ -3174,12 +3184,12 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* 로그인 포인트 */}
+            {/* 방문 포인트 */}
             {pointsDetail && (
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-slate-700">로그인 포인트</div>
-                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 로그인 시 +{pointsDetail.loginPointsPerDay ?? 2}점 (누계)</div>
+                  <div className="text-sm font-medium text-slate-700">방문 포인트</div>
+                  <div className="text-xs text-slate-500 mt-0.5">하루 1회 대시보드 방문 시 +{pointsDetail.loginPointsPerDay ?? 2}점 (누계)</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-800 ml-4">
                   {pointsDetail.login.toLocaleString()}점

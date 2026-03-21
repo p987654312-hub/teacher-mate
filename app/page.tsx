@@ -144,23 +144,7 @@ export default function Home() {
           data.user?.email ||
           "사용자";
 
-        let pointMsg = "";
-        const token = data.session?.access_token;
-        if (token) {
-          try {
-            const res = await fetch("/api/points/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-              const j = await res.json();
-              if (j.added > 0) pointMsg = `\n로그인 성공과 함께 열정 포인트 +${j.added}점 획득했습니다.`;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        alert(`${displayName}님 로그인 되었습니다.${pointMsg}`);
+        alert(`${displayName}님 로그인 되었습니다.`);
         router.push("/dashboard");
       } else {
         // 회원가입 모드

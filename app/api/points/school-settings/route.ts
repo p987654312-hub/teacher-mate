@@ -16,7 +16,7 @@ function defaultPoints(): Record<string, number> {
   CATEGORY_KEYS.forEach((k) => {
     o[k] = 1;
   });
-  o.login_points = 2; // 1일 로그인 점수 기본값
+  o.login_points = 2; // 1일 방문 점수 기본값
   return o;
 }
 
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
       const v = pointsInput[k];
       filteredPoints[k] = typeof v === "number" && v >= 0 ? v : 1;
     });
-    // 로그인 포인트 설정 추가
+    // 방문 포인트 설정 추가
     const loginPoints = pointsInput.login_points;
     filteredPoints.login_points = typeof loginPoints === "number" && loginPoints >= 0 ? loginPoints : 2;
 

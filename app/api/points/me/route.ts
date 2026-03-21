@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const { data: pointsRow } = await supabase.from("user_points").select("base_points, login_points").eq("user_email", email).maybeSingle();
     const base = (pointsRow?.base_points ?? 100) as number;
     const login = (pointsRow?.login_points ?? 0) as number;
-    // "하루 1회 로그인 시 +N점" 문구용: 학교 포인트 설정에서 읽는다.
+    // "하루 1회 대시보드 방문 시 +N점" 문구용: 학교 포인트 설정에서 읽는다.
     let loginPointsPerDay = 2;
 
     type MileageBreakdownItem = {

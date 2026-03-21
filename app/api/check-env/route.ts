@@ -33,6 +33,7 @@ export async function GET() {
   status["VERTEX_AI(사용가능)"] = vertexSetup ? "비어있음" : "설정됨";
 
   const connectivity: Record<string, "ok" | "fail" | "skip"> = {};
+  let vertexError: string | null = null;
 
   // Supabase 연결 테스트 (anon key만 사용, 세션 조회만 시도)
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -52,18 +53,21 @@ export async function GET() {
   // Vertex AI 최소 호출 (응답 내용은 사용하지 않음)
   if (!vertexSetup) {
     try {
-      await generateVertexGeminiText("1", { maxOutputTokens: 8 });
+      await generateVertexGeminiText("ping");
       connectivity.vertex_ai = "ok";
-    } catch {
+    } catch (err) {
       connectivity.vertex_ai = "fail";
+      vertexError = err instanceof Error ? err.message : String(err);
     }
   } else {
     connectivity.vertex_ai = "skip";
+    vertexError = vertexSetup;
   }
 
   return NextResponse.json({
     env: status,
     connectivity,
+    vertexError,
     note: "키 값은 반환되지 않으며, 개발 환경에서만 동작합니다.",
   });
 }

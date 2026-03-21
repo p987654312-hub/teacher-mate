@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseStored } from "../school-settings/route";
 
-const LOGIN_POINTS_PER_DEFAULT = 2;
+const VISIT_POINTS_PER_DEFAULT = 2;
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,7 +11,7 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
-/** 로그인 시 설정된 점수 추가, 하루 1회만 (같은 날 재로그인 시 추가 점수 없음) */
+/** 대시보드 방문 시 설정된 점수 추가, 하루 1회만 */
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     let loginPoints = (row?.login_points ?? 0) as number;
     const lastDate = row?.last_login_date as string | null;
 
-    // 같은 날 이미 로그인했으면 추가 점수 없음
+    // 같은 날 이미 적립했다면 추가 점수 없음
     if (lastDate === today) {
       return NextResponse.json({
         added: 0,
@@ -42,10 +42,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // 학교별 로그인 포인트 설정 가져오기
+    // 학교별 방문 포인트 설정 가져오기
     const meta = (user.user_metadata ?? {}) as { schoolName?: string };
     const schoolName = (meta.schoolName ?? "").trim();
-    let loginPointsPer = LOGIN_POINTS_PER_DEFAULT;
+    let loginPointsPer = VISIT_POINTS_PER_DEFAULT;
     
     if (schoolName) {
       const { data: settingsRow } = await supabase
@@ -56,11 +56,11 @@ export async function POST(req: Request) {
       
       if (settingsRow) {
         const { points } = parseStored(settingsRow);
-        loginPointsPer = typeof points.login_points === "number" && points.login_points >= 0 ? points.login_points : LOGIN_POINTS_PER_DEFAULT;
+        loginPointsPer = typeof points.login_points === "number" && points.login_points >= 0 ? points.login_points : VISIT_POINTS_PER_DEFAULT;
       }
     }
 
-    // 새로운 날 첫 로그인: 설정된 점수 추가
+    // 새로운 날 첫 방문: 설정된 점수 추가
     const toAdd = loginPointsPer;
     loginPoints += toAdd;
 
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       added: toAdd,
       login_points: loginPoints,
-      message: toAdd > 0 ? `열정 포인트 +${toAdd}점 획득` : undefined,
+      message: toAdd > 0 ? `방문 포인트 +${toAdd}점 획득` : undefined,
     });
   } catch (e) {
     console.error("points/login:", e);

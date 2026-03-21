@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     }
     const schoolName = (meta.schoolName ?? "").trim();
 
-    // 기본/로그인 포인트는 개인 user_points 기준
+    // 기본/방문 포인트는 개인 user_points 기준
     const { data: pointsRow } = await supabase
       .from("user_points")
       .select("base_points, login_points")
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     let mileage = 0;
     let mileageBreakdown: MileageBreakdownItem[] = [];
-    // "하루 1회 로그인 시 +N점" 문구용: 학교 포인트 설정에서 읽는다.
+    // "하루 1회 대시보드 방문 시 +N점" 문구용: 학교 포인트 설정에서 읽는다.
     let loginPointsPerDay = 2;
 
     if (schoolName) {
