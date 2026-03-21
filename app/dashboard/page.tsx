@@ -987,24 +987,6 @@ export default function DashboardPage() {
     parts.push(str.slice(last));
     return parts;
   };
-  // 외부 클릭 시 설정 닫기
-  const settingsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if ((showPointSettings || showDiagnosisSettings || showAiPromptSettings) && settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setShowPointSettings(false);
-        setShowDiagnosisSettings(false);
-        setShowAiPromptSettings(false);
-      }
-    };
-    if (showPointSettings || showDiagnosisSettings || showAiPromptSettings) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showPointSettings, showDiagnosisSettings, showAiPromptSettings]);
-
   const savePointAndCategorySettings = async (overrides?: { settings?: Record<string, number>; categories?: CategoryConfigItem[] }) => {
     const settings = overrides?.settings ?? pointSettings;
     const categories = overrides?.categories ?? categoryConfigSaved;
@@ -1194,8 +1176,10 @@ export default function DashboardPage() {
       const reflectionFromDb = String(draftRow?.reflection_text ?? "").trim();
       const goalFromLocal = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_goal_achievement_" + emailKey) ?? "").trim() : "";
       const reflectionFromLocal = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_reflection_text_" + emailKey) ?? "").trim() : "";
-      const goalAchievementFilled = (goalFromDb || goalFromLocal) !== "";
-      const reflectionFilled = (reflectionFromDb || reflectionFromLocal) !== "";
+      const goalAchievementFilled =
+        draftRow != null ? goalFromDb !== "" : goalFromLocal !== "";
+      const reflectionFilled =
+        draftRow != null ? reflectionFromDb !== "" : reflectionFromLocal !== "";
       const { data: nextYearRow } = await supabase
         .from("user_preferences")
         .select("pref_value")
@@ -2139,7 +2123,7 @@ export default function DashboardPage() {
               </div>
 
               {showAdminView && (showPointSettings || showDiagnosisSettings || showAiPromptSettings) && (
-                <div ref={settingsRef} className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-col gap-3">
                   {showAiPromptSettings && (
                   <Card className="rounded-xl border-slate-200/80 bg-slate-50/50 p-4 shadow-sm">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
