@@ -82,8 +82,16 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("admin/ai-provider upsert:", error);
+      const hint =
+        (error as { message?: string }).message?.includes("does not exist") ||
+        (error as { code?: string }).code === "42P01"
+          ? " Supabase SQL Editor에서 supabase/app_global_settings.sql 내용을 실행해 테이블을 만드세요."
+          : "";
       return NextResponse.json(
-        { error: "저장에 실패했습니다. Supabase에 app_global_settings 테이블이 있는지 확인하세요." },
+        {
+          error: `저장에 실패했습니다.${hint}`,
+          details: (error as { message?: string }).message ?? String(error),
+        },
         { status: 500 }
       );
     }

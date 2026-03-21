@@ -2070,7 +2070,9 @@ export default function DashboardPage() {
                                 });
                                 const j = await res.json().catch(() => ({}));
                                 if (!res.ok) {
-                                  alert(j?.error ?? "저장에 실패했습니다.");
+                                  const msg = j?.error ?? "저장에 실패했습니다.";
+                                  const detail = typeof j?.details === "string" ? j.details : "";
+                                  alert(detail ? `${msg}\n\n${detail}` : msg);
                                   return;
                                 }
                                 setSuperAdminAi({ status: "ready", provider: "vertex" });
@@ -2104,7 +2106,9 @@ export default function DashboardPage() {
                                 });
                                 const j = await res.json().catch(() => ({}));
                                 if (!res.ok) {
-                                  alert(j?.error ?? "저장에 실패했습니다.");
+                                  const msg = j?.error ?? "저장에 실패했습니다.";
+                                  const detail = typeof j?.details === "string" ? j.details : "";
+                                  alert(detail ? `${msg}\n\n${detail}` : msg);
                                   return;
                                 }
                                 setSuperAdminAi({ status: "ready", provider: "gemini" });

@@ -78,12 +78,10 @@ export async function POST(req: Request) {
     }
 
     const getTemplate = (t: string) => {
-      // next_year_goal은 키워드 반영 규칙이 핵심이므로, DB 오버라이드가 남아있어도
-      // 현재 코드의 기본 템플릿을 강제로 사용해 동작을 안정화한다.
-      if (t === "next_year_goal") {
-        return (AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? "";
-      }
-      return promptTemplates[t]?.trim() || ((AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? "");
+      return (
+        promptTemplates[t]?.trim() ||
+        ((AI_PROMPT_DEFAULTS as Record<string, { template: string }>)[t]?.template ?? "")
+      );
     };
 
     // 프롬프트 구성 (1인칭 시점, 교사 본인의 자기성찰·다짐)

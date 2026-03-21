@@ -55,14 +55,10 @@ export async function GET(req: Request) {
 
     const prompts = AI_PROMPT_KEYS.reduce((acc, key) => {
       const def = AI_PROMPT_DEFAULTS[key];
-      // next_year_goal은 백엔드에서 무조건 기본값을 사용하도록 고정되어 있으므로,
-      // 관리자 화면 표시도 기본값(def.template) 기준으로 통일해 혼선을 줄입니다.
       const effectiveValue =
-        key === "next_year_goal"
-          ? def.template
-          : typeof overrides[key] === "string" && overrides[key].trim()
-            ? overrides[key].trim()
-            : def.template;
+        typeof overrides[key] === "string" && overrides[key].trim()
+          ? overrides[key].trim()
+          : def.template;
       acc[key] = {
         value: effectiveValue,
         description: def.description,
