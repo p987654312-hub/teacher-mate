@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { invalidateAiProviderCache, type AiBackend } from "@/lib/aiGemini";
+import { invalidateAiProviderCache, resolveAiBackendFromDbValue, type AiBackend } from "@/lib/aiGemini";
 
 const SETTINGS_KEY = "ai_provider";
 
@@ -39,10 +39,13 @@ export async function GET(req: Request) {
       .maybeSingle();
     if (readError) {
       console.error("admin/ai-provider read:", readError);
-      return NextResponse.json({ provider: "vertex" as AiBackend, warning: "app_global_settings 테이블을 아직 만들지 않았을 수 있습니다. supabase/app_global_settings.sql을 실행하세요." });
+      return NextResponse.json({
+        provider: resolveAiBackendFromDbValue(null),
+        warning: "app_global_settings 테이블을 아직 만들지 않았을 수 있습니다. supabase/app_global_settings.sql을 실행하세요.",
+      });
     }
-    const raw = (row?.value as string | undefined)?.trim();
-    const provider: AiBackend = raw === "gemini" ? "gemini" : "vertex";
+    const raw = row?.value as string | undefined;
+    const provider = resolveAiBackendFromDbValue(raw);
 
     return NextResponse.json({ provider });
   } catch (e) {

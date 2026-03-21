@@ -19,6 +19,20 @@ export function invalidateAiProviderCache() {
   providerCache = null;
 }
 
+/**
+ * DB `app_global_settings.ai_provider` 값과 서버 env를 함께 해석합니다.
+ * - `gemini` / `vertex` 가 명시되면 그대로 사용
+ * - 없거나 비어 있으면: Vertex JSON 없고 GEMINI_API_KEY만 있으면 `gemini`(레거시 키 전용 배포), 아니면 `vertex`
+ */
+export function resolveAiBackendFromDbValue(raw: string | undefined | null): AiBackend {
+  const t = (raw ?? "").trim();
+  const hasVertex = !!process.env.GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON?.trim();
+  const hasGemini = !!process.env.GEMINI_API_KEY?.trim();
+  if (t === "gemini") return "gemini";
+  if (t === "vertex") return "vertex";
+  return !hasVertex && hasGemini ? "gemini" : "vertex";
+}
+
 export async function getAiProvider(): Promise<AiBackend> {
   if (providerCache && Date.now() < providerCache.expires) {
     return providerCache.value;
@@ -26,12 +40,12 @@ export async function getAiProvider(): Promise<AiBackend> {
   try {
     const supabase = getSupabaseAdmin();
     const { data } = await supabase.from("app_global_settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
-    const raw = (data?.value as string | undefined)?.trim();
-    const v: AiBackend = raw === "gemini" ? "gemini" : "vertex";
+    const raw = data?.value as string | undefined;
+    const v = resolveAiBackendFromDbValue(raw);
     providerCache = { value: v, expires: Date.now() + CACHE_MS };
     return v;
   } catch {
-    const v: AiBackend = "vertex";
+    const v = resolveAiBackendFromDbValue(null);
     providerCache = { value: v, expires: Date.now() + CACHE_MS };
     return v;
   }
