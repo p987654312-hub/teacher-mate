@@ -834,11 +834,11 @@ export default function ReflectionPage() {
           </tbody>
         </table>
       </div>
-      <div class="sec footer">
+      <div class="footer">
         <div class="footer-date">${esc(f.dateYear)}년 ${esc(f.dateMonth)}월 ${esc(f.dateDay)}일</div>
         <div class="footer-row">
-          <span class="label">작성자(본인) 성명</span><span class="line">${esc(f.preparerName)}</span>
-          <span class="label" style="margin-left:20px">서명(인)</span><span class="line"></span>
+          <span class="label">작성자(본인) 성명</span><span class="line"></span>
+          <span class="label" style="margin-left:20px">서명(인)</span>
         </div>
       </div>
     </div></body></html>`;
