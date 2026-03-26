@@ -61,7 +61,9 @@ function getVertexClient(): VertexAI {
 
 /** 모델 미설정 시 AI Studio와 동일하게 gemini-2.5-flash 사용 */
 export function getVertexGeminiModelId(): string {
-  return process.env.GOOGLE_CLOUD_VERTEX_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
+  // Vertex는 프로젝트/리전에 따라 일부 preview 모델 ID가 바로 열려있지 않을 수 있어,
+  // 기본값은 접근 가능한 stable 모델로 둡니다.
+  return process.env.GOOGLE_CLOUD_VERTEX_MODEL?.trim() || "gemini-2.5-flash";
 }
 
 /** 라우트 진입 시 사전 검증용 (실제 호출 없음) */
@@ -89,13 +91,31 @@ export async function generateVertexGeminiText(
   opts?: { maxOutputTokens?: number }
 ): Promise<string> {
   const vertex = getVertexClient();
-  const model = vertex.getGenerativeModel({ model: getVertexGeminiModelId() });
-  const result =
-    opts?.maxOutputTokens != null
-      ? await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: opts.maxOutputTokens },
-        })
-      : await model.generateContent(prompt);
-  return extractText(result.response);
+  const call = async (modelId: string) => {
+    const model = vertex.getGenerativeModel({ model: modelId });
+    const result =
+      opts?.maxOutputTokens != null
+        ? await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: opts.maxOutputTokens },
+          })
+        : await model.generateContent(prompt);
+    return extractText(result.response);
+  };
+
+  const primary = getVertexGeminiModelId();
+  try {
+    return await call(primary);
+  } catch (e: any) {
+    const msg = String(e?.message ?? "");
+    const code = e?.status ?? e?.code ?? null;
+    const looksLikeNotFound =
+      code === 404 ||
+      msg.includes("Publisher Model") ||
+      msg.includes("was not found") ||
+      msg.includes("NOT_FOUND");
+    if (!looksLikeNotFound || primary === "gemini-2.5-flash") throw e;
+    // 모델 접근/존재 문제가 의심되면 안정적인 모델로 한 번 폴백
+    return await call("gemini-2.5-flash");
+  }
 }
