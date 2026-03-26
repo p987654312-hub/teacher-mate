@@ -61,7 +61,7 @@ function getVertexClient(): VertexAI {
 
 /** 모델 미설정 시 AI Studio와 동일하게 gemini-2.5-flash 사용 */
 export function getVertexGeminiModelId(): string {
-  return process.env.GOOGLE_CLOUD_VERTEX_MODEL?.trim() || "gemini-2.5-flash";
+  return process.env.GOOGLE_CLOUD_VERTEX_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
 }
 
 /** 라우트 진입 시 사전 검증용 (실제 호출 없음) */

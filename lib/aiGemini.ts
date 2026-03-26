@@ -71,7 +71,7 @@ async function generateStudioGeminiText(
   if (!key) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(key);
-  const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+  const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
   const model = genAI.getGenerativeModel({ model: modelId });
   const result =
     opts?.maxOutputTokens != null
