@@ -649,6 +649,13 @@ export default function PlanPage() {
   ]);
   const [mentoringFeedback, setMentoringFeedback] = useState<string | null>(null);
   const [isMentoringLoading, setIsMentoringLoading] = useState(false);
+  const aiWarnedRef = useRef(false);
+  const maybeAlertAiWarning = (warning: unknown) => {
+    const w = typeof warning === "string" ? warning.trim() : "";
+    if (!w || aiWarnedRef.current) return;
+    aiWarnedRef.current = true;
+    alert(w);
+  };
   const sessionTokenRef = useRef<string | null>(null);
 
   // 보호된 라우트: 교사만 접근 가능
@@ -1211,6 +1218,7 @@ export default function PlanPage() {
         }),
       });
       const data = await res.json();
+      maybeAlertAiWarning(data?.warning);
       if (!res.ok) {
         alert(data?.code === "QUOTA_EXCEEDED" ? data.error : (data?.error || "AI 추천을 불러오는데 실패했습니다."));
         return;
@@ -1369,6 +1377,7 @@ export default function PlanPage() {
         alert(errorMessage);
         return;
       }
+      maybeAlertAiWarning(responseData?.warning);
 
       const { recommendation } = responseData;
 
@@ -1432,6 +1441,7 @@ export default function PlanPage() {
         }),
       });
       const data = await res.json();
+      maybeAlertAiWarning(data?.warning);
       if (!res.ok) {
         const msg = data?.code === "QUOTA_EXCEEDED" ? data.error : (data?.error || "멘토링 요청에 실패했습니다.");
         throw new Error(msg);

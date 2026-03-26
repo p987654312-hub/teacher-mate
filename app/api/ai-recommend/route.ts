@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { AI_PROMPT_DEFAULTS, applyPromptTemplate } from "@/lib/aiPromptDefaults";
-import { generateGeminiText, getAiSetupError } from "@/lib/aiGemini";
+import { generateGeminiTextWithMeta, getAiSetupError } from "@/lib/aiGemini";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -296,7 +296,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const recommendation = (await generateGeminiText(prompt)).trim();
+    const ai = await generateGeminiTextWithMeta(prompt);
+    const recommendation = (ai.text ?? "").trim();
 
     if (!recommendation || recommendation === "") {
       return NextResponse.json(
@@ -304,6 +305,11 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    const warning =
+      ai.fallbackFrom
+        ? `Vertex AI에서 모델 "${ai.fallbackFrom}" 접근에 실패하여 "${ai.modelUsed}"로 대체 실행했습니다. (리전/권한/모델 ID를 확인하세요.)`
+        : null;
 
     if (type === "plan_fill_rows") {
       let raw = recommendation.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -361,7 +367,7 @@ export async function POST(req: Request) {
           remarks: r.effect,
         }));
 
-        return NextResponse.json({ rows: mapped });
+        return NextResponse.json({ rows: mapped, warning });
       } catch (parseErr) {
         console.error("plan_fill_rows parse error:", parseErr);
         return NextResponse.json(
@@ -388,7 +394,7 @@ export async function POST(req: Request) {
         );
       }
     }
-    return NextResponse.json({ recommendation });
+    return NextResponse.json({ recommendation, warning });
   } catch (error: any) {
     console.error("Error in /api/ai-recommend:", error);
     const msg = (error?.message ?? "").toLowerCase();

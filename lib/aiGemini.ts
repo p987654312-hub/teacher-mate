@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { generateVertexGeminiText, getVertexGeminiSetupError } from "@/lib/vertexGemini";
+import { generateVertexGeminiText, generateVertexGeminiTextWithMeta, getVertexGeminiSetupError } from "@/lib/vertexGemini";
 
 export type AiBackend = "vertex" | "gemini";
 
@@ -94,4 +94,18 @@ export async function generateGeminiText(
   const p = await getAiProvider();
   if (p === "vertex") return generateVertexGeminiText(prompt, opts);
   return generateStudioGeminiText(prompt, opts);
+}
+
+export async function generateGeminiTextWithMeta(
+  prompt: string,
+  opts?: { maxOutputTokens?: number }
+): Promise<{ text: string; backend: AiBackend; modelUsed: string; fallbackFrom: string | null }> {
+  const backend = await getAiProvider();
+  if (backend === "vertex") {
+    const r = await generateVertexGeminiTextWithMeta(prompt, opts);
+    return { text: r.text, backend, modelUsed: r.modelUsed, fallbackFrom: r.fallbackFrom };
+  }
+  const modelUsed = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
+  const text = await generateStudioGeminiText(prompt, opts);
+  return { text, backend, modelUsed, fallbackFrom: null };
 }

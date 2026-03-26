@@ -228,6 +228,13 @@ export default function ReflectionPage() {
   const selfEvalFieldClass = (k: keyof SelfEvalFormState, base: string) =>
     `${base} ${isSelfEvalFieldMissing(k) ? "border-red-500 focus-visible:ring-red-500" : "border-slate-200"}`;
   const navigatingToReportRef = useRef(false);
+  const aiWarnedRef = useRef(false);
+  const maybeAlertAiWarning = (warning: unknown) => {
+    const w = typeof warning === "string" ? warning.trim() : "";
+    if (!w || aiWarnedRef.current) return;
+    aiWarnedRef.current = true;
+    alert(w);
+  };
 
   useEffect(() => {
     const check = async () => {
@@ -569,6 +576,7 @@ export default function ReflectionPage() {
         body: JSON.stringify({ type: "result_report", planSummary, mileageText }),
       });
       const json = await res.json();
+      maybeAlertAiWarning(json?.warning);
       if (res.ok && json.recommendation) {
         const text = json.recommendation;
         setGoalAchievementText(text);
@@ -921,6 +929,7 @@ export default function ReflectionPage() {
         }),
       });
       const data = await res.json();
+      maybeAlertAiWarning(data?.warning);
       if (res.ok && data.learningGoal != null) {
         setSelfEvalForm((prev) => ({
           ...prev,
@@ -1033,6 +1042,7 @@ export default function ReflectionPage() {
                       body: JSON.stringify({ type: "analysis_post_rewrite", text: analysisPostText }),
                     });
                     const json = await res.json();
+                    maybeAlertAiWarning(json?.warning);
                     if (!res.ok) {
                       alert(json?.error ?? "AI 글 다듬기에 실패했습니다.");
                       return;

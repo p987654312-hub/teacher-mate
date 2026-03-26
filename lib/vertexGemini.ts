@@ -119,3 +119,39 @@ export async function generateVertexGeminiText(
     return await call("gemini-2.5-flash");
   }
 }
+
+export async function generateVertexGeminiTextWithMeta(
+  prompt: string,
+  opts?: { maxOutputTokens?: number }
+): Promise<{ text: string; modelUsed: string; fallbackFrom: string | null }> {
+  const vertex = getVertexClient();
+  const call = async (modelId: string) => {
+    const model = vertex.getGenerativeModel({ model: modelId });
+    const result =
+      opts?.maxOutputTokens != null
+        ? await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: opts.maxOutputTokens },
+          })
+        : await model.generateContent(prompt);
+    return extractText(result.response);
+  };
+
+  const primary = getVertexGeminiModelId();
+  try {
+    const text = await call(primary);
+    return { text, modelUsed: primary, fallbackFrom: null };
+  } catch (e: any) {
+    const msg = String(e?.message ?? "");
+    const code = e?.status ?? e?.code ?? null;
+    const looksLikeNotFound =
+      code === 404 ||
+      msg.includes("Publisher Model") ||
+      msg.includes("was not found") ||
+      msg.includes("NOT_FOUND");
+    if (!looksLikeNotFound || primary === "gemini-2.5-flash") throw e;
+    const fallback = "gemini-2.5-flash";
+    const text = await call(fallback);
+    return { text, modelUsed: fallback, fallbackFrom: primary };
+  }
+}

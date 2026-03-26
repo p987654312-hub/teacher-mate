@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Link from "next/link";
@@ -36,6 +36,13 @@ function DiagnosisContent() {
   const [errorQuestionIds, setErrorQuestionIds] = useState<Record<string, boolean>>({});
   const [useSurvey, setUseSurvey] = useState(false);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
+  const aiWarnedRef = useRef(false);
+  const maybeAlertAiWarning = (warning: unknown) => {
+    const w = typeof warning === "string" ? warning.trim() : "";
+    if (!w || aiWarnedRef.current) return;
+    aiWarnedRef.current = true;
+    alert(w);
+  };
 
   // 보호된 라우트 + 학교별 설문 로드 (설정 로드 후에만 폼 표시 → 깜빡임 없음)
   useEffect(() => {
@@ -327,6 +334,7 @@ function DiagnosisContent() {
             });
             if (analysisRes.ok) {
               const result = await analysisRes.json();
+              maybeAlertAiWarning(result?.warning);
               if (result.recommendation && result.recommendation.trim()) {
                 const analysisText = result.recommendation.trim();
                 await supabase.from("diagnosis_results").update({
@@ -363,6 +371,7 @@ function DiagnosisContent() {
           });
           if (analysisRes.ok) {
             const result = await analysisRes.json();
+            maybeAlertAiWarning(result?.warning);
             if (result.recommendation && result.recommendation.trim()) {
               const analysisText = result.recommendation.trim();
                 await supabase.from("diagnosis_results").update({

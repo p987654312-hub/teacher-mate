@@ -76,6 +76,13 @@ function DiagnosisResultContent() {
   const [diagnosisTitle, setDiagnosisTitle] = useState<string | null>(null);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const aiWarnedRef = useRef(false);
+  const maybeAlertAiWarning = (warning: unknown) => {
+    const w = typeof warning === "string" ? warning.trim() : "";
+    if (!w || aiWarnedRef.current) return;
+    aiWarnedRef.current = true;
+    alert(w);
+  };
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -393,6 +400,7 @@ function DiagnosisResultContent() {
           }),
         });
         const json = await res.json();
+        maybeAlertAiWarning(json?.warning);
         if (res.ok && json.recommendation) {
           setAiAnalysis(json.recommendation);
           const analysisText = json.recommendation;
