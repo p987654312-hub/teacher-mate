@@ -99,6 +99,16 @@ function PlanPrintContent() {
         setUserName(j.name ?? viewEmail ?? "");
         setUserSchool(j.schoolName ?? "");
         if (j.diagnosisSummary) setDiagnosisSummary(j.diagnosisSummary);
+        // 관리자 조회에서도 학교 카테고리 설정 로드 (미로드 시 '마일리지카드1' 기본값이 그대로 노출됨)
+        try {
+          const catRes = await fetch("/api/school-category-settings", { headers: { Authorization: `Bearer ${token}` } });
+          if (catRes.ok) {
+            const cj = await catRes.json();
+            if (Array.isArray(cj.categories)) setSchoolCategories(cj.categories);
+          }
+        } catch {
+          // ignore
+        }
         const planRow = j.plan;
         if (planRow) {
           setPlan({
@@ -353,10 +363,16 @@ function PlanPrintContent() {
     health: "마일리지카드5",
     other: "마일리지카드6",
   };
+  const normalizeCategoryLabelForPrint = (label: string): string => {
+    const s = (label ?? "").trim();
+    // 출력용에서는 "마일리지카드1" 같은 기본값이 너무 기술적으로 보여서 축약
+    if (/^마일리지카드\d+$/.test(s)) return s.replace(/^마일리지/, "");
+    return s;
+  };
   const getCategoryLabel = (key: string): string => {
     const fromSettings = schoolCategories.find((c) => c.key === key)?.label;
-    if (fromSettings && fromSettings.trim()) return fromSettings.trim();
-    return DEFAULT_CATEGORY_LABELS[key] ?? key;
+    if (fromSettings && fromSettings.trim()) return normalizeCategoryLabelForPrint(fromSettings);
+    return normalizeCategoryLabelForPrint(DEFAULT_CATEGORY_LABELS[key] ?? key);
   };
 
   // 연간 목표량 검증 함수
