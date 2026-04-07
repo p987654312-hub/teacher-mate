@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { parseValueFromContent } from "@/lib/mileageProgress";
+import { sumParsedValueForCategory } from "@/lib/mileageProgress";
 import { parseStored } from "@/app/api/points/school-settings/route";
 
 function getSupabaseAdmin() {
@@ -58,10 +58,9 @@ export async function GET(req: Request) {
       const healthGoalUnit = (planRes.data?.education_annual_goal_unit === "거리" ? "거리" : "시간") as "시간" | "거리";
 
       const sumByKey: Record<string, number> = {};
-      (entriesRes.data ?? []).forEach((e: { content: string; category: string }) => {
-        const unit = unitByKey[e.category];
-        const value = parseValueFromContent(e.content, e.category, healthGoalUnit, unit);
-        sumByKey[e.category] = (sumByKey[e.category] ?? 0) + value;
+      const entryRows = (entriesRes.data ?? []) as { content: string; category: string }[];
+      categories.forEach((c) => {
+        sumByKey[c.key] = sumParsedValueForCategory(entryRows, c.key, healthGoalUnit, unitByKey[c.key]);
       });
 
       mileageBreakdown = categories.map((c) => {

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
-import { parseValueFromContent, hasValidMileageFormat, isMileageEntryCountable } from "@/lib/mileageProgress";
+import { sumParsedValueForCategory, hasValidMileageFormat, isMileageEntryCountable } from "@/lib/mileageProgress";
 import { ArrowLeft, Calendar, Maximize2, Minimize2, NotebookPen, Pencil, Plane, Plus, Trash2 } from "lucide-react";
 
 const PLAN_GOAL_KEYS: Record<string, string> = {
@@ -983,10 +983,7 @@ export default function MileagePage() {
           {displayCategories.map((c) => {
             const expanded = !!expandedByKey[c.key];
             const list = entriesByCategory[c.key] ?? [];
-            const sum = list.reduce(
-              (acc, e) => acc + parseValueFromContent(e.content, c.key, healthGoalUnit, c.unit),
-              0
-            );
+            const sum = sumParsedValueForCategory(list, c.key, healthGoalUnit, c.unit);
             const goalNum = planGoals[c.key] ?? 0;
             const progress = goalNum > 0 ? Math.min(100, (sum / goalNum) * 100) : 0;
             const unit = c.unit;

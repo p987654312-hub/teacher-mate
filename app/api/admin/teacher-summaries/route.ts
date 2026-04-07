@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { computeMileageProgress, parseValueFromContent } from "@/lib/mileageProgress";
+import { computeMileageProgress, sumParsedValueForCategory } from "@/lib/mileageProgress";
 import { parseStored } from "@/app/api/points/school-settings/route";
 
 function getSupabaseAdmin() {
@@ -227,10 +227,9 @@ export async function POST(req: Request) {
 
         // 개인 포인트(마일리지 총점) 계산: 기본/로그인 + 마일리지(학교 설정 단위당 포인트)
         const sumByKey: Record<string, number> = {};
-        (mileageRes.data ?? []).forEach((e: { content: string; category: string }) => {
-          const unit = unitByKey[e.category];
-          const value = parseValueFromContent(e.content, e.category, healthGoalUnit, unit);
-          sumByKey[e.category] = (sumByKey[e.category] ?? 0) + value;
+        const mileageRows = (mileageRes.data ?? []) as { content: string; category: string }[];
+        schoolCategories.forEach((c) => {
+          sumByKey[c.key] = sumParsedValueForCategory(mileageRows, c.key, healthGoalUnit, unitByKey[c.key]);
         });
         let mileagePoints = 0;
         schoolCategories.forEach((c) => {

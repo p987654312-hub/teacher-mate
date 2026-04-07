@@ -31,7 +31,14 @@ function collectUnitValues(text: string, regex: RegExp): number {
   return sum;
 }
 
-/** 시간 카테고리: 시간 + 분(60분=1시간, 남는 분은 절삭). */
+/** 학교 설정 JSON 등에서 온 단위 문자열 정규화(BOM·0폭 공백·앞뒤 공백 제거). */
+function normalizeCategoryUnit(unit: string | undefined): string | undefined {
+  if (unit == null) return undefined;
+  const t = unit.replace(/[\uFEFF\u200B-\u200D\u2060]/g, "").trim();
+  return t === "" ? undefined : t;
+}
+
+/** 한 줄(content) 기준: 시간 + 분을 합쳐 시간 환산(60분=1시간). 항목 여러 개 합계는 sumParsedValueForCategory를 쓴다. */
 function parseTimeValue(text: string): number {
   const hours = collectUnitValues(text, /(\d+(?:\.\d+)?)\s*시간/g);
   const minutes = collectUnitValues(text, /(\d+(?:\.\d+)?)\s*분/g);
@@ -81,31 +88,32 @@ export function hasValidMileageFormat(
 ): boolean {
   const text = (content ?? "").trim();
   if (!text) return true;
-  
+
+  const unitNorm = normalizeCategoryUnit(categoryUnit);
   // categoryUnit이 있으면 해당 단위 기준으로 정확히 검증
-  if (categoryUnit) {
-    if (categoryUnit === "km") {
+  if (unitNorm) {
+    if (unitNorm === "km") {
       // km 단위: km만 허용 (시간은 허용하지 않음)
       // "0.5km", "2.5km", "10km" 등 소수점 포함 모든 km 패턴 매칭
       const kmMatch1 = text.match(/(\d+(?:\.\d+)?)\s*km/gi);
       const kmMatch2 = text.match(/(\d+(?:\.\d+)?)\s*킬로/gi);
       return (kmMatch1 !== null && kmMatch1.length > 0) || (kmMatch2 !== null && kmMatch2.length > 0);
     }
-    if (categoryUnit === "시간") {
+    if (unitNorm === "시간") {
       // 시간 단위: 시간 또는 분만 허용 (km은 허용하지 않음)
       return hasTimePattern(text);
     }
-    if (categoryUnit === "분") {
+    if (unitNorm === "분") {
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*분/g) > 0;
     }
-    if (categoryUnit === "회") {
+    if (unitNorm === "회") {
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) > 0 || true; // 기본적으로 허용
     }
-    if (categoryUnit === "건") {
+    if (unitNorm === "건") {
       // 1개당 1건으로 인식하므로 단위 없어도 유효. N회·N건 있으면 그에 맞춤
       return true;
     }
-    if (categoryUnit === "권") {
+    if (unitNorm === "권") {
       return collectUnitValues(text, /(\d+(?:\.\d+)?)\s*권/g) > 0 || collectUnitValues(text, /(\d+(?:\.\d+)?)\s*회/g) > 0 || true;
     }
   }
@@ -169,8 +177,9 @@ export function parseValueFromContent(
   const text = (content ?? "").trim();
   if (!text) return 0;
 
-  if (categoryUnit && ["시간", "분", "회", "건", "권", "km"].includes(categoryUnit)) {
-    return parseByUnit(text, categoryUnit);
+  const unitNorm = normalizeCategoryUnit(categoryUnit);
+  if (unitNorm && ["시간", "분", "회", "건", "권", "km"].includes(unitNorm)) {
+    return parseByUnit(text, unitNorm);
   }
 
   switch (categoryKey) {
@@ -232,6 +241,53 @@ export function isMileageEntryCountable(content: string, now: Date = new Date())
   return entryDay.getTime() <= today.getTime();
 }
 
+function sumTimeHoursAcrossEntries(rows: MileageEntryLike[]): number {
+  let totalHours = 0;
+  let totalMinutes = 0;
+  for (const e of rows) {
+    const t = (e.content ?? "").trim();
+    totalHours += collectUnitValues(t, /(\d+(?:\.\d+)?)\s*시간/g);
+    totalMinutes += collectUnitValues(t, /(\d+(?:\.\d+)?)\s*분/g);
+  }
+  return totalHours + Math.floor(totalMinutes / 60);
+}
+
+/**
+ * 카테고리별 마일리지 수치 합계.
+ * 단위가 "시간"이면 기록마다 floor(분/60)하지 않고, 시간·분을 각각 모두 합친 뒤 60분마다 1시간으로 이월.
+ * health·other 카드가 "건"으로 잘못 열려 있어도 내용이 모두 N시간/N분이면 동일 합산.
+ */
+export function sumParsedValueForCategory(
+  entries: MileageEntryLike[],
+  categoryKey: string,
+  healthGoalUnit: "시간" | "거리",
+  categoryUnit?: string
+): number {
+  const rows = (entries ?? []).filter(
+    (e) => e.category === categoryKey && isMileageEntryCountable(e.content)
+  );
+
+  const unit = normalizeCategoryUnit(categoryUnit);
+  const allRowsHaveTimePattern =
+    rows.length > 0 && rows.every((e) => hasTimePattern((e.content ?? "").trim()));
+
+  const useCrossEntryTimeSum =
+    unit === "시간" ||
+    (healthGoalUnit !== "거리" &&
+      (categoryKey === "health" || categoryKey === "other") &&
+      unit === "건" &&
+      allRowsHaveTimePattern);
+
+  if (useCrossEntryTimeSum) {
+    return sumTimeHoursAcrossEntries(rows);
+  }
+
+  return rows.reduce(
+    (acc, e) => acc + parseValueFromContent(e.content, categoryKey, healthGoalUnit, categoryUnit),
+    0
+  );
+}
+
 function getCategoryUnit(categoryKey: string, healthGoalUnit: "시간" | "거리", unitOverride?: string): string {
   if (unitOverride) return unitOverride;
   if (categoryKey === "training") return "시간";
@@ -255,20 +311,7 @@ export function computeMileageProgress(
   const cats = schoolCategories?.length === 6 ? schoolCategories : MILEAGE_CATEGORIES.map((c) => ({ key: c.key, label: c.label, unit: getCategoryUnit(c.key, healthGoalUnit) }));
   const sumByCategory: Record<string, number> = {};
   cats.forEach((c) => {
-    sumByCategory[c.key] = 0;
-  });
-  const unitByKey: Record<string, string> = {};
-  cats.forEach((c) => {
-    unitByKey[c.key] = c.unit;
-  });
-  entries.forEach((e) => {
-    // "예정" 또는 미래 날짜면 합산에서 제외
-    if (!isMileageEntryCountable(e.content)) return;
-    const k = e.category;
-    if (k && sumByCategory[k] !== undefined) {
-      const unit = unitByKey[k];
-      sumByCategory[k] += parseValueFromContent(e.content, k, healthGoalUnit, unit);
-    }
+    sumByCategory[c.key] = sumParsedValueForCategory(entries, c.key, healthGoalUnit, c.unit);
   });
 
   const categories = cats.map((c) => {
