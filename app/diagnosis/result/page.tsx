@@ -36,6 +36,7 @@ type DiagnosisResult = {
   total_score: number;
   raw_answers: Record<string, number> & { _schema?: string };
   created_at: string;
+  exam_date?: string | null;
   ai_analysis?: string | null;
   category_scores?: {
     domain1?: { score: number; count: number };
@@ -545,16 +546,16 @@ function DiagnosisResultContent() {
     });
   }
 
-  // 방사형 범례용 검사일 (사전·사후)
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
+  // 방사형 범례용 검사일 (사전·사후) — 사용자가 실시일을 고르면 exam_date(YYYY-MM-DD)를 우선 사용
+  const formatDate = (isoOrDate: string) => {
+    const d = new Date(isoOrDate);
     const y = String(d.getFullYear()).slice(-2);
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}.${m}.${day}`;
   };
-  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
-  const postDateStr = diagnosisResult ? formatDate(diagnosisResult.created_at) : "";
+  const preDateStr = preResult ? formatDate(preResult.exam_date || preResult.created_at) : "";
+  const postDateStr = diagnosisResult ? formatDate(diagnosisResult.exam_date || diagnosisResult.created_at) : "";
 
   // 강점/개발 우선 영역 (홀수 대영역이면 강점 3개·개발 2개, 짝수면 반반)
   const sorted = [...domainAverages].sort((a, b) => b.avg - a.avg);
@@ -565,7 +566,7 @@ function DiagnosisResultContent() {
   const weaknesses = weaknessN > 0 ? [...sorted.slice(-weaknessN)].reverse() : [];
 
   // 날짜 포맷팅 (24.06.03 형태)
-  const date = new Date(diagnosisResult.created_at);
+  const date = new Date(diagnosisResult.exam_date || diagnosisResult.created_at);
   const formattedDate = `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 
   // 사전검사 전용: 결과 분석 다시 생성

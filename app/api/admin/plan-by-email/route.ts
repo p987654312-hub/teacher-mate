@@ -67,7 +67,11 @@ export async function POST(req: Request) {
     }
 
     const admin = getSupabaseAdmin();
-    type ListedUser = { id: string; email?: string; user_metadata?: { role?: string; schoolName?: string; name?: string } };
+    type ListedUser = {
+      id: string;
+      email?: string;
+      user_metadata?: { role?: string; schoolName?: string; name?: string; gradeClass?: string; schoolLevel?: string; subject?: string };
+    };
     const findByEmail = async (): Promise<ListedUser | undefined> => {
       const perPage = 1000;
       const maxPages = 200;
@@ -213,6 +217,9 @@ export async function POST(req: Request) {
       ok: true,
       name: teacher.user_metadata?.name ?? "",
       schoolName: teacherSchool,
+      gradeClass: teacher.user_metadata?.gradeClass ?? "",
+      schoolLevel: teacher.user_metadata?.schoolLevel ?? "",
+      subject: teacher.user_metadata?.subject ?? "",
       plan: planRow ?? null,
       diagnosisSummary,
     });

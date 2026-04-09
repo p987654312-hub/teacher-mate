@@ -33,6 +33,7 @@ function DiagnosisContent() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [lockedAnswers, setLockedAnswers] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [examDate, setExamDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [errorQuestionIds, setErrorQuestionIds] = useState<Record<string, boolean>>({});
   const [useSurvey, setUseSurvey] = useState(false);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
@@ -215,9 +216,11 @@ function DiagnosisContent() {
       const totalScoreValue = totalScore ?? 0;
 
       const is4Domain = useSurvey && (survey?.domains?.length ?? 0) === 4;
+      const examDateStr = (examDate ?? "").trim() || new Date().toISOString().split("T")[0];
       const payload = {
         user_email: userEmail,
         school_name: userSchool,
+        exam_date: examDateStr,
         domain1: Number.isInteger(domain1Value) ? domain1Value : Math.floor(Number(domain1Value)),
         domain2: Number.isInteger(domain2Value) ? domain2Value : Math.floor(Number(domain2Value)),
         domain3: Number.isInteger(domain3Value) ? domain3Value : Math.floor(Number(domain3Value)),
@@ -246,13 +249,23 @@ function DiagnosisContent() {
             },
       };
 
-      const { error, data } = await supabase.from("diagnosis_results").insert([
-        payload,
-      ]).select();
+      let { error, data } = await supabase.from("diagnosis_results").insert([payload]).select();
+
+      // DB에 exam_date 컬럼이 아직 없을 수 있으므로, 그 경우에는 exam_date 없이 한 번 더 저장 시도
+      if (error && String(error.message ?? "").includes("exam_date")) {
+        const retryPayload = { ...(payload as Record<string, unknown>) };
+        delete retryPayload.exam_date;
+        const retry = await supabase.from("diagnosis_results").insert([retryPayload]).select();
+        error = retry.error;
+        data = retry.data;
+      }
 
       if (error) {
+        const hint = String(error.message ?? "").includes("exam_date")
+          ? "\n\n조치: Supabase SQL Editor에서 supabase/diagnosis_results_type.sql을 실행해 exam_date 컬럼을 추가해 주세요."
+          : "";
         alert(
-          `진단 결과 저장 중 오류가 발생했습니다.\n\n에러 내용: ${error.message}\n\nSupabase 테이블 설정을 확인해 주세요.`
+          `진단 결과 저장 중 오류가 발생했습니다.\n\n에러 내용: ${error.message}${hint}\n\nSupabase 테이블 설정을 확인해 주세요.`
         );
         return;
       }
@@ -424,16 +437,27 @@ function DiagnosisContent() {
 
         {/* 진행률 바 — 스크롤해도 항상 상단에 보이도록 고정 */}
         <Card className="sticky top-2 z-10 rounded-xl border-slate-200/80 bg-slate-50/80 p-2.5 shadow-sm backdrop-blur-sm">
-          <div className="mb-1 flex items-center justify-between text-[11px]">
+          <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-[11px]">
             <div className="flex items-center gap-2">
               <span className="text-slate-600">진행률</span>
               <span className="font-semibold text-slate-800">
                 {Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== null).length} / {questions.length}
               </span>
             </div>
-            <span className="text-[10px] text-slate-500">
-              선생님들의 손목 보호를 위해, 점수 위를 지나가기만 해도 체크됩니다.(클릭하셔도 됩니다.)
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[10px] text-slate-500">
+                선생님들의 손목 보호를 위해, 점수 위를 지나가기만 해도 체크됩니다.(클릭하셔도 됩니다.)
+              </span>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600">
+                <span className="font-medium text-slate-700">실시일</span>
+                <input
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                  className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700"
+                />
+              </label>
+            </div>
           </div>
           <Progress
             value={progress}

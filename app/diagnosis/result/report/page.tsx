@@ -44,6 +44,7 @@ type DiagnosisResult = {
   total_score: number;
   raw_answers: Record<string, number> & { _schema?: string };
   created_at: string;
+  exam_date?: string | null;
   ai_analysis?: string | null;
   ai_analysis_report?: string | null;
   category_scores?: {
@@ -257,7 +258,7 @@ function DiagnosisReportContent() {
     );
   }
 
-  const created = new Date(diagnosisResult.created_at);
+  const created = new Date(diagnosisResult.exam_date || diagnosisResult.created_at);
   const dateStr = `${created.getFullYear()}년 ${created.getMonth() + 1}월 ${created.getDate()}일`;
 
   // 영역별 평균 점수 계산
@@ -341,15 +342,15 @@ function DiagnosisReportContent() {
     });
   }
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
+  const formatDate = (isoOrDate: string) => {
+    const d = new Date(isoOrDate);
     const y = String(d.getFullYear()).slice(-2);
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}.${m}.${day}`;
   };
-  const preDateStr = preResult ? formatDate(preResult.created_at) : "";
-  const postDateStr = formatDate(diagnosisResult.created_at);
+  const preDateStr = preResult ? formatDate(preResult.exam_date || preResult.created_at) : "";
+  const postDateStr = formatDate(diagnosisResult.exam_date || diagnosisResult.created_at);
 
   const aiText = (diagnosisResult.ai_analysis_report ?? diagnosisResult.ai_analysis ?? "") || "";
 

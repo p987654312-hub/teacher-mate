@@ -60,6 +60,7 @@ function PlanPrintContent() {
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [userSchool, setUserSchool] = useState<string>("");
+  const [userGradeClassOrSubject, setUserGradeClassOrSubject] = useState<string>("");
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [diagnosisSummary, setDiagnosisSummary] = useState<DiagnosisSummaryDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +73,7 @@ function PlanPrintContent() {
         return;
       }
 
-      const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string; role?: string };
+      const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string; role?: string; gradeClass?: string; schoolLevel?: string; subject?: string };
       let targetEmail: string;
       if (meta.role === "admin" && searchParams.get("email")) {
         const viewEmail = searchParams.get("email")!.trim();
@@ -98,6 +99,7 @@ function PlanPrintContent() {
         const j = await res.json();
         setUserName(j.name ?? viewEmail ?? "");
         setUserSchool(j.schoolName ?? "");
+        setUserGradeClassOrSubject((j.gradeClass ?? j.subject ?? j.schoolLevel ?? "").trim());
         if (j.diagnosisSummary) setDiagnosisSummary(j.diagnosisSummary);
         // 관리자 조회에서도 학교 카테고리 설정 로드 (미로드 시 '마일리지카드1' 기본값이 그대로 노출됨)
         try {
@@ -154,6 +156,7 @@ function PlanPrintContent() {
       targetEmail = user.email!;
       setUserName(meta.name ?? user.email ?? "");
       setUserSchool(meta.schoolName ?? "");
+      setUserGradeClassOrSubject((meta.gradeClass ?? meta.subject ?? meta.schoolLevel ?? "").trim());
 
       const { data: planRow } = await supabase
         .from("development_plans")
@@ -456,12 +459,14 @@ function PlanPrintContent() {
           </div>
 
           <div className="space-y-4 text-sm text-slate-800">
-            {/* 성명, 학교명 */}
+            {/* 성명, 학년반/교과, 학교명 */}
             <table className="w-full border-collapse border border-slate-300">
               <tbody>
                 <tr>
                   <td className="w-28 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">성명</td>
                   <td className="border border-slate-300 px-2 py-1.5">{userName ? maskDisplayName(userName) : "—"}</td>
+                  <td className="w-28 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">학년/반(교과)</td>
+                  <td className="border border-slate-300 px-2 py-1.5">{userGradeClassOrSubject || "—"}</td>
                   <td className="w-28 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">학교명</td>
                   <td className="border border-slate-300 px-2 py-1.5">{userSchool || "—"}</td>
                 </tr>
