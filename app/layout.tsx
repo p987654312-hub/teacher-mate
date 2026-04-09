@@ -30,7 +30,7 @@ export default function RootLayout({
           <main className="flex-1 pb-6">{children}</main>
         </div>
         <footer className="fixed bottom-0 left-0 right-0 py-1 text-center text-[10px] text-slate-400 bg-transparent print:hidden">
-          Inspired by 교원성장메이트(강주원) · Crafted by Shingu.es.연구팀
+          © 2026 Shingu.es. All rights reserved. Crafted with care by SG_NAVI Research Team
         </footer>
       </body>
     </html>
