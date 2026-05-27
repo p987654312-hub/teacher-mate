@@ -751,11 +751,11 @@ function DiagnosisResultContent() {
           )}
         </div>
 
-        {/* 사전·사후 진단 비교 분석 */}
+        {/* 사전: 결과 분석 / 사후: 사전·사후 비교 분석 */}
         <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold text-slate-800">
-              사전·사후 진단 비교 분석
+              {isPost ? "사전·사후 진단 비교 분석" : "사전 검사 결과 분석"}
             </h2>
             {!isPost && (
               <Button

@@ -151,7 +151,7 @@ export default function DashboardPage() {
     }[]
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
-  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("createdAt");
+  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("gradeClass");
   const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(20);
   const TEACHER_PAGE_SIZE = 20;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
