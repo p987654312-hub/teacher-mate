@@ -118,55 +118,34 @@ function DiagnosisReportContent() {
       await supabase.auth.refreshSession();
       const viewEmailParam = searchParams.get("email")?.trim();
 
-      const loadForEmail = async (targetEmail: string, displayName: string) => {
+      const loadForEmail = async (
+        targetEmail: string,
+        displayName: string,
+        preResult: DiagnosisResult | null,
+        postResult: DiagnosisResult | null
+      ) => {
         try {
           setUserEmail(targetEmail);
           setUserName(displayName);
           setLoading(true);
 
           if (isPost) {
-            const [postRes, preRes] = await Promise.all([
-              supabase
-                .from("diagnosis_results")
-                .select("*")
-                .eq("user_email", targetEmail)
-                .eq("diagnosis_type", "post")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle(),
-              supabase
-                .from("diagnosis_results")
-                .select("*")
-                .eq("user_email", targetEmail)
-                .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle(),
-            ]);
-            if (postRes.error || !postRes.data) {
+            if (!postResult) {
               alert("진단 결과를 불러오는 중 오류가 발생했거나 결과가 없습니다.");
               router.push("/dashboard");
               return;
             }
-            setDiagnosisResult(postRes.data as DiagnosisResult);
-            if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
-            setSchoolName((postRes.data as any).school_name ?? null);
+            setDiagnosisResult(postResult);
+            if (preResult) setPreResult(preResult);
+            setSchoolName((postResult as { school_name?: string | null }).school_name ?? null);
           } else {
-            const { data, error } = await supabase
-              .from("diagnosis_results")
-              .select("*")
-              .eq("user_email", targetEmail)
-              .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (error || !data) {
+            if (!preResult) {
               alert("진단 결과를 불러오는 중 오류가 발생했거나 결과가 없습니다.");
               router.push("/dashboard");
               return;
             }
-            setDiagnosisResult(data as DiagnosisResult);
-            setSchoolName((data as any).school_name ?? null);
+            setDiagnosisResult(preResult);
+            setSchoolName((preResult as { school_name?: string | null }).school_name ?? null);
           }
 
           // 역량명·설문 설정 로드
@@ -208,7 +187,7 @@ function DiagnosisReportContent() {
           token = session?.access_token ?? null;
         }
         if (token) {
-          const res = await fetch("/api/admin/verify-teacher-email", {
+          const res = await fetch("/api/admin/diagnosis-results-by-email", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ email: viewEmailParam }),
@@ -217,7 +196,12 @@ function DiagnosisReportContent() {
             const j = await res.json();
             const targetEmail = j.email ?? viewEmailParam;
             const displayName = j.name || targetEmail || "교사";
-            await loadForEmail(targetEmail, displayName);
+            await loadForEmail(
+              targetEmail,
+              displayName,
+              (j.preResult as DiagnosisResult | null) ?? null,
+              (j.postResult as DiagnosisResult | null) ?? null
+            );
             return;
           }
         }

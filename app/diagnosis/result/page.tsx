@@ -135,7 +135,7 @@ function DiagnosisResultContent() {
           token = session?.access_token ?? null;
         }
         if (token) {
-          const res = await fetch("/api/admin/verify-teacher-email", {
+          const res = await fetch("/api/admin/diagnosis-results-by-email", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ email: viewEmailParam }),
@@ -150,41 +150,26 @@ function DiagnosisResultContent() {
             try {
               setIsLoading(true);
               if (isPost) {
-                const [postRes, preRes] = await Promise.all([
-                  supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-                  supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-                ]);
-                if (postRes.error) {
-                  console.error("Error fetching diagnosis result:", postRes.error);
-                  alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-                  router.push("/dashboard");
-                  return;
-                }
-                if (!postRes.data) {
+                const postData = j.postResult as DiagnosisResult | null;
+                const preData = j.preResult as DiagnosisResult | null;
+                if (!postData) {
                   alert("진단 결과가 없습니다.");
                   router.push("/dashboard");
                   return;
                 }
-                setDiagnosisResult(postRes.data as DiagnosisResult);
-                const reportAnalysis = (postRes.data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report
-                  ?? (postRes.data as { ai_analysis?: string | null }).ai_analysis;
+                setDiagnosisResult(postData);
+                const reportAnalysis = postData.ai_analysis_report ?? postData.ai_analysis;
                 if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
-                if (preRes.data) setPreResult(preRes.data as DiagnosisResult);
+                if (preData) setPreResult(preData);
               } else {
-                const { data, error } = await supabase.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle();
-                if (error) {
-                  console.error("Error fetching diagnosis result:", error);
-                  alert("진단 결과를 불러오는 중 오류가 발생했습니다.");
-                  router.push("/dashboard");
-                  return;
-                }
+                const data = j.preResult as DiagnosisResult | null;
                 if (!data) {
                   alert("진단 결과가 없습니다.");
                   router.push("/dashboard");
                   return;
                 }
-                setDiagnosisResult(data as DiagnosisResult);
-                const reportAnalysis = (data as { ai_analysis_report?: string | null; ai_analysis?: string | null }).ai_analysis_report ?? (data as { ai_analysis?: string | null }).ai_analysis;
+                setDiagnosisResult(data);
+                const reportAnalysis = data.ai_analysis_report ?? data.ai_analysis;
                 if (reportAnalysis) setAiAnalysis(reportAnalysis as string);
               }
             } catch (err) {
