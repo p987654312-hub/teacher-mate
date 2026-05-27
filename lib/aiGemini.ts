@@ -63,6 +63,19 @@ export async function getAiSetupError(): Promise<string | null> {
   return getStudioGeminiSetupError();
 }
 
+const DEFAULT_STUDIO_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const STUDIO_GEMINI_FALLBACK_MODEL = "gemini-2.5-flash";
+
+function studioModelUnavailable(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+  return (
+    msg.includes("404") ||
+    msg.includes("not found") ||
+    msg.includes("no longer available") ||
+    msg.includes("is not found")
+  );
+}
+
 async function generateStudioGeminiText(
   prompt: string,
   opts?: { maxOutputTokens?: number }
@@ -71,19 +84,29 @@ async function generateStudioGeminiText(
   if (!key) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(key);
-  const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
-  const model = genAI.getGenerativeModel({ model: modelId });
-  const result =
-    opts?.maxOutputTokens != null
-      ? await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: opts.maxOutputTokens },
-        })
-      : await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text().trim();
-  if (!text) throw new Error("Gemini API 응답에 텍스트가 없습니다.");
-  return text;
+  const primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_STUDIO_GEMINI_MODEL;
+
+  const call = async (modelId: string) => {
+    const model = genAI.getGenerativeModel({ model: modelId });
+    const result =
+      opts?.maxOutputTokens != null
+        ? await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: opts.maxOutputTokens },
+          })
+        : await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().trim();
+    if (!text) throw new Error("Gemini API 응답에 텍스트가 없습니다.");
+    return text;
+  };
+
+  try {
+    return await call(primary);
+  } catch (e) {
+    if (!studioModelUnavailable(e) || primary === STUDIO_GEMINI_FALLBACK_MODEL) throw e;
+    return await call(STUDIO_GEMINI_FALLBACK_MODEL);
+  }
 }
 
 /** DB의 ai_provider 설정에 따라 Vertex 또는 Gemini API(키)로 호출 */
@@ -105,7 +128,7 @@ export async function generateGeminiTextWithMeta(
     const r = await generateVertexGeminiTextWithMeta(prompt, opts);
     return { text: r.text, backend, modelUsed: r.modelUsed, fallbackFrom: r.fallbackFrom };
   }
-  const modelUsed = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
+  const modelUsed = process.env.GEMINI_MODEL?.trim() || DEFAULT_STUDIO_GEMINI_MODEL;
   const text = await generateStudioGeminiText(prompt, opts);
   return { text, backend, modelUsed, fallbackFrom: null };
 }
