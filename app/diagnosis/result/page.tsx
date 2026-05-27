@@ -9,7 +9,7 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
-import { maskDisplayName } from "@/lib/displayName";
+import { formatMaskedNameWithAffiliation, resolveAffiliation } from "@/lib/displayName";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { ArrowLeft, Printer, FileDown, RefreshCw } from "lucide-react";
@@ -67,6 +67,7 @@ function DiagnosisResultContent() {
   const isPost = searchParams.get("type") === "post";
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [userAffiliation, setUserAffiliation] = useState("");
   const [isChecking, setIsChecking] = useState(true);
   const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
   const [preResult, setPreResult] = useState<DiagnosisResult | null>(null);
@@ -147,6 +148,7 @@ function DiagnosisResultContent() {
             const displayName = j.name || targetEmail || "교사";
             setUserEmail(targetEmail);
             setUserName(displayName);
+            setUserAffiliation(typeof j.gradeClass === "string" ? j.gradeClass.trim() : "");
             setIsChecking(false);
             try {
               setIsLoading(true);
@@ -200,12 +202,13 @@ function DiagnosisResultContent() {
       }
 
       const metadata = user.user_metadata as
-        | { role?: string; name?: string; full_name?: string }
+        | { role?: string; name?: string; full_name?: string; gradeClass?: string; subject?: string; schoolLevel?: string }
         | undefined;
       const role = metadata?.role;
 
       let targetEmail: string;
       let displayName: string;
+      let affiliation = resolveAffiliation(metadata);
 
       // 관리자도 교원 권한을 가지므로 자신의 데이터를 볼 수 있음
       if (role === "teacher" || role === "admin") {
@@ -223,8 +226,28 @@ function DiagnosisResultContent() {
         return;
       }
 
+      const { data: { session: profileSession } } = await supabase.auth.getSession();
+      const profileToken = profileSession?.access_token;
+      if (profileToken) {
+        try {
+          const res = await fetch("/api/account/profile-overrides", {
+            headers: { Authorization: `Bearer ${profileToken}` },
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const overrides = (await res.json()) as { gradeClass?: string | null };
+            if (overrides.gradeClass != null && overrides.gradeClass.trim() !== "") {
+              affiliation = overrides.gradeClass.trim();
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       setUserEmail(targetEmail);
       setUserName(displayName);
+      setUserAffiliation(affiliation);
       setIsChecking(false);
 
       try {
@@ -643,7 +666,7 @@ function DiagnosisResultContent() {
                   </Button>
                 </div>
                 <p className="text-xs text-slate-600 whitespace-nowrap">
-                  {userName ? maskDisplayName(userName) : ""} 님 / 진단 일시 : {formattedDate}
+                  {userName ? formatMaskedNameWithAffiliation(userAffiliation, userName) : ""} 님 / 진단 일시 : {formattedDate}
                 </p>
               </div>
             </div>

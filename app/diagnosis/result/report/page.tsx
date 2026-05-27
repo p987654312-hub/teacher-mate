@@ -6,7 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
-import { maskDisplayName } from "@/lib/displayName";
+import { formatMaskedNameWithAffiliation, resolveAffiliation } from "@/lib/displayName";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
@@ -72,6 +72,7 @@ function DiagnosisReportContent() {
   const isPost = searchParams.get("type") === "post";
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [userAffiliation, setUserAffiliation] = useState("");
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
   const [preResult, setPreResult] = useState<DiagnosisResult | null>(null);
@@ -121,12 +122,14 @@ function DiagnosisReportContent() {
       const loadForEmail = async (
         targetEmail: string,
         displayName: string,
+        affiliation: string,
         preResult: DiagnosisResult | null,
         postResult: DiagnosisResult | null
       ) => {
         try {
           setUserEmail(targetEmail);
           setUserName(displayName);
+          setUserAffiliation(affiliation);
           setLoading(true);
 
           if (isPost) {
@@ -196,9 +199,11 @@ function DiagnosisReportContent() {
             const j = await res.json();
             const targetEmail = j.email ?? viewEmailParam;
             const displayName = j.name || targetEmail || "교사";
+            const affiliation = typeof j.gradeClass === "string" ? j.gradeClass.trim() : "";
             await loadForEmail(
               targetEmail,
               displayName,
+              affiliation,
               (j.preResult as DiagnosisResult | null) ?? null,
               (j.postResult as DiagnosisResult | null) ?? null
             );
@@ -215,7 +220,14 @@ function DiagnosisReportContent() {
         router.replace("/");
         return;
       }
-      const metadata = user.user_metadata as { role?: string; name?: string; full_name?: string } | undefined;
+      const metadata = user.user_metadata as {
+        role?: string;
+        name?: string;
+        full_name?: string;
+        gradeClass?: string;
+        subject?: string;
+        schoolLevel?: string;
+      } | undefined;
       if (metadata?.role !== "teacher" && metadata?.role !== "admin") {
         router.replace("/");
         return;
@@ -228,6 +240,26 @@ function DiagnosisReportContent() {
         (typeof raw?.full_name === "string" ? raw.full_name : null) ??
         user.email ??
         "교사";
+
+      let affiliation = resolveAffiliation(metadata);
+      const { data: { session: profileSession } } = await supabase.auth.getSession();
+      const profileToken = profileSession?.access_token;
+      if (profileToken) {
+        try {
+          const res = await fetch("/api/account/profile-overrides", {
+            headers: { Authorization: `Bearer ${profileToken}` },
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const overrides = (await res.json()) as { gradeClass?: string | null };
+            if (overrides.gradeClass != null && overrides.gradeClass.trim() !== "") {
+              affiliation = overrides.gradeClass.trim();
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       const email = user.email!;
       const [postRes, preRes] = await Promise.all([
@@ -251,6 +283,7 @@ function DiagnosisReportContent() {
       await loadForEmail(
         email,
         displayName,
+        affiliation,
         (preRes.data as DiagnosisResult | null) ?? null,
         (postRes.data as DiagnosisResult | null) ?? null
       );
@@ -430,7 +463,9 @@ function DiagnosisReportContent() {
                   <td className="w-24 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">학교명</td>
                   <td className="border border-slate-300 px-2 py-1.5">{schoolName || "—"}</td>
                   <td className="w-24 border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">성명</td>
-                  <td className="border border-slate-300 px-2 py-1.5">{userName ? maskDisplayName(userName) : "—"}</td>
+                  <td className="border border-slate-300 px-2 py-1.5">
+                    {userName ? formatMaskedNameWithAffiliation(userAffiliation, userName) : "—"}
+                  </td>
                 </tr>
                 <tr>
                   <td className="border border-slate-300 bg-slate-50 px-2 py-1.5 font-medium">진단 시기</td>

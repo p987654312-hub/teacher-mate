@@ -117,10 +117,20 @@ export async function POST(req: Request) {
         .maybeSingle(),
     ]);
 
+    const meta = teacher.user_metadata ?? {};
+    const gradeClass = (
+      meta.gradeClass ??
+      (meta as { subject?: string }).subject ??
+      (meta as { schoolLevel?: string }).schoolLevel ??
+      ""
+    )
+      .trim();
+
     return NextResponse.json({
       ok: true,
       email: targetEmail,
-      name: teacher.user_metadata?.name ?? "",
+      name: meta.name ?? "",
+      gradeClass,
       schoolName: teacherSchool,
       preResult: preData ?? null,
       postResult: postData ?? null,
