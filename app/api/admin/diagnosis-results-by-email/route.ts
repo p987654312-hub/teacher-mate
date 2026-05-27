@@ -13,7 +13,14 @@ function getSupabaseAdmin() {
 type ListedUser = {
   id: string;
   email?: string;
-  user_metadata?: { role?: string; schoolName?: string; name?: string };
+  user_metadata?: {
+    role?: string;
+    schoolName?: string;
+    name?: string;
+    gradeClass?: string;
+    subject?: string;
+    schoolLevel?: string;
+  };
 };
 
 async function findTeacherByEmail(admin: ReturnType<typeof getSupabaseAdmin>, normalizedEmail: string) {
@@ -118,13 +125,7 @@ export async function POST(req: Request) {
     ]);
 
     const teacherMeta = teacher.user_metadata ?? {};
-    const gradeClass = (
-      teacherMeta.gradeClass ??
-      (teacherMeta as { subject?: string }).subject ??
-      (teacherMeta as { schoolLevel?: string }).schoolLevel ??
-      ""
-    )
-      .trim();
+    const gradeClass = (teacherMeta.gradeClass ?? teacherMeta.subject ?? teacherMeta.schoolLevel ?? "").trim();
 
     return NextResponse.json({
       ok: true,
