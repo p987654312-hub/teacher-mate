@@ -229,7 +229,31 @@ function DiagnosisReportContent() {
         user.email ??
         "교사";
 
-      await loadForEmail(user.email!, displayName);
+      const email = user.email!;
+      const [postRes, preRes] = await Promise.all([
+        supabase
+          .from("diagnosis_results")
+          .select("*")
+          .eq("user_email", email)
+          .eq("diagnosis_type", "post")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("diagnosis_results")
+          .select("*")
+          .eq("user_email", email)
+          .or("diagnosis_type.is.null,diagnosis_type.eq.pre")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      await loadForEmail(
+        email,
+        displayName,
+        (preRes.data as DiagnosisResult | null) ?? null,
+        (postRes.data as DiagnosisResult | null) ?? null
+      );
     };
     fetchData();
   }, [router, searchParams, isPost]);

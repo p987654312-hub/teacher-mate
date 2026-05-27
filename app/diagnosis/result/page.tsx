@@ -38,6 +38,7 @@ type DiagnosisResult = {
   created_at: string;
   exam_date?: string | null;
   ai_analysis?: string | null;
+  ai_analysis_report?: string | null;
   category_scores?: {
     domain1?: { score: number; count: number };
     domain2?: { score: number; count: number };
