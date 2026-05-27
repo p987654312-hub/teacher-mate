@@ -152,8 +152,9 @@ export default function DashboardPage() {
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
   const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("gradeClass");
-  const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(20);
-  const TEACHER_PAGE_SIZE = 20;
+  const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(5);
+  const TEACHER_INITIAL_LOAD = 5;
+  const TEACHER_PAGE_SIZE = 10;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [teachersError, setTeachersError] = useState<string | null>(null);
   const [isLoadingTeachersMore, setIsLoadingTeachersMore] = useState(false);
@@ -412,7 +413,7 @@ export default function DashboardPage() {
               const res = await fetch("/api/admin/teacher-summaries", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ schoolName, limit: TEACHER_PAGE_SIZE, offset: 0 }),
+                body: JSON.stringify({ schoolName, limit: TEACHER_INITIAL_LOAD, offset: 0 }),
               });
               return { ok: res.ok, json: await res.json() };
             })()
@@ -3246,7 +3247,7 @@ export default function DashboardPage() {
                       </Card>
                     );
                     })}
-                  {teachersTotalCount > teacherDisplayLimit && (
+                  {teachersTotalCount > teacherSummaries.length && (
                     <div className="py-3 text-center">
                       <Button
                         type="button"
@@ -3256,7 +3257,9 @@ export default function DashboardPage() {
                         onClick={loadMoreTeachers}
                         disabled={isLoadingTeachersMore}
                       >
-                        더 보기 ({Math.min(TEACHER_PAGE_SIZE, teachersTotalCount - teacherDisplayLimit)}명)
+                        {isLoadingTeachersMore
+                          ? "불러오는 중..."
+                          : `더 보기 (${Math.min(TEACHER_PAGE_SIZE, teachersTotalCount - teacherSummaries.length)}명)`}
                       </Button>
                     </div>
                   )}
