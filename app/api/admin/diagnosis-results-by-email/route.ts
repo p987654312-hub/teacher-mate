@@ -117,11 +117,11 @@ export async function POST(req: Request) {
         .maybeSingle(),
     ]);
 
-    const meta = teacher.user_metadata ?? {};
+    const teacherMeta = teacher.user_metadata ?? {};
     const gradeClass = (
-      meta.gradeClass ??
-      (meta as { subject?: string }).subject ??
-      (meta as { schoolLevel?: string }).schoolLevel ??
+      teacherMeta.gradeClass ??
+      (teacherMeta as { subject?: string }).subject ??
+      (teacherMeta as { schoolLevel?: string }).schoolLevel ??
       ""
     )
       .trim();
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       email: targetEmail,
-      name: meta.name ?? "",
+      name: teacherMeta.name ?? "",
       gradeClass,
       schoolName: teacherSchool,
       preResult: preData ?? null,
