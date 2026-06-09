@@ -185,8 +185,6 @@ export default function DashboardPage() {
   } | null>(null);
   const [animatedMileageProgress, setAnimatedMileageProgress] = useState(0);
   const [visibleMileagePieCount, setVisibleMileagePieCount] = useState(0);
-  // 효과는 이번 세션 첫 진입에서만. 이후 페이지를 들락날락할 땐 즉시 표시(무애니메이션).
-  const [animateDashboard, setAnimateDashboard] = useState(false);
   const [relativeDifficulty, setRelativeDifficulty] = useState<Record<string, 1 | 2 | 3> | null>(null);
   const [totalPoints, setTotalPoints] = useState<number | null>(null);
   const [pointsDetail, setPointsDetail] = useState<{
@@ -491,18 +489,6 @@ export default function DashboardPage() {
   } | null>(null);
   const [showAdminMileageDetail, setShowAdminMileageDetail] = useState(false);
 
-  // 이번 세션 첫 대시보드 진입에서만 효과 ON. 이후엔 OFF(즉시 표시).
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const KEY = "tm_dashboard_animated";
-    if (!sessionStorage.getItem(KEY)) {
-      setAnimateDashboard(true);
-      sessionStorage.setItem(KEY, "1");
-    } else {
-      setAnimateDashboard(false);
-    }
-  }, []);
-
   // 메인 대시보드(교사 보기): 성장 여정 바/비행기 동시 이동 애니메이션
   useEffect(() => {
     if (!showTeacherView || !mileageSummary) {
@@ -510,15 +496,10 @@ export default function DashboardPage() {
       return;
     }
     const target = Math.min(100, Math.max(0, mileageSummary.overallProgress));
-    // 첫 진입이 아니면 0→target 트랜지션 없이 바로 최종값으로 표시
-    if (!animateDashboard) {
-      setAnimatedMileageProgress(target);
-      return;
-    }
     setAnimatedMileageProgress(0);
     const id = window.setTimeout(() => setAnimatedMileageProgress(target), 40);
     return () => window.clearTimeout(id);
-  }, [showTeacherView, mileageSummary?.overallProgress, animateDashboard]);
+  }, [showTeacherView, mileageSummary?.overallProgress]);
 
   // 메인 대시보드(교사 보기): 파이차트는 순차 표시하지 않고 동시에 표시
   useEffect(() => {
@@ -1684,7 +1665,6 @@ export default function DashboardPage() {
                           diagnosisSummary.domain6,
                         ][i] ?? 0,
                       }))}
-                      animate={animateDashboard}
                     />
                   ) : isLoadingDiagnosis ? (
                     <p className="text-[11px] text-slate-400">
@@ -1918,11 +1898,11 @@ export default function DashboardPage() {
                             <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                             <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                               <div
-                                className={`absolute inset-y-0 left-0 rounded-full bg-[#6366f1] ${animateDashboard ? "transition-all duration-700" : ""}`}
+                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-700"
                                 style={{ width: `${animatedMileageProgress}%`, minWidth: animatedMileageProgress > 0 ? 2 : 0 }}
                               />
                               <div
-                                className={`absolute bottom-full left-0 mb-0.5 flex items-center gap-1 ${animateDashboard ? "transition-all duration-700" : ""}`}
+                                className="absolute bottom-full left-0 mb-0.5 flex items-center gap-1 transition-all duration-700"
                                 style={{
                                   left: `${animatedMileageProgress}%`,
                                   transform: "translate(-50%, 0)",
@@ -1953,7 +1933,11 @@ export default function DashboardPage() {
                             <div className="grid grid-cols-3 gap-4">
                               {mileageSummary.categories.map((c, i) => {
                                 const completed = Math.min(100, Math.max(0, c.progress));
-                                const ringColor = PIE_COLORS[i % PIE_COLORS.length];
+                                const remaining = 100 - completed;
+                                const pieData = [
+                                  { name: "진행", value: completed, fill: PIE_COLORS[i % PIE_COLORS.length] },
+                                  { name: "남음", value: remaining, fill: "var(--tw-slate-200, #e2e8f0)" },
+                                ].filter((d) => d.value > 0);
                                 const goal = c.goal ?? 0;
                                 const sum = c.sum ?? 0;
                                 const unit = c.unit ?? "";
@@ -1967,14 +1951,27 @@ export default function DashboardPage() {
                                     className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
                                   >
                                     <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-                                      <div
-                                        className="absolute inset-0 rounded-full"
-                                        style={{
-                                          background: `conic-gradient(${ringColor} ${completed}%, #e2e8f0 ${completed}% 100%)`,
-                                          WebkitMask: "radial-gradient(closest-side, transparent 55%, #000 56%)",
-                                          mask: "radial-gradient(closest-side, transparent 55%, #000 56%)",
-                                        }}
-                                      />
+                                      {isVisible ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <PieChart>
+                                            <Pie
+                                              data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
+                                              cx="50%"
+                                              cy="50%"
+                                              innerRadius="55%"
+                                              outerRadius="95%"
+                                              dataKey="value"
+                                              strokeWidth={0}
+                                              cursor="pointer"
+                                              isAnimationActive={showAdminView ? false : true}
+                                            >
+                                              {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
+                                            </Pie>
+                                          </PieChart>
+                                        </ResponsiveContainer>
+                                      ) : (
+                                        <div className="absolute inset-0 rounded-full border border-slate-200 bg-slate-50" />
+                                      )}
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <span className="text-[10px] font-semibold text-slate-600 sm:text-xs">{Math.round(c.progress)}%</span>
                                       </div>
