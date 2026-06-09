@@ -50,6 +50,14 @@ const DashboardDiagnosisRadar = dynamic(
   { ssr: false }
 );
 
+// "3-1", "3학년 1반", "3학년1반" 등을 "3-1" 형태로 정규화하여 학급을 매칭한다.
+function normalizeClassLabel(s: string | null | undefined): string {
+  if (!s) return "";
+  const nums = String(s).match(/\d+/g);
+  if (nums && nums.length >= 2) return `${parseInt(nums[0], 10)}-${parseInt(nums[1], 10)}`;
+  return String(s).trim();
+}
+
 type PlanRow = {
   development_goal?: string | null;
   expected_outcome?: string | null;
@@ -151,9 +159,8 @@ export default function DashboardPage() {
     }[]
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
-  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass">("gradeClass");
-  const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(5);
-  const TEACHER_INITIAL_LOAD = 5;
+  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass" | "mileage">("mileage");
+  const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(9999);
   const TEACHER_PAGE_SIZE = 10;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [teachersError, setTeachersError] = useState<string | null>(null);
@@ -201,6 +208,166 @@ export default function DashboardPage() {
     provider?: "vertex" | "gemini";
   }>({ status: "idle" });
   const [superAdminAiSaving, setSuperAdminAiSaving] = useState(false);
+  const [showAiBackendSetting, setShowAiBackendSetting] = useState(false);
+  const [showPerceptionUpload, setShowPerceptionUpload] = useState(false);
+  const [perceptionUploading, setPerceptionUploading] = useState<"pre" | "post" | null>(null);
+  const [perceptionStatus, setPerceptionStatus] = useState<{ pre?: string; post?: string }>({});
+  const perceptionPreInputRef = useRef<HTMLInputElement | null>(null);
+  const perceptionPostInputRef = useRef<HTMLInputElement | null>(null);
+  const [perceptionPreMatched, setPerceptionPreMatched] = useState<{ classLabel: string; rows: { domain: string; value: number }[] } | null>(null);
+  const [showPerceptionResultModal, setShowPerceptionResultModal] = useState(false);
+
+  // 한국 엑셀 CSV는 UTF-8 또는 CP949(EUC-KR)일 수 있어 둘 다 시도한다.
+  const readCsvText = async (file: File): Promise<string> => {
+    const buf = await file.arrayBuffer();
+    const utf8 = new TextDecoder("utf-8").decode(buf);
+    if (!utf8.includes("\uFFFD")) return utf8;
+    try {
+      return new TextDecoder("euc-kr").decode(buf);
+    } catch {
+      return utf8;
+    }
+  };
+
+  // 행=영역, 열=학년반 행렬을 { classes, rows } 로 파싱
+  const parsePerceptionCsv = (text: string): { classes: string[]; rows: { domain: string; values: (number | null)[] }[] } => {
+    // 엑셀 텍스트 강제 형식(="3-1")·따옴표 감싸기 제거
+    const cleanCell = (raw: string): string => {
+      let v = raw.trim();
+      const m = v.match(/^="(.*)"$/);
+      if (m) return m[1].trim();
+      if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) return v.slice(1, -1).trim();
+      return v;
+    };
+
+    const lines = text
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (lines.length < 2) throw new Error("데이터 행이 부족합니다.");
+
+    const header = lines[0].split(",").map(cleanCell);
+    const classes = header.slice(1).filter((c) => c.length > 0);
+    if (classes.length === 0) throw new Error("첫 줄에 학년반(예: 3-1, 4-1) 정보가 없습니다.");
+
+    const rows = lines.slice(1).map((line) => {
+      const cells = line.split(",").map(cleanCell);
+      const domain = cells[0] ?? "";
+      const values = classes.map((_, i) => {
+        const v = cells[i + 1];
+        if (v === undefined || v === "") return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      });
+      return { domain, values };
+    }).filter((r) => r.domain.length > 0);
+
+    if (rows.length === 0) throw new Error("영역(교수, 학생지도 등) 행을 찾지 못했습니다.");
+    return { classes, rows };
+  };
+
+  const uploadPerception = async (phase: "pre" | "post", file: File) => {
+    setPerceptionUploading(phase);
+    setPerceptionStatus((s) => ({ ...s, [phase]: "" }));
+    try {
+      const text = await readCsvText(file);
+      let parsed: { classes: string[]; rows: { domain: string; values: (number | null)[] }[] };
+      try {
+        parsed = parsePerceptionCsv(text);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "형식 오류";
+        setPerceptionStatus((s) => ({ ...s, [phase]: `파싱 실패: ${msg}` }));
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setPerceptionStatus((s) => ({ ...s, [phase]: "로그인 세션이 없습니다." }));
+        return;
+      }
+      const res = await fetch("/api/admin/student-perception", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ phase, data: { ...parsed, fileName: file.name } }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = typeof j?.details === "string" ? `\n${j.details}` : "";
+        setPerceptionStatus((s) => ({ ...s, [phase]: `${j?.error ?? "저장 실패"}${detail}` }));
+        return;
+      }
+      setPerceptionStatus((s) => ({ ...s, [phase]: `업로드 완료 (${parsed.rows.length}개 영역 × ${parsed.classes.length}개 학급)` }));
+    } finally {
+      setPerceptionUploading(null);
+    }
+  };
+
+  const downloadPerceptionSample = () => {
+    const classCols = ["3-1", "4-1", "4-2", "5-1", "5-2", "5-3", "5-4", "6-1", "6-2", "6-3", "6-4"];
+    // 엑셀이 "3-1"을 날짜로 자동 변환하지 못하도록 텍스트 강제 형식(="3-1")으로 출력
+    const header = "," + classCols.map((c) => `="${c}"`).join(",");
+    const rows = [
+      header,
+      "교수,4.20,4.49,4.66,4.64,4.82,4.61,4.54,4.55,4.77,4.01,4.72",
+      "학생지도,3.68,4.50,4.59,4.62,4.76,4.56,4.30,4.49,4.74,3.89,4.71",
+      "전문성개발,4.00,4.61,4.56,4.64,4.86,4.59,4.39,4.49,4.82,3.94,4.68",
+      "현장실무,4.04,4.58,4.54,4.65,4.84,4.64,4.48,4.59,4.79,3.92,4.74",
+    ];
+    const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "학생인식조사결과_샘플양식.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 교사 본인 학급이 업로드된 (사전) 학생 인식조사 데이터에 있으면 매칭 결과를 준비한다.
+  useEffect(() => {
+    const gc = normalizeClassLabel(userGradeClass);
+    if (!gc || !userSchool) {
+      setPerceptionPreMatched(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/student-perception/me?phase=pre", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const j = await res.json().catch(() => ({}));
+        const data = j?.data as { classes?: string[]; rows?: { domain: string; values: (number | null)[] }[] } | null;
+        if (!data || !Array.isArray(data.classes) || !Array.isArray(data.rows)) {
+          if (!cancelled) setPerceptionPreMatched(null);
+          return;
+        }
+        const idx = data.classes.findIndex((c) => normalizeClassLabel(c) === gc);
+        if (idx < 0) {
+          if (!cancelled) setPerceptionPreMatched(null);
+          return;
+        }
+        const rows = data.rows
+          .map((r) => ({ domain: r.domain, value: typeof r.values?.[idx] === "number" ? (r.values[idx] as number) : NaN }))
+          .filter((r) => Number.isFinite(r.value));
+        if (rows.length === 0) {
+          if (!cancelled) setPerceptionPreMatched(null);
+          return;
+        }
+        if (!cancelled) setPerceptionPreMatched({ classLabel: data.classes[idx], rows });
+      } catch {
+        if (!cancelled) setPerceptionPreMatched(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userGradeClass, userSchool]);
   const [aiPromptSettings, setAiPromptSettings] = useState<Record<string, { value: string; description: string; label: string }>>({});
   const [aiPromptSettingsLoading, setAiPromptSettingsLoading] = useState(false);
   const [aiPromptSettingsSaving, setAiPromptSettingsSaving] = useState(false);
@@ -413,7 +580,7 @@ export default function DashboardPage() {
               const res = await fetch("/api/admin/teacher-summaries", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ schoolName, limit: TEACHER_INITIAL_LOAD, offset: 0 }),
+                body: JSON.stringify({ schoolName }),
               });
               return { ok: res.ok, json: await res.json() };
             })()
@@ -1511,33 +1678,91 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <div className="mt-3 flex justify-end gap-2">
-                  <div className="relative group">
-                    <Link href="/diagnosis/result">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={!diagnosisSummary}
-                        title={!diagnosisSummary ? "먼저 실시완료 하세요" : undefined}
-                        className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                      >
-                        <Printer className="h-3.5 w-3.5" />
-                        결과 보기
-                      </Button>
-                    </Link>
-                  </div>
-                  <Link href="/diagnosis">
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  {perceptionPreMatched ? (
                     <Button
                       type="button"
                       size="sm"
-                      className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:shadow-md hover:opacity-95"
+                      variant="outline"
+                      onClick={() => setShowPerceptionResultModal(true)}
+                      className="rounded-full border-sky-300 bg-white px-3 text-[11px] font-semibold text-sky-700 shadow-sm hover:bg-sky-50 hover:shadow-md inline-flex items-center gap-1.5"
                     >
-                      {diagnosisSummary ? "다시 실시하기" : "실시하기"}
+                      <NotebookPen className="h-3.5 w-3.5" />
+                      (사전)학생인식조사결과 보기
                     </Button>
-                  </Link>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <div className="relative group">
+                      <Link href="/diagnosis/result">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={!diagnosisSummary}
+                          title={!diagnosisSummary ? "먼저 실시완료 하세요" : undefined}
+                          className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          결과 보기
+                        </Button>
+                      </Link>
+                    </div>
+                    <Link href="/diagnosis">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:shadow-md hover:opacity-95"
+                      >
+                        {diagnosisSummary ? "다시 실시하기" : "실시하기"}
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </Card>
+
+              {showPerceptionResultModal && perceptionPreMatched && (
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+                  onClick={() => setShowPerceptionResultModal(false)}
+                >
+                  <div
+                    className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-800">(사전) 학생 인식조사 결과</h3>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {userSchool ? `${userSchool} · ` : ""}{perceptionPreMatched.classLabel} · 영역별 평균
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPerceptionResultModal(false)}
+                        className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="닫기"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="mt-3 h-[300px] w-full">
+                      <DashboardDiagnosisRadar
+                        data={perceptionPreMatched.rows.map((r) => ({ name: r.domain, score: r.value }))}
+                      />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                      {perceptionPreMatched.rows.map((r) => (
+                        <div key={r.domain} className="flex justify-between rounded-md bg-slate-50 px-2 py-1">
+                          <span className="truncate">{r.domain}</span>
+                          <span className="font-semibold">{r.value.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="relative h-[180px] isolate">
                 {!diagnosisSummary && (
@@ -1943,7 +2168,7 @@ export default function DashboardPage() {
                       >
                         <span className="inline-flex items-center gap-1.5">
                           <Settings className="h-3.5 w-3.5" />
-                          설정 (영역 / 포인트&마일리지)
+                          설정 (영역/포인트&마일리지)
                         </span>
                       </Button>
                       <Button
@@ -1976,6 +2201,32 @@ export default function DashboardPage() {
                         <span className="inline-flex items-center gap-1.5">
                           <MessageSquare className="h-3.5 w-3.5" />
                           AI 프롬프트 설정
+                        </span>
+                      </Button>
+                      {superAdminAi.status === "ready" && superAdminAi.provider && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
+                          onClick={() => setShowAiBackendSetting((v) => !v)}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <KeyRound className="h-3.5 w-3.5" />
+                            AI 호출 세팅
+                          </span>
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
+                        onClick={() => setShowPerceptionUpload((v) => !v)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <NotebookPen className="h-3.5 w-3.5" />
+                          학생인식조사 결과 업로드
                         </span>
                       </Button>
                       <Button
@@ -2012,17 +2263,92 @@ export default function DashboardPage() {
                           }
                         }}
                       >
-                        <span className="inline-flex items-center gap-1.5">
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <span className="inline-flex items-center gap-1 text-[9px]">
+                          <Trash2 className="h-3 w-3" />
                           {resettingAllData ? "처리 중..." : "모든 구성원 데이터 초기화"}
                         </span>
                       </Button>
                     </div>
                   )}
-                  {superAdminAi.status === "loading" && (
-                    <p className="text-xs text-slate-500">AI 백엔드 권한 확인 중...</p>
+                  {showPerceptionUpload && (
+                    <Card className="rounded-xl border-sky-200/80 bg-sky-50/40 p-3 shadow-sm">
+                      <input
+                        ref={perceptionPreInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadPerception("pre", f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <input
+                        ref={perceptionPostInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadPerception("post", f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <div className="flex flex-col gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800">학생인식조사 결과 업로드</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            행=영역(교수/학생지도/전문성개발/현장실무), 열=학년반(예: 3-1, 4-1), 값=평균점수 형태의 CSV를 올리세요.
+                            학급 수는 고정이 아닙니다 — 첫 줄에 열을 원하는 만큼 추가/삭제하면 그대로 반영됩니다.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-700"
+                            disabled={perceptionUploading !== null}
+                            onClick={() => perceptionPreInputRef.current?.click()}
+                          >
+                            {perceptionUploading === "pre" ? "업로드 중..." : "사전 결과 업로드"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
+                            disabled={perceptionUploading !== null}
+                            onClick={() => perceptionPostInputRef.current?.click()}
+                          >
+                            {perceptionUploading === "post" ? "업로드 중..." : "사후 결과 업로드"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            onClick={downloadPerceptionSample}
+                          >
+                            샘플양식 다운받기
+                          </Button>
+                        </div>
+                        {(perceptionStatus.pre || perceptionStatus.post) && (
+                          <div className="flex flex-col gap-1 text-[11px]">
+                            {perceptionStatus.pre && (
+                              <p className={perceptionStatus.pre.includes("완료") ? "text-emerald-600" : "text-rose-600"}>
+                                사전: {perceptionStatus.pre}
+                              </p>
+                            )}
+                            {perceptionStatus.post && (
+                              <p className={perceptionStatus.post.includes("완료") ? "text-emerald-600" : "text-rose-600"}>
+                                사후: {perceptionStatus.post}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
                   )}
-                  {superAdminAi.status === "ready" && superAdminAi.provider && (
+                  {showAiBackendSetting && superAdminAi.status === "ready" && superAdminAi.provider && (
                     <Card className="rounded-xl border-violet-200/80 bg-violet-50/40 p-3 shadow-sm">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
@@ -2109,13 +2435,14 @@ export default function DashboardPage() {
                     </Card>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
                 <span className="text-xs text-slate-500">정렬</span>
                 <select
                   value={adminSortBy}
-                  onChange={(e) => setAdminSortBy(e.target.value as "createdAt" | "name" | "gradeClass")}
+                  onChange={(e) => setAdminSortBy(e.target.value as "createdAt" | "name" | "gradeClass" | "mileage")}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
+                  <option value="mileage">마일리지 순</option>
                   <option value="createdAt">가입일 순</option>
                   <option value="name">성명순</option>
                   <option value="gradeClass">학년 반</option>
@@ -2859,6 +3186,9 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-1.5">
                   {[...teacherSummaries]
                     .sort((a, b) => {
+                      if (adminSortBy === "mileage") {
+                        return (b.mileageSummary?.overallProgress ?? 0) - (a.mileageSummary?.overallProgress ?? 0);
+                      }
                       if (adminSortBy === "createdAt") {
                         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
                       }
@@ -2974,10 +3304,7 @@ export default function DashboardPage() {
                                   <div className="flex min-w-0 flex-row items-center">
                                     {t.mileageSummary.categories.map((c, i) => {
                                       const val = Math.min(100, Math.max(0, c.progress));
-                                      const pieData = [
-                                        { name: "a", value: val, fill: PIE_COLORS[i % PIE_COLORS.length] },
-                                        { name: "b", value: 100 - val, fill: "#e2e8f0" },
-                                      ].filter((d) => d.value > 0);
+                                      const ringColor = PIE_COLORS[i % PIE_COLORS.length];
                                       return (
                                         <button
                                           key={c.key}
@@ -3013,23 +3340,15 @@ export default function DashboardPage() {
                                       }
                                           }}
                                         >
-                                          <PieChart width={38} height={38}>
-                                            <Pie
-                                              data={pieData.length ? pieData : [{ name: "a", value: 100, fill: "#e2e8f0" }]}
-                                              cx="50%"
-                                              cy="50%"
-                                              innerRadius="30%"
-                                              outerRadius="95%"
-                                              dataKey="value"
-                                              strokeWidth={0}
-                                              cursor="pointer"
-                                            isAnimationActive={false}
-                                            >
-                                              {(pieData.length ? pieData : [{ fill: "#e2e8f0" }]).map((d, j) => (
-                                                <Cell key={j} fill={d.fill} />
-                                              ))}
-                                            </Pie>
-                                          </PieChart>
+                                          <div
+                                            className="h-[38px] w-[38px] rounded-full"
+                                            style={{
+                                              background: `conic-gradient(${ringColor} ${val}%, #e2e8f0 ${val}% 100%)`,
+                                              WebkitMask: "radial-gradient(closest-side, transparent 31%, #000 32%)",
+                                              mask: "radial-gradient(closest-side, transparent 31%, #000 32%)",
+                                            }}
+                                            aria-hidden
+                                          />
                                           <span className="w-full text-center leading-tight text-slate-500 text-[8px] sm:text-[9px]">
                                             {c.label.length > 7 ? `${c.label.slice(0, 7)}…` : c.label}
                                           </span>

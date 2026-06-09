@@ -308,7 +308,7 @@ export async function POST(req: Request) {
 
     const warning =
       ai.fallbackFrom
-        ? `Vertex AI에서 모델 "${ai.fallbackFrom}" 접근에 실패하여 "${ai.modelUsed}"로 대체 실행했습니다. (리전/권한/모델 ID를 확인하세요.)`
+        ? `모델 "${ai.fallbackFrom}" 접근에 실패하여 "${ai.modelUsed}"로 대체 실행했습니다. (리전/권한/모델 ID를 확인하세요.)`
         : null;
 
     if (type === "plan_fill_rows") {
@@ -409,7 +409,7 @@ export async function POST(req: Request) {
       if (process.env.NODE_ENV === "development") {
         return NextResponse.json(
           {
-            error: "Vertex AI 호출이 제한되었습니다(쿼터/레이트리밋 가능).",
+            error: "Gemini API 호출이 제한되었습니다(쿼터/크레딧/레이트리밋 가능).",
             code: "QUOTA_EXCEEDED",
             debug: {
               status: error?.status ?? null,
@@ -433,7 +433,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       process.env.NODE_ENV === "development"
         ? {
-            error: `Vertex AI 호출 실패: ${errorMessage}`,
+            error: `Gemini API 호출 실패: ${errorMessage}`,
             debug: {
               status: error?.status ?? null,
               name: error?.name ?? null,
@@ -441,7 +441,7 @@ export async function POST(req: Request) {
               details: error?.errorDetails ?? error?.details ?? null,
             },
           }
-        : { error: `Vertex AI 호출 실패: ${errorMessage}` },
+        : { error: `Gemini API 호출 실패: ${errorMessage}` },
       { status: 500 }
     );
   }
