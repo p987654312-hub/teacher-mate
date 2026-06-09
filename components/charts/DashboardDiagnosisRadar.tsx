@@ -11,9 +11,10 @@ import {
 
 type Props = {
   data: { name: string; score: number }[];
+  animate?: boolean;
 };
 
-export default function DashboardDiagnosisRadar({ data }: Props) {
+export default function DashboardDiagnosisRadar({ data, animate = true }: Props) {
   return (
     <ResponsiveContainer width="100%" height="100%" minHeight={176} minWidth={200}>
       <RadarChart outerRadius="76%" data={data}>
@@ -29,6 +30,7 @@ export default function DashboardDiagnosisRadar({ data }: Props) {
           stroke="#6366f1"
           fill="#6366f1"
           fillOpacity={0.35}
+          isAnimationActive={animate}
         />
       </RadarChart>
     </ResponsiveContainer>
