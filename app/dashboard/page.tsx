@@ -215,7 +215,8 @@ export default function DashboardPage() {
   const perceptionPreInputRef = useRef<HTMLInputElement | null>(null);
   const perceptionPostInputRef = useRef<HTMLInputElement | null>(null);
   const [perceptionPreMatched, setPerceptionPreMatched] = useState<{ classLabel: string; rows: { domain: string; value: number }[] } | null>(null);
-  const [showPerceptionResultModal, setShowPerceptionResultModal] = useState(false);
+  const [perceptionPostMatched, setPerceptionPostMatched] = useState<{ classLabel: string; rows: { domain: string; value: number }[] } | null>(null);
+  const [perceptionModalPhase, setPerceptionModalPhase] = useState<"pre" | "post" | null>(null);
 
   // 한국 엑셀 CSV는 UTF-8 또는 CP949(EUC-KR)일 수 있어 둘 다 시도한다.
   const readCsvText = async (file: File): Promise<string> => {
@@ -324,45 +325,46 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url);
   };
 
-  // 교사 본인 학급이 업로드된 (사전) 학생 인식조사 데이터에 있으면 매칭 결과를 준비한다.
+  // 교사 본인 학급이 업로드된 학생 인식조사 데이터(사전/사후)에 있으면 매칭 결과를 준비한다.
   useEffect(() => {
     const gc = normalizeClassLabel(userGradeClass);
     if (!gc || !userSchool) {
       setPerceptionPreMatched(null);
+      setPerceptionPostMatched(null);
       return;
     }
     let cancelled = false;
-    (async () => {
+    const loadPhase = async (
+      phase: "pre" | "post",
+      token: string
+    ): Promise<{ classLabel: string; rows: { domain: string; value: number }[] } | null> => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) return;
-        const res = await fetch("/api/student-perception/me?phase=pre", {
+        const res = await fetch(`/api/student-perception/me?phase=${phase}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
         const j = await res.json().catch(() => ({}));
         const data = j?.data as { classes?: string[]; rows?: { domain: string; values: (number | null)[] }[] } | null;
-        if (!data || !Array.isArray(data.classes) || !Array.isArray(data.rows)) {
-          if (!cancelled) setPerceptionPreMatched(null);
-          return;
-        }
+        if (!data || !Array.isArray(data.classes) || !Array.isArray(data.rows)) return null;
         const idx = data.classes.findIndex((c) => normalizeClassLabel(c) === gc);
-        if (idx < 0) {
-          if (!cancelled) setPerceptionPreMatched(null);
-          return;
-        }
+        if (idx < 0) return null;
         const rows = data.rows
           .map((r) => ({ domain: r.domain, value: typeof r.values?.[idx] === "number" ? (r.values[idx] as number) : NaN }))
           .filter((r) => Number.isFinite(r.value));
-        if (rows.length === 0) {
-          if (!cancelled) setPerceptionPreMatched(null);
-          return;
-        }
-        if (!cancelled) setPerceptionPreMatched({ classLabel: data.classes[idx], rows });
+        if (rows.length === 0) return null;
+        return { classLabel: data.classes[idx], rows };
       } catch {
-        if (!cancelled) setPerceptionPreMatched(null);
+        return null;
       }
+    };
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const [pre, post] = await Promise.all([loadPhase("pre", token), loadPhase("post", token)]);
+      if (cancelled) return;
+      setPerceptionPreMatched(pre);
+      setPerceptionPostMatched(post);
     })();
     return () => {
       cancelled = true;
@@ -1679,20 +1681,23 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  {perceptionPreMatched ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowPerceptionResultModal(true)}
-                      className="rounded-full border-sky-300 bg-white px-3 text-[11px] font-semibold text-sky-700 shadow-sm hover:bg-sky-50 hover:shadow-md inline-flex items-center gap-1.5"
-                    >
-                      <NotebookPen className="h-3.5 w-3.5" />
-                      (사전)학생인식조사결과 보기
-                    </Button>
-                  ) : (
-                    <span />
-                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (perceptionPreMatched) setPerceptionModalPhase("pre");
+                      else alert("조사 결과 데이터가 없습니다.");
+                    }}
+                    className={
+                      perceptionPreMatched
+                        ? "rounded-full border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5"
+                        : "rounded-full border-slate-200 bg-slate-100 px-3 text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1.5 cursor-not-allowed"
+                    }
+                  >
+                    <NotebookPen className="h-3.5 w-3.5" />
+                    (사전)학생인식조사결과 보기
+                  </Button>
                   <div className="flex justify-end gap-2">
                     <div className="relative group">
                       <Link href="/diagnosis/result">
@@ -1722,47 +1727,52 @@ export default function DashboardPage() {
                 </div>
               </Card>
 
-              {showPerceptionResultModal && perceptionPreMatched && (
-                <div
-                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
-                  onClick={() => setShowPerceptionResultModal(false)}
-                >
+              {(() => {
+                const md = perceptionModalPhase === "pre" ? perceptionPreMatched : perceptionModalPhase === "post" ? perceptionPostMatched : null;
+                if (!perceptionModalPhase || !md) return null;
+                const phaseLabel = perceptionModalPhase === "pre" ? "(사전)" : "(사후)";
+                return (
                   <div
-                    className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
-                    onClick={(e) => e.stopPropagation()}
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+                    onClick={() => setPerceptionModalPhase(null)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-800">(사전) 학생 인식조사 결과</h3>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {userSchool ? `${userSchool} · ` : ""}{perceptionPreMatched.classLabel} · 영역별 평균
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowPerceptionResultModal(false)}
-                        className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                        aria-label="닫기"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                    <div className="mt-3 h-[300px] w-full">
-                      <DashboardDiagnosisRadar
-                        data={perceptionPreMatched.rows.map((r) => ({ name: r.domain, score: r.value }))}
-                      />
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-slate-600">
-                      {perceptionPreMatched.rows.map((r) => (
-                        <div key={r.domain} className="flex justify-between rounded-md bg-slate-50 px-2 py-1">
-                          <span className="truncate">{r.domain}</span>
-                          <span className="font-semibold">{r.value.toFixed(2)}</span>
+                    <div
+                      className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-800">{phaseLabel} 학생 인식조사 결과</h3>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {userSchool ? `${userSchool} · ` : ""}{md.classLabel} · 영역별 평균
+                          </p>
                         </div>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={() => setPerceptionModalPhase(null)}
+                          className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                          aria-label="닫기"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                      <div className="mt-3 h-[300px] w-full">
+                        <DashboardDiagnosisRadar
+                          data={md.rows.map((r) => ({ name: r.domain, score: r.value }))}
+                        />
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                        {md.rows.map((r) => (
+                          <div key={r.domain} className="flex justify-between rounded-md bg-slate-50 px-2 py-1">
+                            <span className="truncate">{r.domain}</span>
+                            <span className="font-semibold">{r.value.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="relative h-[180px] isolate">
                 {!diagnosisSummary && (
@@ -2039,41 +2049,60 @@ export default function DashboardPage() {
                           향상된 나의 역량을 진단합니다.
                         </p>
                       </div>
-                      <div className="mt-3 flex flex-wrap justify-end gap-2 min-w-0">
-                        {planCompleted ? (
-                          <Link href="/diagnosis/result?type=post" className="shrink-0">
+                      <div className="mt-3 flex items-center justify-between gap-2 min-w-0">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (perceptionPostMatched) setPerceptionModalPhase("post");
+                            else alert("조사 결과 데이터가 없습니다.");
+                          }}
+                          className={
+                            perceptionPostMatched
+                              ? "shrink-0 rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1"
+                              : "shrink-0 rounded-full border-slate-200 bg-slate-100 px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1 cursor-not-allowed"
+                          }
+                        >
+                          <NotebookPen className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                          (사후)학생결과
+                        </Button>
+                        <div className="flex flex-wrap justify-end gap-2 min-w-0">
+                          {planCompleted ? (
+                            <Link href="/diagnosis/result?type=post" className="shrink-0">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!hasPostDiagnosis}
+                                title={!hasPostDiagnosis ? "먼저 실시완료 하세요" : undefined}
+                                className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                              >
+                                <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                결과 보기
+                              </Button>
+                            </Link>
+                          ) : (
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={!hasPostDiagnosis}
-                              title={!hasPostDiagnosis ? "먼저 실시완료 하세요" : undefined}
-                              className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                              disabled
+                              title="먼저 자기역량개발계획을 실시완료 하세요"
+                              className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
                             >
                               <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                               결과 보기
                             </Button>
-                          </Link>
-                        ) : (
+                          )}
                           <Button
-                            type="button"
+                            asChild
                             size="sm"
-                            variant="outline"
-                            disabled
-                            title="먼저 자기역량개발계획을 실시완료 하세요"
-                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
+                            className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                           >
-                            <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                            결과 보기
+                            <Link href="/diagnosis?type=post">{hasPostDiagnosis ? "다시 실시하기" : "실시하기"}</Link>
                           </Button>
-                        )}
-                        <Button
-                          asChild
-                          size="sm"
-                          className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
-                        >
-                          <Link href="/diagnosis?type=post">{hasPostDiagnosis ? "다시 실시하기" : "실시하기"}</Link>
-                        </Button>
+                        </div>
                       </div>
                     </div>
                   </Card>
