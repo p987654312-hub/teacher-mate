@@ -1653,7 +1653,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 h-[220px] w-full">
+                <div className="-mt-1 h-[250px] w-full">
                   {diagnosisSummary ? (
                     <DashboardDiagnosisRadar
                       data={diagnosisRadarLabels.slice(0, 6).map((name, i) => ({
@@ -1680,24 +1680,22 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <Button
+                <div className="-mt-1 flex items-center justify-between gap-2">
+                  <button
                     type="button"
-                    size="sm"
-                    variant="outline"
                     onClick={() => {
                       if (perceptionPreMatched) setPerceptionModalPhase("pre");
                       else alert("조사 결과 데이터가 없습니다.");
                     }}
                     className={
                       perceptionPreMatched
-                        ? "rounded-full border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5"
-                        : "rounded-full border-slate-200 bg-slate-100 px-3 text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1.5 cursor-not-allowed"
+                        ? "inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                        : "inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 underline underline-offset-2 cursor-not-allowed"
                     }
                   >
-                    <NotebookPen className="h-3.5 w-3.5" />
-                    (사전)학생인식조사결과 보기
-                  </Button>
+                    <NotebookPen className="h-3 w-3" />
+                    (사전) 학생인식조사 결과 보기
+                  </button>
                   <div className="flex justify-end gap-2">
                     <div className="relative group">
                       <Link href="/diagnosis/result">
@@ -2050,23 +2048,24 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-2 min-w-0">
-                        <Button
+                        <button
                           type="button"
-                          size="sm"
-                          variant="outline"
                           onClick={() => {
                             if (perceptionPostMatched) setPerceptionModalPhase("post");
                             else alert("조사 결과 데이터가 없습니다.");
                           }}
                           className={
                             perceptionPostMatched
-                              ? "shrink-0 rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1"
-                              : "shrink-0 rounded-full border-slate-200 bg-slate-100 px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1 cursor-not-allowed"
+                              ? "shrink-0 inline-flex flex-col items-start leading-tight text-[10px] sm:text-[11px] font-medium text-slate-500 hover:text-slate-700"
+                              : "shrink-0 inline-flex flex-col items-start leading-tight text-[10px] sm:text-[11px] font-medium text-slate-300 cursor-not-allowed"
                           }
                         >
-                          <NotebookPen className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                          (사후)학생결과
-                        </Button>
+                          <span className="inline-flex items-center gap-1">
+                            <NotebookPen className="h-3 w-3" />
+                            (사후)
+                          </span>
+                          <span className="underline underline-offset-2">학생인식조사 결과 보기</span>
+                        </button>
                         <div className="flex flex-wrap justify-end gap-2 min-w-0">
                           {planCompleted ? (
                             <Link href="/diagnosis/result?type=post" className="shrink-0">
