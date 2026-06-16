@@ -124,9 +124,11 @@ export async function POST(req: Request) {
     } else if (type === "result_report") {
       const planSummary = String((body as any)?.planSummary ?? "").trim();
       const mileageText = String((body as any)?.mileageText ?? "").trim();
+      const achievementSummary = String((body as any)?.achievementSummary ?? "").trim();
       prompt = applyPromptTemplate(getTemplate("result_report"), {
         planSummary: planSummary || "(없음)",
         mileageText: mileageText || "(없음)",
+        achievementSummary: achievementSummary || "(없음)",
       });
     } else if (type === "self_eval_sections") {
       const planSummary = String((body as any)?.planSummary ?? "").trim();

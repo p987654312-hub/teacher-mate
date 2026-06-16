@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
+import { computeMileageProgress, MILEAGE_CATEGORIES, PLAN_GOAL_KEYS } from "@/lib/mileageProgress";
 import { FileDown, MessageCircle, Printer, Save, Sparkles } from "lucide-react";
 
 const SELF_EVAL_PERIOD = "2026년 3월 1일부터 2027년 2월 28일까지(학년도 단위)";
@@ -182,6 +183,7 @@ export default function ReflectionPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [planSummary, setPlanSummary] = useState("");
   const [mileageText, setMileageText] = useState("");
+  const [achievementSummary, setAchievementSummary] = useState("");
   const [goalAchievementText, setGoalAchievementText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [reflectionText, setReflectionText] = useState("");
@@ -288,6 +290,32 @@ export default function ReflectionPage() {
             `[${categoryLabels[r.category ?? ""] ?? r.category ?? ""}] ${r.content ?? ""} (${r.created_at ? (() => { const d = new Date(r.created_at); return `${String(d.getFullYear()).slice(-2)}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; })() : ""})`
         );
         setMileageText(lines.join("\n\n") || "마일리지에 기록된 내용이 없습니다.");
+      }
+      // 달성률·목표 수치는 AI에게 맡기지 않고 마일리지 카드와 동일한 코드(computeMileageProgress)로 확정 계산해 주입
+      try {
+        const planGoalsRow = planRow as Record<string, string | null | undefined> | null;
+        const planGoals: Record<string, number> = {};
+        MILEAGE_CATEGORIES.forEach((c) => {
+          const raw = String(planGoalsRow?.[PLAN_GOAL_KEYS[c.key]] ?? "").trim();
+          planGoals[c.key] = parseFloat(raw.replace(/[^\d.]/g, "")) || 0;
+        });
+        let healthGoalUnit: "시간" | "거리" = planGoalsRow?.education_annual_goal_unit === "거리" ? "거리" : "시간";
+        const healthCat = schoolCategories.find((c) => c.key === "health");
+        if (healthCat?.unit === "km") healthGoalUnit = "거리";
+        else if (healthCat?.unit === "시간") healthGoalUnit = "시간";
+        const { categories: achCats } = computeMileageProgress(
+          (mileageData ?? []).map((r: { content?: string; category?: string }) => ({ content: r.content ?? "", category: r.category ?? "" })),
+          planGoals,
+          healthGoalUnit,
+          schoolCategories.length === 6 ? schoolCategories : undefined
+        );
+        const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+        const achLines = achCats.map(
+          (c) => `**[${c.label}]** 목표 : ${fmtNum(c.goal)}${c.unit} 이상 ( ${Math.round(c.progress)}% 완료)`
+        );
+        setAchievementSummary(achLines.join("\n"));
+      } catch {
+        setAchievementSummary("");
       }
       const { data: postResultRow } = await supabase
         .from("diagnosis_results")
@@ -573,7 +601,7 @@ export default function ReflectionPage() {
       const res = await fetch("/api/ai-recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "result_report", planSummary, mileageText }),
+        body: JSON.stringify({ type: "result_report", planSummary, mileageText, achievementSummary }),
       });
       const json = await res.json();
       maybeAlertAiWarning(json?.warning);
