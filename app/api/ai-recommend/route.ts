@@ -310,7 +310,7 @@ export async function POST(req: Request) {
 
     const warning =
       ai.fallbackFrom
-        ? `모델 "${ai.fallbackFrom}" 접근에 실패하여 "${ai.modelUsed}"로 대체 실행했습니다. (리전/권한/모델 ID를 확인하세요.)`
+        ? `"${ai.fallbackFrom}" 모델이 일시적으로 불안정하여 "${ai.modelUsed}" 모델로 대체 생성했습니다.`
         : null;
 
     if (type === "plan_fill_rows") {

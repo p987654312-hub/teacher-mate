@@ -200,6 +200,10 @@ export default function MileagePage() {
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
   const [userSchool, setUserSchool] = useState<string | null>(null);
   const [expandedByKey, setExpandedByKey] = useState<Record<string, boolean>>({});
+  // 카드 내 인라인 "새 기록 추가" 임시 입력
+  const [draftCategory, setDraftCategory] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState("");
+  const [draftSaving, setDraftSaving] = useState(false);
 
   // 일일 성찰 기록 (기본 닫힘)
   const [dailyReflectionOn, setDailyReflectionOn] = useState(false);
@@ -210,6 +214,11 @@ export default function MileagePage() {
   const [editingDailyId, setEditingDailyId] = useState<string | null>(null);
   const [editDailyDate, setEditDailyDate] = useState<string>("");
   const [editDailyContent, setEditDailyContent] = useState<string>("");
+  // 일일성찰 카드 내 인라인 "새 기록 추가"
+  const [dailyDraftOpen, setDailyDraftOpen] = useState(false);
+  const [dailyDraftDate, setDailyDraftDate] = useState<string>("");
+  const [dailyDraftContent, setDailyDraftContent] = useState<string>("");
+  const [dailyDraftSaving, setDailyDraftSaving] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
@@ -566,6 +575,50 @@ export default function MileagePage() {
     }
   };
 
+  const openDailyDraft = () => {
+    setDailyDraftOpen(true);
+    setDailyDraftDate("");
+    setDailyDraftContent("");
+  };
+
+  const saveDailyDraft = async () => {
+    const date = dailyDraftDate.trim();
+    const text = stripLeadingDatePrefix(dailyDraftContent).trim();
+    if (!date) {
+      alert("날짜를 먼저 선택해 주세요.");
+      return;
+    }
+    if (!text || !userEmail) return;
+    setDailyDraftSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("daily_reflections")
+        .insert({ user_email: userEmail, reflection_date: date, content: text })
+        .select()
+        .single();
+      if (error) {
+        console.error("일일성찰기록 저장 오류:", error);
+        alert("일일성찰기록 저장 중 오류가 발생했습니다.");
+        return;
+      }
+      const next: DailyReflectionEntry = {
+        id: data.id,
+        date: data.reflection_date,
+        content: data.content,
+        createdAt: data.created_at,
+      };
+      setDailyReflections((prev) => sortDailyReflections([next, ...prev]));
+      setDailyDraftOpen(false);
+      setDailyDraftDate("");
+      setDailyDraftContent("");
+    } catch (err) {
+      console.error("일일성찰기록 저장 중 오류:", err);
+      alert("일일성찰기록 저장 중 오류가 발생했습니다.");
+    } finally {
+      setDailyDraftSaving(false);
+    }
+  };
+
   const handleEditDailyStart = (e: DailyReflectionEntry) => {
     setEditingDailyId(e.id);
     setEditDailyDate(e.date);
@@ -669,6 +722,46 @@ export default function MileagePage() {
         prev.map((x) => (x.id === entryId ? { ...x, category: newCategory } : x))
       );
       setRecentlyMovedAt((prev) => ({ ...prev, [entryId]: Date.now() }));
+    }
+  };
+
+  // 카드 내 임시 입력칸 저장(카드 밖 클릭 등 포커스 이탈 시 호출). 비어 있으면 그냥 닫는다.
+  const saveDraft = async () => {
+    const cat = draftCategory;
+    const text = draftContent.trim();
+    if (!cat) return;
+    // 다른 카드로 전환된 경우 현재 입력칸만 닫는다(새로 연 입력칸은 유지).
+    const closeIfSame = () => {
+      setDraftCategory((cur) => (cur === cat ? null : cur));
+      setDraftContent((cur) => (cur === text ? "" : cur));
+    };
+    if (!text || !userEmail) {
+      closeIfSame();
+      return;
+    }
+    setDraftSaving(true);
+    const { data, error } = await supabase
+      .from("mileage_entries")
+      .insert({ user_email: userEmail, content: text, category: cat })
+      .select("id, content, category, created_at")
+      .single();
+    if (!error && data) {
+      setEntries((prev) => [data as MileageEntry, ...prev]);
+    }
+    setDraftSaving(false);
+    closeIfSame();
+  };
+
+  // 카드별 "새 기록 추가": 해당 카드 하단에 빈 입력칸을 띄운다.
+  const handleNewEntryForCategory = (categoryKey: string) => {
+    setDraftCategory(categoryKey);
+    setDraftContent("");
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`mileage-draft-${categoryKey}`);
+        el?.focus();
+        el?.scrollIntoView({ block: "nearest" });
+      });
     }
   };
 
@@ -996,7 +1089,7 @@ export default function MileagePage() {
                     : "overflow-hidden max-h-[min(400px,calc((100vh-180px)/2))] md:col-span-1 lg:col-span-1"
                 }`}
               >
-                <div className="mb-2 mt-[2mm] flex shrink-0 items-center gap-2 overflow-visible">
+                <div className="mb-0 mt-[1mm] flex shrink-0 items-center gap-2 overflow-visible">
                   <div className="w-1/2 shrink-0 flex items-center gap-1 min-w-0">
                     <button
                       type="button"
@@ -1035,12 +1128,23 @@ export default function MileagePage() {
                     </span>
                   </div>
                 </div>
+                <div className="-mt-6 -mb-3 flex shrink-0 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleNewEntryForCategory(c.key)}
+                    className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0 text-[11px] font-semibold leading-tight text-violet-600 transition-colors hover:bg-violet-100 hover:text-violet-700"
+                    title={`${c.label}에 새 기록 추가`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    새 기록 추가
+                  </button>
+                </div>
                 <DroppableArea
                   id={`drop-${c.key}`}
                   categoryKey={c.key}
                   className="min-h-[2rem] flex-1 flex flex-col"
                 >
-                {entriesByCategory[c.key]?.length === 0 ? (
+                {(entriesByCategory[c.key]?.length ?? 0) === 0 && draftCategory !== c.key ? (
                   <p className="text-xs text-slate-500 py-2">기록 없음</p>
                 ) : (
                   <ul className={`min-h-0 flex-1 space-y-px ${expanded ? "overflow-visible" : "overflow-y-auto"}`}>
@@ -1133,6 +1237,46 @@ export default function MileagePage() {
                     ))}
                   </ul>
                 )}
+                {draftCategory === c.key && (
+                  <div className="mt-1 shrink-0">
+                    <textarea
+                      id={`mileage-draft-${c.key}`}
+                      value={draftContent}
+                      onChange={(ev) => setDraftContent(ev.target.value)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Escape") {
+                          setDraftContent("");
+                          setDraftCategory(null);
+                        }
+                      }}
+                      disabled={draftSaving}
+                      placeholder="내용 입력 후 저장 버튼을 누르세요. (예: 26.06.26(금) 활동 2시간)"
+                      rows={2}
+                      autoFocus
+                      className="w-full resize-none rounded-sm border border-violet-300 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:opacity-60"
+                    />
+                    <div className="mt-0.5 flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={saveDraft}
+                        disabled={draftSaving || !draftContent.trim()}
+                        className="rounded px-2 py-0.5 text-[11px] font-semibold text-violet-600 hover:bg-violet-50 disabled:opacity-40"
+                      >
+                        {draftSaving ? "저장 중..." : "저장"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftContent("");
+                          setDraftCategory(null);
+                        }}
+                        className="rounded px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-100"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                )}
                 </DroppableArea>
               </Card>
             );
@@ -1164,10 +1308,72 @@ export default function MileagePage() {
                 <p className="text-[11px] text-slate-500">날짜별로 자동 정렬됩니다. (수정/삭제 가능)</p>
               </div>
             </div>
-            <span className="text-xs font-semibold text-slate-600">
-              {dailyReflections.length.toLocaleString()}개
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openDailyDraft}
+                className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-600 transition-colors hover:bg-violet-100 hover:text-violet-700"
+                title="일일성찰 새 기록 추가"
+              >
+                <Pencil className="h-3 w-3" />
+                새 기록 추가
+              </button>
+              <span className="text-xs font-semibold text-slate-600">
+                {dailyReflections.length.toLocaleString()}개
+              </span>
+            </div>
           </div>
+
+          {dailyDraftOpen && (
+            <div className="mb-3 rounded-xl border border-violet-300 bg-white p-3">
+              <div className="flex flex-col gap-2">
+                <input
+                  type="date"
+                  value={dailyDraftDate}
+                  onChange={(ev) => setDailyDraftDate(ev.target.value)}
+                  className="h-8 w-40 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-800"
+                />
+                <textarea
+                  value={dailyDraftContent}
+                  onChange={(ev) => setDailyDraftContent(ev.target.value)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Escape") {
+                      setDailyDraftOpen(false);
+                      setDailyDraftContent("");
+                    }
+                  }}
+                  disabled={dailyDraftSaving}
+                  placeholder="날짜를 선택하고 성찰 내용을 적은 뒤 저장 버튼을 누르세요."
+                  rows={2}
+                  autoFocus
+                  className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:opacity-60"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={saveDailyDraft}
+                    disabled={dailyDraftSaving || !dailyDraftDate.trim() || !dailyDraftContent.trim()}
+                    className="rounded-full px-4 text-xs"
+                  >
+                    {dailyDraftSaving ? "저장 중..." : "저장"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDailyDraftOpen(false);
+                      setDailyDraftContent("");
+                    }}
+                    className="rounded-full px-4 text-xs"
+                  >
+                    취소
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {dailyReflections.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-white/60 p-3 text-center text-xs text-slate-500">

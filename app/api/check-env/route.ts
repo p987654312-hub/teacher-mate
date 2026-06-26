@@ -12,28 +12,22 @@ export async function GET() {
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON",
-    "GOOGLE_CLOUD_PROJECT",
-    "GOOGLE_CLOUD_LOCATION",
-    "GOOGLE_CLOUD_VERTEX_MODEL",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL",
     "ADMIN_CODE",
   ] as const;
 
   const status: Record<string, string> = {};
   for (const key of envKeys) {
     const val = process.env[key];
-    if (key === "GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON") {
-      status[key] = val && String(val).trim() ? "설정됨" : "비어있음";
-    } else {
-      status[key] = val && String(val).trim() ? "설정됨" : "비어있음";
-    }
+    status[key] = val && String(val).trim() ? "설정됨" : "비어있음";
   }
 
-  const aiSetup = await getAiSetupError();
+  const aiSetup = getAiSetupError();
   status["AI(사용가능)"] = aiSetup ? "비어있음" : "설정됨";
 
   const connectivity: Record<string, "ok" | "fail" | "skip"> = {};
-  let vertexError: string | null = null;
+  let aiError: string | null = null;
 
   // Supabase 연결 테스트 (anon key만 사용, 세션 조회만 시도)
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -50,24 +44,24 @@ export async function GET() {
     connectivity.supabase = "skip";
   }
 
-  // Vertex AI 최소 호출 (응답 내용은 사용하지 않음)
+  // Gemini API 최소 호출 (응답 내용은 사용하지 않음)
   if (!aiSetup) {
     try {
       await generateGeminiText("ping");
       connectivity.ai_backend = "ok";
     } catch (err) {
       connectivity.ai_backend = "fail";
-      vertexError = err instanceof Error ? err.message : String(err);
+      aiError = err instanceof Error ? err.message : String(err);
     }
   } else {
     connectivity.ai_backend = "skip";
-    vertexError = aiSetup;
+    aiError = aiSetup;
   }
 
   return NextResponse.json({
     env: status,
     connectivity,
-    vertexError,
+    aiError,
     note: "키 값은 반환되지 않으며, 개발 환경에서만 동작합니다.",
   });
 }
