@@ -76,10 +76,25 @@ function studioModelUnavailable(err: unknown): boolean {
   );
 }
 
-async function generateStudioGeminiText(
+/** 일시적 과부하/혼잡 오류(재시도하면 풀릴 수 있는 종류). 503·overloaded·high demand 등. */
+function studioTransientError(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+  return (
+    msg.includes("503") ||
+    msg.includes("service unavailable") ||
+    msg.includes("overloaded") ||
+    msg.includes("high demand") ||
+    msg.includes("try again later") ||
+    msg.includes("unavailable")
+  );
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function generateStudioGeminiInternal(
   prompt: string,
   opts?: { maxOutputTokens?: number }
-): Promise<string> {
+): Promise<{ text: string; modelUsed: string; fallbackFrom: string | null }> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -101,12 +116,40 @@ async function generateStudioGeminiText(
     return text;
   };
 
-  try {
-    return await call(primary);
-  } catch (e) {
-    if (!studioModelUnavailable(e) || primary === STUDIO_GEMINI_FALLBACK_MODEL) throw e;
-    return await call(STUDIO_GEMINI_FALLBACK_MODEL);
+  // 1차 모델 → (모델 없음/과부하 시) 보조 모델 순으로 시도. 각 모델은 일시 오류에 한해 백오프 재시도.
+  const models = primary === STUDIO_GEMINI_FALLBACK_MODEL ? [primary] : [primary, STUDIO_GEMINI_FALLBACK_MODEL];
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
+  for (let mi = 0; mi < models.length; mi++) {
+    const modelId = models[mi];
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const text = await call(modelId);
+        return { text, modelUsed: modelId, fallbackFrom: mi > 0 ? models[0] : null };
+      } catch (e) {
+        lastErr = e;
+        // 모델 자체가 없으면 재시도 의미 없음 → 다음 모델로
+        if (studioModelUnavailable(e)) break;
+        // 일시 과부하면 백오프 후 같은 모델 재시도
+        if (studioTransientError(e) && attempt < MAX_ATTEMPTS) {
+          await sleep(attempt * 1000);
+          continue;
+        }
+        // 일시 오류로 재시도 소진 → 다음(보조) 모델로 폴백
+        if (studioTransientError(e)) break;
+        // 그 외(쿼터 초과 등)는 즉시 throw
+        throw e;
+      }
+    }
   }
+  throw lastErr;
+}
+
+async function generateStudioGeminiText(
+  prompt: string,
+  opts?: { maxOutputTokens?: number }
+): Promise<string> {
+  return (await generateStudioGeminiInternal(prompt, opts)).text;
 }
 
 /** DB의 ai_provider 설정에 따라 Vertex 또는 Gemini API(키)로 호출 */
@@ -128,7 +171,6 @@ export async function generateGeminiTextWithMeta(
     const r = await generateVertexGeminiTextWithMeta(prompt, opts);
     return { text: r.text, backend, modelUsed: r.modelUsed, fallbackFrom: r.fallbackFrom };
   }
-  const modelUsed = process.env.GEMINI_MODEL?.trim() || DEFAULT_STUDIO_GEMINI_MODEL;
-  const text = await generateStudioGeminiText(prompt, opts);
-  return { text, backend, modelUsed, fallbackFrom: null };
+  const r = await generateStudioGeminiInternal(prompt, opts);
+  return { text: r.text, backend, modelUsed: r.modelUsed, fallbackFrom: r.fallbackFrom };
 }
