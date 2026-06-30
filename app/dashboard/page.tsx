@@ -2022,9 +2022,9 @@ export default function DashboardPage() {
                         >
                           <span className="inline-flex items-center gap-1">
                             <NotebookPen className="h-3 w-3" />
-                            (사후)
+                            <span className="underline underline-offset-2">(사후)학생인식</span>
                           </span>
-                          <span className="underline underline-offset-2">학생인식조사 결과 보기</span>
+                          <span className="underline underline-offset-2">조사 결과 보기</span>
                         </button>
                         <div className="flex flex-wrap justify-end gap-2 min-w-0">
                           {planCompleted ? (
