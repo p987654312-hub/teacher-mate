@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
 import { computeMileageProgress, MILEAGE_CATEGORIES, PLAN_GOAL_KEYS } from "@/lib/mileageProgress";
-import { FileDown, MessageCircle, Printer, Save, Sparkles } from "lucide-react";
+import { FileDown, MessageCircle, Printer, RefreshCw, Save, Sparkles } from "lucide-react";
 
 const SELF_EVAL_PERIOD = "2026년 3월 1일부터 2027년 2월 28일까지(학년도 단위)";
 type SelfEvalRating = "" | "만족" | "보통" | "미흡";
@@ -177,15 +177,65 @@ function formatPlanSummary(plan: Record<string, unknown> | null, categories?: { 
   return lines.length ? lines.join("\n") : "계획서에 작성된 내용이 없습니다.";
 }
 
+type AchievementCategory = { key: string; label: string; progress: number; sum: number; goal: number; unit: string };
+
+/** content 앞부분의 yy.mm.dd 활동일을 ms로 파싱(없으면 -Infinity). */
+function parseActivityDateMs(content: string): number {
+  const m = (content ?? "").match(/(\d{2})\.(\d{2})\.(\d{2})/);
+  if (!m) return -Infinity;
+  const t = new Date(2000 + parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)).getTime();
+  return isNaN(t) ? -Infinity : t;
+}
+
+function fmtGoalNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+/**
+ * 마일리지 기록을 코드로 정리해 '정량 목표 달성도' 텍스트를 생성한다(AI 미사용).
+ * - 영역별: 헤더(목표·달성률) + 활동일 최신순 최대 3건
+ * - 3건 초과 시 3번째 줄 끝에 ' 외 N건' 결합
+ */
+function buildGoalAchievementText(
+  entries: { content: string; category: string; created_at?: string }[],
+  achCats: AchievementCategory[]
+): string {
+  const blocks = achCats.map((c) => {
+    const header = `[${c.label}] 목표 : ${fmtGoalNum(c.goal)}${c.unit} 이상 ( ${Math.round(c.progress)}% 완료)`;
+    const catEntries = entries
+      .filter((e) => e.category === c.key)
+      .sort((a, b) => {
+        const da = parseActivityDateMs(a.content);
+        const db = parseActivityDateMs(b.content);
+        if (da !== db) return db - da; // 활동일 최신 우선
+        const ca = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const cb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return cb - ca;
+      });
+    if (catEntries.length === 0) return header;
+    const total = catEntries.length;
+    const lines = catEntries.slice(0, 3).map((e, idx) => {
+      let text = (e.content ?? "").trim();
+      if (idx === 2 && total > 3) text = `${text} 외 ${total - 3}건`;
+      return `  - ${text}`;
+    });
+    return [header, ...lines].join("\n");
+  });
+  return blocks.join("\n\n");
+}
+
 export default function ReflectionPage() {
   const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [planSummary, setPlanSummary] = useState("");
   const [mileageText, setMileageText] = useState("");
-  const [achievementSummary, setAchievementSummary] = useState("");
   const [goalAchievementText, setGoalAchievementText] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+  // '정량 목표 달성도' 자동 생성용 원본 데이터(마일리지 기록 + 영역별 달성률)
+  const [goalReportData, setGoalReportData] = useState<{
+    entries: { content: string; category: string; created_at?: string }[];
+    achCats: AchievementCategory[];
+  } | null>(null);
   const [reflectionText, setReflectionText] = useState("");
   const [evidenceText, setEvidenceText] = useState("");
   const [nextYearGoalText, setNextYearGoalText] = useState("");
@@ -291,7 +341,8 @@ export default function ReflectionPage() {
         );
         setMileageText(lines.join("\n\n") || "마일리지에 기록된 내용이 없습니다.");
       }
-      // 달성률·목표 수치는 AI에게 맡기지 않고 마일리지 카드와 동일한 코드(computeMileageProgress)로 확정 계산해 주입
+      // '정량 목표 달성도'는 AI 없이 마일리지 데이터로 코드 계산하여 자동 작성한다.
+      let generatedGoalText = "";
       try {
         const planGoalsRow = planRow as Record<string, string | null | undefined> | null;
         const planGoals: Record<string, number> = {};
@@ -309,13 +360,17 @@ export default function ReflectionPage() {
           healthGoalUnit,
           schoolCategories.length === 6 ? schoolCategories : undefined
         );
-        const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-        const achLines = achCats.map(
-          (c) => `**[${c.label}]** 목표 : ${fmtNum(c.goal)}${c.unit} 이상 ( ${Math.round(c.progress)}% 완료)`
+        const entriesForReport = (mileageData ?? []).map(
+          (r: { content?: string; category?: string; created_at?: string }) => ({
+            content: r.content ?? "",
+            category: r.category ?? "",
+            created_at: r.created_at,
+          })
         );
-        setAchievementSummary(achLines.join("\n"));
+        generatedGoalText = buildGoalAchievementText(entriesForReport, achCats);
+        setGoalReportData({ entries: entriesForReport, achCats });
       } catch {
-        setAchievementSummary("");
+        generatedGoalText = "";
       }
       const { data: postResultRow } = await supabase
         .from("diagnosis_results")
@@ -346,11 +401,11 @@ export default function ReflectionPage() {
           .maybeSingle();
         const localGoal = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_goal_achievement_" + emailKey) ?? "") : "";
         const localReflection = typeof window !== "undefined" ? (localStorage.getItem("teacher_mate_reflection_text_" + emailKey) ?? "") : "";
+        // 정량 목표 달성도는 항상 마일리지 데이터 기반으로 자동 작성(저장본 무시).
+        setGoalAchievementText(generatedGoalText);
         if (draftRow != null) {
-          setGoalAchievementText(String((draftRow.goal_achievement_text as string) ?? ""));
           setReflectionText(String((draftRow.reflection_text as string) ?? ""));
         } else {
-          setGoalAchievementText(localGoal || "");
           setReflectionText(localReflection || "");
         }
         if (typeof window !== "undefined") {
@@ -585,46 +640,10 @@ export default function ReflectionPage() {
     };
   }, []);
 
-  const generateReport = async () => {
-    if (!planSummary.trim() && !mileageText.trim()) {
-      alert("계획서 또는 마일리지 내용이 있어야 AI 보고서를 생성할 수 있습니다.");
-      return;
-    }
-    setAiLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) {
-        alert("로그인이 필요합니다.");
-        return;
-      }
-      const res = await fetch("/api/ai-recommend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "result_report", planSummary, mileageText, achievementSummary }),
-      });
-      const json = await res.json();
-      maybeAlertAiWarning(json?.warning);
-      if (res.ok && json.recommendation) {
-        const text = json.recommendation;
-        setGoalAchievementText(text);
-        if (userEmail && typeof window !== "undefined") {
-          try { localStorage.setItem("teacher_mate_goal_achievement_" + userEmail, text); } catch (_) {}
-        }
-        await supabase.from("reflection_drafts").upsert(
-          { user_email: userEmail!, goal_achievement_text: text, reflection_text: reflectionText, updated_at: new Date().toISOString() },
-          { onConflict: "user_email" }
-        );
-      } else {
-        const msg = json?.code === "QUOTA_EXCEEDED" ? json.error : ("보고서 생성에 실패했습니다. " + (json?.error || ""));
-        setGoalAchievementText(msg);
-      }
-    } catch (e) {
-      console.error(e);
-      setGoalAchievementText("보고서 생성 중 오류가 발생했습니다.");
-    } finally {
-      setAiLoading(false);
-    }
+  // 마일리지 데이터로 '정량 목표 달성도'를 코드 기반으로 다시 작성(AI 미사용).
+  const regenerateGoalAchievement = () => {
+    if (!goalReportData) return;
+    setGoalAchievementText(buildGoalAchievementText(goalReportData.entries, goalReportData.achCats));
   };
 
   const generateReflectionSummary = async () => {
@@ -1130,12 +1149,13 @@ export default function ReflectionPage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
-                    onClick={generateReport}
-                    disabled={aiLoading}
+                    variant="outline"
+                    className="rounded-full border-slate-300"
+                    onClick={regenerateGoalAchievement}
+                    disabled={!goalReportData}
                   >
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    {aiLoading ? "작성 중..." : goalAchievementText.trim() ? "AI로 재작성" : "AI로 작성"}
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    자동 작성
                   </Button>
                   <Button type="button" size="sm" variant="outline" className="rounded-full border-slate-300" onClick={saveGoalAchievementAndReflection} disabled={savingStatus.report === "saving"}>
                     <Save className="mr-1.5 h-3.5 w-3.5" />
@@ -1144,7 +1164,7 @@ export default function ReflectionPage() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                정량 목표 달성도 : 개조식으로 작성해 주세요. 「AI로 작성」은 연간·계획서 및 마일리지 정보를 바탕으로 초안을 채웁니다.
+                정량 목표 달성도 : 마일리지 기록과 계획서 목표를 바탕으로 자동 정리됩니다. 마일리지를 추가한 뒤 「자동 작성」을 누르면 최신 내용으로 다시 채워집니다.
               </p>
               <Textarea
                 placeholder="정량 목표 달성도를 개조식으로 작성하세요."

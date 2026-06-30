@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const { type, weakDomains, strongDomains, weakItems } = body;
 
     // 입력 검증
-    if (!type || (type !== "goal" && type !== "effect" && type !== "analysis" && type !== "analysis_post" && type !== "mentor" && type !== "result_report" && type !== "plan_outline" && type !== "plan_fill_rows" && type !== "self_eval_sections" && type !== "analysis_post_rewrite" && type !== "next_year_goal")) {
+    if (!type || (type !== "goal" && type !== "effect" && type !== "analysis" && type !== "analysis_post" && type !== "mentor" && type !== "plan_outline" && type !== "plan_fill_rows" && type !== "self_eval_sections" && type !== "analysis_post_rewrite" && type !== "next_year_goal")) {
       return NextResponse.json(
         { error: "올바른 type을 제공해주세요." },
         { status: 400 }
@@ -121,15 +121,6 @@ export async function POST(req: Request) {
       const preText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${getScore(pre, k, domainLabels[k])}점`).join(", ");
       const postText = domainKeysList.map((k) => `${domainLabels[k] ?? k}: ${getScore(post, k, domainLabels[k])}점`).join(", ");
       prompt = applyPromptTemplate(getTemplate("analysis_post"), { preText, postText, preTotal, postTotal });
-    } else if (type === "result_report") {
-      const planSummary = String((body as any)?.planSummary ?? "").trim();
-      const mileageText = String((body as any)?.mileageText ?? "").trim();
-      const achievementSummary = String((body as any)?.achievementSummary ?? "").trim();
-      prompt = applyPromptTemplate(getTemplate("result_report"), {
-        planSummary: planSummary || "(없음)",
-        mileageText: mileageText || "(없음)",
-        achievementSummary: achievementSummary || "(없음)",
-      });
     } else if (type === "self_eval_sections") {
       const planSummary = String((body as any)?.planSummary ?? "").trim();
       const mileageText = String((body as any)?.mileageText ?? "").trim();
