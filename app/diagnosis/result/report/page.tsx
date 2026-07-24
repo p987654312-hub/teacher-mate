@@ -514,8 +514,8 @@ function DiagnosisReportContent() {
                             <Radar
                               name="역량 평균"
                               dataKey="score"
-                              stroke="#6366f1"
-                              fill="#6366f1"
+                              stroke="#2e6fe6"
+                              fill="#2e6fe6"
                               fillOpacity={0.35}
                             />
                           </RadarChart>

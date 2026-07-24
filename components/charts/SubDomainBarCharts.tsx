@@ -95,7 +95,7 @@ export default function SubDomainBarCharts({ barChartDataByDomain, className = "
               ]}
             />
             <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" />
-            <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#6366f1" />
+            <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" />
           </BarChart>
         </ResponsiveContainer>
       </div>

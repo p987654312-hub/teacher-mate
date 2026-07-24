@@ -37,7 +37,7 @@ export default function ReflectionRadarCharts({ radarCompareData, domainAverages
             tickLine={false}
           />
           <Radar name="사전" dataKey="사전" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.25} strokeWidth={1} />
-          <Radar name="사후" dataKey="사후" stroke="#6366f1" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
+          <Radar name="사후" dataKey="사후" stroke="#2e6fe6" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
         </RadarChart>
       ) : (
         <RadarChart data={domainAverages} outerRadius="40%" margin={{ top: 16, right: 64, bottom: 16, left: 32 }}>
@@ -59,7 +59,7 @@ export default function ReflectionRadarCharts({ radarCompareData, domainAverages
             }}
             tickLine={false}
           />
-          <Radar name="역량" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+          <Radar name="역량" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
         </RadarChart>
       )}
     </ResponsiveContainer>

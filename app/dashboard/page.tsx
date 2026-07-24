@@ -114,6 +114,19 @@ function getPlanFillRatio(row: PlanRow): number {
   return total > 0 ? filled / total : 0;
 }
 
+/** 진행률(0~100)에 따라 연한 파랑 → 파랑으로 이어지는 나이스 블루 톤을 반환한다.
+ *  가장 진한 값도 남색이 아닌 선명한 파랑(#2e6fe6)이 되도록 한다. */
+function progressToBlue(pct: number): string {
+  const p = Math.min(100, Math.max(0, pct));
+  if (p >= 90) return "#4a85e9"; // 거의 완료 — 가장 진한 파랑(살짝 연하게)
+  if (p >= 75) return "#6d9bee";
+  if (p >= 60) return "#87abf1";
+  if (p >= 45) return "#a9c7f3";
+  if (p >= 30) return "#cbdff9";
+  if (p >= 15) return "#dbe9f7";
+  return "#eef4fd"; // 시작 단계 — 가장 연함
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [userSchool, setUserSchool] = useState<string | null>(null);
@@ -474,7 +487,6 @@ export default function DashboardPage() {
     health: "시간",
     other: "건",
   };
-  const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#c084fc", "#d8b4fe", "#e9d5ff"];
   const [pointsDetailOwner, setPointsDetailOwner] = useState<{ name: string; isAdminSelf: boolean } | null>(null);
   const [isLoadingPointsDetail, setIsLoadingPointsDetail] = useState(false);
   const [adminMileageDetail, setAdminMileageDetail] = useState<{
@@ -1454,7 +1466,7 @@ export default function DashboardPage() {
                 <span className="text-slate-700">로 찾아가는 목적지</span>
               </span>
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-[#45608F]">
               참여와 협력을 바탕으로 하는 교원 역량개발지원
             </p>
           </div>
@@ -1507,7 +1519,7 @@ export default function DashboardPage() {
             <>
               {/* 왼쪽: 사용자 정보 + 진단 + 계획 (가로는 오른쪽보다 짧게) */}
               <div className="flex w-full flex-col gap-4 md:w-[38%] md:min-w-0 md:flex-shrink-0">
-                <Card className="overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-violet-200/85 via-violet-300/60 to-indigo-300/70 p-4 shadow-md ring-1 ring-violet-300/50">
+                <Card className="overflow-hidden rounded-lg border-0 bg-gradient-to-br from-[#CBDFF9] via-[#B6D0F5] to-[#9DC0F1] p-4 shadow-md">
                   <style dangerouslySetInnerHTML={{ __html: `
                     @keyframes dashboard-car-float {
                       0%, 100% { transform: translateY(0); }
@@ -1519,16 +1531,16 @@ export default function DashboardPage() {
                     }
                   `}} />
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[#2E6FE6] to-[#1E5BC6] text-white shadow-md">
                       <span className="text-lg font-bold leading-none">
                         {(userName ?? "?")[0]}
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium uppercase tracking-wider text-violet-800">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[#1E5BC6]">
                         {userSchool ?? "소속"}
                       </p>
-                      <p className="mt-0.5 truncate text-lg font-extrabold text-violet-900 drop-shadow-sm">
+                      <p className="mt-0.5 truncate font-[family-name:var(--font-sans-kr)] text-lg font-extrabold text-[#1B3A6B] drop-shadow-sm">
                         {[userGradeClass, maskDisplayName(userName)].filter(Boolean).join(" ")}{userName ? " 선생님" : "선생님"}
                       </p>
                     </div>
@@ -1547,13 +1559,13 @@ export default function DashboardPage() {
                         style={{ bottom: "-1mm", animation: "dashboard-car-float 1.5s ease-in-out infinite" }}
                       >
                         <svg width="50" height="29" viewBox="0 0 28 16" fill="none" className="drop-shadow-sm" style={{ transform: "scaleX(-1) scale(0.8)", transformOrigin: "center" }} aria-hidden>
-                          <rect x="2" y="6" width="20" height="6" rx="2" fill="#6366f1" />
-                          <path d="M6 6 L8 2 L18 2 L20 6" fill="#818cf8" />
+                          <rect x="2" y="6" width="20" height="6" rx="2" fill="#2E6FE6" />
+                          <path d="M6 6 L8 2 L18 2 L20 6" fill="#6D9BEE" />
                           <circle cx="7" cy="12" r="2.5" fill="#334155" />
                           <circle cx="17" cy="12" r="2.5" fill="#334155" />
                           <circle cx="7" cy="12" r="1" fill="#94a3b8" />
                           <circle cx="17" cy="12" r="1" fill="#94a3b8" />
-                          <circle cx="14" cy="8" r="1.2" fill="#c7d2fe" />
+                          <circle cx="14" cy="8" r="1.2" fill="#CBDFF9" />
                         </svg>
                       </div>
                       {showTeacherView && (
@@ -1566,10 +1578,10 @@ export default function DashboardPage() {
                           className="absolute right-0 flex items-baseline justify-end gap-1 cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ bottom: "calc(32px - 1mm)", animation: "dashboard-car-float 1.5s ease-in-out infinite" }}
                         >
-                          <span className="text-[calc(1.8em*0.75)] font-semibold text-violet-900 whitespace-nowrap leading-none">
+                          <span className="text-[calc(1.8em*0.75)] font-semibold text-[#1B3A6B] whitespace-nowrap leading-none">
                             {(totalPoints ?? 0).toLocaleString()}
                           </span>
-                          <span className="text-[calc(0.9em*0.75)] font-semibold text-violet-900 whitespace-nowrap leading-none">
+                          <span className="text-[calc(0.9em*0.75)] font-semibold text-[#1B3A6B] whitespace-nowrap leading-none">
                             P
                           </span>
                         </button>
@@ -1584,13 +1596,13 @@ export default function DashboardPage() {
                   </div>
                 </Card>
 
-              <Card className="group min-h-[210px] rounded-2xl border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70">
+              <Card className="group min-h-[210px] rounded-2xl border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70">
                 <div className="relative flex flex-col gap-3">
-                  <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>1</span>
+                  <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/50 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>1</span>
                   <div className="flex w-full justify-end">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
                           diagnosisSummary
                             ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                             : "bg-slate-50 text-slate-500 border border-slate-100"
@@ -1604,10 +1616,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+                    <h2 className="font-[family-name:var(--font-sans-kr)] text-xl font-bold tracking-tight text-[#1B3A6B]">
                       (사전) 교원 역량 진단
                     </h2>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[#45608F]">
                       나의 전문성과 역량을 진단합니다.
                     </p>
                   </div>
@@ -1649,7 +1661,7 @@ export default function DashboardPage() {
                     }}
                     className={
                       perceptionPreMatched
-                        ? "inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                        ? "inline-flex items-center gap-1 text-[11px] font-medium text-[#1E5BC6] underline underline-offset-2 hover:text-[#1B3A6B]"
                         : "inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 underline underline-offset-2 cursor-not-allowed"
                     }
                   >
@@ -1665,7 +1677,7 @@ export default function DashboardPage() {
                           variant="outline"
                           disabled={!diagnosisSummary}
                           title={!diagnosisSummary ? "먼저 실시완료 하세요" : undefined}
-                          className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                          className="rounded-md border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
                         >
                           <Printer className="h-3.5 w-3.5" />
                           결과 보기
@@ -1676,7 +1688,7 @@ export default function DashboardPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:shadow-md hover:opacity-95"
+                        className="rounded-md bg-[#2E6FE6] px-4 text-[11px] font-semibold text-white shadow-sm hover:bg-[#1E5BC6] hover:shadow-md"
                       >
                         {diagnosisSummary ? "다시 실시하기" : "실시하기"}
                       </Button>
@@ -1739,7 +1751,7 @@ export default function DashboardPage() {
                 <Card
                   className={`group h-full rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all ${
                     diagnosisSummary
-                      ? "relative border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                      ? "relative border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                       : "relative z-0 pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                   }`}
                 >
@@ -1748,7 +1760,7 @@ export default function DashboardPage() {
                     <div className="flex w-full justify-end">
                       <div className="flex items-center gap-2">
 <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
                               planCompleted
                               ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                               : "bg-slate-50 text-slate-500 border border-slate-100"
@@ -1768,7 +1780,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+                      <h2 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">
                         목적지 플래너(자기역량 개발계획서)
                       </h2>
                       <p className="mt-1 text-xs text-slate-500">
@@ -1788,7 +1800,7 @@ export default function DashboardPage() {
                             router.push("/plan/print");
                           }
                         }}
-                        className="rounded-full border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                        className="rounded-md border-slate-300 bg-white px-4 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
                         title={planMissingGoals.length > 0 ? "미작성 된 계획이 있어 출력이 불가합니다." : undefined}
                       >
                         <Printer className="h-3.5 w-3.5" />
@@ -1807,7 +1819,7 @@ export default function DashboardPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:shadow-md hover:opacity-95"
+                        className="rounded-md bg-[#2e6fe6] px-4 text-[11px] font-semibold text-white shadow-sm hover:shadow-md hover:opacity-95"
                       >
                         계획 작성
                       </Button>
@@ -1827,7 +1839,7 @@ export default function DashboardPage() {
                   <Card
                     className={`flex min-h-0 flex-1 flex-col rounded-2xl p-3 shadow-sm backdrop-blur-sm transition-all relative ${
                       planCompleted
-                        ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                        ? "border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "z-0 pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
                   >
@@ -1836,7 +1848,7 @@ export default function DashboardPage() {
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
                               mileageStarted
                                 ? "bg-amber-50 text-amber-700 border border-amber-100"
                                 : "bg-slate-50 text-slate-500 border border-slate-100"
@@ -1851,7 +1863,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-4">
-                          <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+                          <h2 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">
                             목적지 마일리지
                           </h2>
                         </div>
@@ -1866,7 +1878,7 @@ export default function DashboardPage() {
                             <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                             <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                               <div
-                                className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-700"
+                                className="absolute inset-y-0 left-0 rounded-full bg-[#2e6fe6] transition-all duration-700"
                                 style={{ width: `${animatedMileageProgress}%`, minWidth: animatedMileageProgress > 0 ? 2 : 0 }}
                               />
                               <div
@@ -1877,7 +1889,7 @@ export default function DashboardPage() {
                                 }}
                               >
                                 <div className="rotate-[20deg]">
-                                  <Plane className="h-[27px] w-[27px] text-[#6366f1]" strokeWidth={2} />
+                                  <Plane className="h-[27px] w-[27px] text-[#2e6fe6]" strokeWidth={2} />
                                 </div>
                                 <button
                                   type="button"
@@ -1902,8 +1914,9 @@ export default function DashboardPage() {
                               {mileageSummary.categories.map((c, i) => {
                                 const completed = Math.min(100, Math.max(0, c.progress));
                                 const remaining = 100 - completed;
+                                const pieFill = progressToBlue(completed);
                                 const pieData = [
-                                  { name: "진행", value: completed, fill: PIE_COLORS[i % PIE_COLORS.length] },
+                                  { name: "진행", value: completed, fill: pieFill },
                                   { name: "남음", value: remaining, fill: "var(--tw-slate-200, #e2e8f0)" },
                                 ].filter((d) => d.value > 0);
                                 const goal = c.goal ?? 0;
@@ -1923,7 +1936,7 @@ export default function DashboardPage() {
                                         <ResponsiveContainer width="100%" height="100%">
                                           <PieChart>
                                             <Pie
-                                              data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
+                                              data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: pieFill }]}
                                               cx="50%"
                                               cy="50%"
                                               innerRadius="55%"
@@ -1933,7 +1946,7 @@ export default function DashboardPage() {
                                               cursor="pointer"
                                               isAnimationActive={showAdminView ? false : true}
                                             >
-                                              {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
+                                              {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={pieFill} />}
                                             </Pie>
                                           </PieChart>
                                         </ResponsiveContainer>
@@ -1961,7 +1974,7 @@ export default function DashboardPage() {
                         <Button
                           asChild
                           size="sm"
-                          className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
+                          className="shrink-0 rounded-md bg-[#2e6fe6] px-4 text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                         >
                           <Link href="/dashboard/mileage">
                             {mileageStarted ? "마일리지 관리" : "마일리지 시작하기"}
@@ -1979,7 +1992,7 @@ export default function DashboardPage() {
                   <Card
                     className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
                       planCompleted
-                        ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                        ? "border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
                   >
@@ -1988,7 +2001,7 @@ export default function DashboardPage() {
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
                               hasPostDiagnosis
                                 ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                                 : "bg-slate-50 text-slate-500 border border-slate-100"
@@ -2002,7 +2015,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">(사후) 교원 역량 진단</h2>
+                        <h2 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">(사후) 교원 역량 진단</h2>
                         <p className="mt-1 text-xs text-slate-500">
                           향상된 나의 역량을 진단합니다.
                         </p>
@@ -2035,7 +2048,7 @@ export default function DashboardPage() {
                                 variant="outline"
                                 disabled={!hasPostDiagnosis}
                                 title={!hasPostDiagnosis ? "먼저 실시완료 하세요" : undefined}
-                                className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
                               >
                                 <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                 결과 보기
@@ -2048,7 +2061,7 @@ export default function DashboardPage() {
                               variant="outline"
                               disabled
                               title="먼저 자기역량개발계획을 실시완료 하세요"
-                              className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
+                              className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
                             >
                               <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                               결과 보기
@@ -2057,7 +2070,7 @@ export default function DashboardPage() {
                           <Button
                             asChild
                             size="sm"
-                            className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
+                            className="shrink-0 rounded-md bg-[#2e6fe6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                           >
                             <Link href="/diagnosis?type=post">{hasPostDiagnosis ? "다시 실시하기" : "실시하기"}</Link>
                           </Button>
@@ -2068,7 +2081,7 @@ export default function DashboardPage() {
                   <Card
                     className={`relative z-0 group w-full md:min-w-0 md:flex-1 rounded-2xl p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all min-h-[160px] md:min-h-0 ${
                       planCompleted
-                        ? "border-0 ring-1 ring-violet-200/50 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
+                        ? "border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70"
                         : "pointer-events-none border-slate-300 bg-slate-200/70 text-slate-500 saturate-0"
                     }`}
                   >
@@ -2077,7 +2090,7 @@ export default function DashboardPage() {
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
                               reflectionDone ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-50 text-slate-500 border border-slate-100"
                             }`}
                           >
@@ -2089,7 +2102,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">목적지 Report(교사 성찰 기록)</h2>
+                        <h2 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">목적지 Report(교사 성찰 기록)</h2>
                         <p className="mt-1 text-xs text-slate-500">
                           자기역량 개발 결과 보고서를 완성합니다.
                         </p>
@@ -2102,7 +2115,7 @@ export default function DashboardPage() {
                             variant="outline"
                             disabled={!reflectionDone}
                             title={!reflectionDone ? "먼저 실시완료 하세요" : undefined}
-                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
                             onClick={() => reflectionDone && (window.location.href = "/reflection/result-report")}
                           >
                             <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -2115,7 +2128,7 @@ export default function DashboardPage() {
                             variant="outline"
                             disabled
                             title="먼저 자기역량개발계획을 실시완료 하세요"
-                            className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
+                            className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-sm inline-flex items-center gap-1 opacity-50 cursor-not-allowed"
                           >
                             <Printer className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             결과 보기
@@ -2124,7 +2137,7 @@ export default function DashboardPage() {
                         <Button
                           asChild
                           size="sm"
-                          className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
+                          className="shrink-0 rounded-md bg-[#2e6fe6] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white shadow-sm hover:opacity-95"
                         >
                           <Link href="/reflection">관리하기</Link>
                         </Button>
@@ -2280,7 +2293,7 @@ export default function DashboardPage() {
                           <Button
                             type="button"
                             size="sm"
-                            className="rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-700"
+                            className="rounded-md bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-700"
                             disabled={perceptionUploading !== null}
                             onClick={() => perceptionPreInputRef.current?.click()}
                           >
@@ -2289,7 +2302,7 @@ export default function DashboardPage() {
                           <Button
                             type="button"
                             size="sm"
-                            className="rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
+                            className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
                             disabled={perceptionUploading !== null}
                             onClick={() => perceptionPostInputRef.current?.click()}
                           >
@@ -2299,7 +2312,7 @@ export default function DashboardPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-full border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            className="rounded-md border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
                             onClick={downloadPerceptionSample}
                           >
                             샘플양식 다운받기
@@ -2352,7 +2365,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                           disabled={aiPromptSettingsLoading || aiPromptSettingsSaving}
                           onClick={async () => {
                             const { data: { session } } = await supabase.auth.getSession();
@@ -2387,7 +2400,7 @@ export default function DashboardPage() {
                         <Button
                           type="button"
                           size="sm"
-                          className="rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
+                          className="rounded-md bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
                           disabled={aiPromptSettingsLoading || aiPromptSettingsSaving}
                           onClick={async () => {
                             const { data: { session } } = await supabase.auth.getSession();
@@ -2454,7 +2467,7 @@ export default function DashboardPage() {
                                 <Button
                                   type="button"
                                   size="sm"
-                                  className="h-7 rounded-full bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                                  className="h-7 rounded-md bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
                                 disabled={aiPromptSettingsLoading || aiPromptSavingKey !== null}
                                 onClick={async () => {
                                   const { data: { session } } = await supabase.auth.getSession();
@@ -2536,7 +2549,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={resettingCategoryConfig}
                           onClick={() => {
                             (async () => {
@@ -2578,7 +2591,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={savingCategoryConfig || JSON.stringify(categoryConfig) === JSON.stringify(categoryConfigSaved)}
                           onClick={() => {
                             const changed = JSON.stringify(categoryConfig) !== JSON.stringify(categoryConfigSaved);
@@ -2643,7 +2656,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                           onClick={() => setShowPointSettings(false)}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -2723,7 +2736,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={savingPointSettings || JSON.stringify(pointSettings) === JSON.stringify(pointSettingsSaved)}
                           onClick={async () => {
                             const changed = JSON.stringify(pointSettings) !== JSON.stringify(pointSettingsSaved);
@@ -2751,7 +2764,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                           onClick={() => setShowPointSettings(false)}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -2819,7 +2832,7 @@ export default function DashboardPage() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                         onClick={() => setShowDiagnosisSettings(false)}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -2976,7 +2989,7 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-full border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                          className="rounded-md border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                           disabled={savingDiagnosisSettings || (diagnosisTitle === diagnosisTitleSaved && JSON.stringify(diagnosisDomains) === JSON.stringify(diagnosisDomainsSaved))}
                           onClick={async () => {
                             if (diagnosisTitle === diagnosisTitleSaved && JSON.stringify(diagnosisDomains) === JSON.stringify(diagnosisDomainsSaved)) return;
@@ -3192,7 +3205,7 @@ export default function DashboardPage() {
                                   <div className="flex min-w-0 flex-row items-center">
                                     {t.mileageSummary.categories.map((c, i) => {
                                       const val = Math.min(100, Math.max(0, c.progress));
-                                      const ringColor = PIE_COLORS[i % PIE_COLORS.length];
+                                      const ringColor = progressToBlue(val);
                                       return (
                                         <button
                                           key={c.key}
@@ -3352,7 +3365,7 @@ export default function DashboardPage() {
                               <span className="shrink-0 text-sm font-medium text-[#333]">성장 여정</span>
                               <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                                 <div
-                                  className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500"
+                                  className="absolute inset-y-0 left-0 rounded-full bg-[#2e6fe6] transition-all duration-500"
                                   style={{ width: `${Math.min(100, Math.max(0, t.mileageSummary.overallProgress))}%`, minWidth: t.mileageSummary.overallProgress > 0 ? 2 : 0 }}
                                 />
                                 <div
@@ -3362,7 +3375,7 @@ export default function DashboardPage() {
                                     transform: "translate(-50%, 0) rotate(20deg)",
                                   }}
                                 >
-                                  <Plane className="h-[27px] w-[27px] text-[#6366f1]" strokeWidth={2} />
+                                  <Plane className="h-[27px] w-[27px] text-[#2e6fe6]" strokeWidth={2} />
                                 </div>
                               </div>
                               <span className="shrink-0 text-sm text-slate-400">{Math.round(t.mileageSummary.overallProgress)}%</span>
@@ -3376,8 +3389,9 @@ export default function DashboardPage() {
                                 const val = Math.min(100, Math.max(0, c.progress));
                                 const completed = val;
                                 const remaining = 100 - val;
+                                const pieFill = progressToBlue(completed);
                                 const pieData = [
-                                  { name: "진행", value: completed, fill: PIE_COLORS[i % PIE_COLORS.length] },
+                                  { name: "진행", value: completed, fill: pieFill },
                                   { name: "남음", value: remaining, fill: "#e2e8f0" },
                                 ].filter((d) => d.value > 0);
                                 const goal = (c as { goal?: number }).goal ?? 0;
@@ -3423,7 +3437,7 @@ export default function DashboardPage() {
                                       <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                           <Pie
-                                            data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: PIE_COLORS[i % PIE_COLORS.length] }]}
+                                            data={pieData.length ? pieData : [{ name: "진행", value: 0, fill: pieFill }]}
                                             cx="50%"
                                             cy="50%"
                                             innerRadius="55%"
@@ -3433,7 +3447,7 @@ export default function DashboardPage() {
                                             cursor="pointer"
                                             isAnimationActive={false}
                                           >
-                                            {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={PIE_COLORS[i % PIE_COLORS.length]} />}
+                                            {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={pieFill} />}
                                           </Pie>
                                         </PieChart>
                                       </ResponsiveContainer>
@@ -3460,7 +3474,7 @@ export default function DashboardPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-full"
+                        className="rounded-md"
                         onClick={loadMoreTeachers}
                         disabled={isLoadingTeachersMore}
                       >

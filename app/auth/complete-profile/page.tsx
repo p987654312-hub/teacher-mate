@@ -160,7 +160,7 @@ export default function CompleteProfilePage() {
 
         <div className="rounded-3xl bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-8 shadow-xl backdrop-blur-sm border border-slate-200/80">
           <header className="mb-6 space-y-1">
-            <h2 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+            <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">
               추가 정보 입력
             </h2>
             <p className="text-sm text-slate-500">
@@ -240,7 +240,7 @@ export default function CompleteProfilePage() {
                 type="button"
                 onClick={handleCompleteProfile}
                 disabled={isLoading}
-                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
+                className="mt-2 w-full rounded-2xl bg-[#2e6fe6] text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70"
               >
                 {isLoading ? "처리 중..." : "가입 완료"}
               </Button>

@@ -126,7 +126,7 @@ export default function DiagnosisResultCharts({
                   ]}
                 />
                 <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" />
-                <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#6366f1" />
+                <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -149,7 +149,7 @@ export default function DiagnosisResultCharts({
                     />
                     <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
                     <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
-                    <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#6366f1" strokeWidth={2} fill="transparent" fillOpacity={0} />
+                    <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} />
                     <Legend />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -183,7 +183,7 @@ export default function DiagnosisResultCharts({
                   />
                   <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
                   <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
-                  <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#6366f1" strokeWidth={2} fill="transparent" fillOpacity={0} />
+                  <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} />
                   <Legend wrapperStyle={{ marginTop: "400px" }} />
                 </RadarChart>
               </ResponsiveContainer>
@@ -224,7 +224,7 @@ export default function DiagnosisResultCharts({
                       ]}
                     />
                     <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" />
-                    <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#6366f1" />
+                    <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -252,7 +252,7 @@ export default function DiagnosisResultCharts({
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 18, fontWeight: 700 }} />
           <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
-          <Radar name="역량 진단" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+          <Radar name="역량 진단" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

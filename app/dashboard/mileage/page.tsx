@@ -840,7 +840,7 @@ export default function MileagePage() {
               <NotebookPen className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B]">
                 목적지 마일리지
               </h1>
               <p className="text-xs text-slate-500">역량 개발 실천 기록을 간편하게 누적 관리합니다.</p>
@@ -1058,7 +1058,7 @@ export default function MileagePage() {
                 adding ||
                 (dailyReflectionOn ? !dailyReflectionDate.trim() || !dailyReflectionContent.trim() : !content.trim())
               }
-              className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-4 text-xs font-semibold text-white hover:opacity-90"
+              className="rounded-md bg-[#2e6fe6] px-4 text-xs font-semibold text-white hover:opacity-90"
             >
               {adding ? "저장 중..." : "확인"}
             </Button>
@@ -1105,7 +1105,7 @@ export default function MileagePage() {
                   <div className="mt-[1mm] flex min-w-0 flex-1 items-center gap-2">
                     <div className="relative h-[4.8px] min-w-0 flex-1 overflow-visible rounded-full bg-[#e0e2e7]">
                       <div
-                        className="absolute inset-y-0 left-0 rounded-full bg-[#6366f1] transition-all duration-500"
+                        className="absolute inset-y-0 left-0 rounded-full bg-[#2e6fe6] transition-all duration-500"
                         style={{ width: `${Math.min(100, Math.max(0, progress))}%`, minWidth: progress > 0 ? 2 : 0 }}
                       />
                       <div
@@ -1116,9 +1116,9 @@ export default function MileagePage() {
                         }}
                       >
                         <span className="rotate-[20deg]">
-                          <Plane className="h-[16px] w-[16px] text-[#6366f1]" strokeWidth={2} />
+                          <Plane className="h-[16px] w-[16px] text-[#2e6fe6]" strokeWidth={2} />
                         </span>
-                        <span className="text-[12px] font-medium text-[#6366f1] whitespace-nowrap">
+                        <span className="text-[12px] font-medium text-[#2e6fe6] whitespace-nowrap">
                           {goalNum > 0 || sum > 0 ? sum.toFixed(sum % 1 === 0 ? 0 : 1) : ""}
                         </span>
                       </div>

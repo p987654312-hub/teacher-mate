@@ -635,7 +635,7 @@ function DiagnosisResultContent() {
                 </Link>
               </div>
               <div className="flex-1 min-w-0 text-center">
-                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent truncate">
+                <h1 className="text-xl font-bold tracking-tight font-[family-name:var(--font-sans-kr)] text-[#1B3A6B] truncate">
                   {diagnosisTitle
                     ? (isPost ? `(사후) ${diagnosisTitle} 결과` : `(사전) ${diagnosisTitle} 결과`)
                     : (isPost ? "(사후) 나의 교원 역량 진단 결과" : "나의 교원 역량 사전 진단 결과")}
@@ -647,7 +647,7 @@ function DiagnosisResultContent() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-slate-300 text-slate-700 hover:bg-slate-50"
+                    className="rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
                     onClick={() => handlePrint()}
                   >
                     <Printer className="mr-1.5 h-3.5 w-3.5" />
@@ -657,7 +657,7 @@ function DiagnosisResultContent() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-slate-300 text-slate-700 hover:bg-slate-50"
+                    className="rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
                     title="PDF로 저장"
                     onClick={() => handlePrint()}
                   >
@@ -817,7 +817,7 @@ function DiagnosisResultContent() {
               type="button"
               variant="outline"
               size="sm"
-              className="rounded-full border-slate-300"
+              className="rounded-md border-slate-300"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               돌아가기

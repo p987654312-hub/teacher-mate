@@ -1056,7 +1056,7 @@ export default function ReflectionPage() {
               navigatingToReportRef.current = true;
               window.location.href = "/reflection/result-report";
             }}
-            className="shrink-0 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90 border-0 cursor-pointer"
+            className="shrink-0 rounded-md bg-[#2e6fe6] px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90 border-0 cursor-pointer"
           >
             보고서 만들기
           </button>
@@ -1073,7 +1073,7 @@ export default function ReflectionPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-base font-semibold text-slate-800">사전사후결과분석</h2>
                 <div className="flex items-center gap-2">
-                <Button type="button" size="sm" className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90" onClick={async () => {
+                <Button type="button" size="sm" className="rounded-md bg-[#2e6fe6] text-white hover:opacity-90" onClick={async () => {
                   if (!analysisPostText.trim()) {
                     alert("사전·사후 결과 분석 내용이 없습니다. 진단 결과 페이지에서 사후 검사 후 결과 분석을 먼저 생성해 주세요.");
                     return;
@@ -1181,7 +1181,7 @@ export default function ReflectionPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-base font-semibold text-slate-800">성찰</h2>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90" onClick={generateReflectionSummary} disabled={reflectionAiLoading}>
+                  <Button type="button" size="sm" className="rounded-md bg-[#2e6fe6] text-white hover:opacity-90" onClick={generateReflectionSummary} disabled={reflectionAiLoading}>
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                     {reflectionAiLoading ? "작성 중..." : reflectionText.trim() ? "AI 어시스트 재작성" : "AI 어시스트 활용하여 초안 작성"}
                   </Button>
@@ -1206,7 +1206,7 @@ export default function ReflectionPage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                    className="rounded-md bg-[#2e6fe6] text-white hover:opacity-90"
                     disabled={nextYearGoalAiLoading}
                     onClick={() => {
                       if (!analysisPostText.trim()) {
@@ -1320,7 +1320,7 @@ export default function ReflectionPage() {
                     </Button>
                     <Button
                       type="button"
-                      className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                      className="rounded-md bg-[#2e6fe6] text-white hover:opacity-90"
                       disabled={nextYearGoalAiLoading}
                       onClick={async () => {
                         if (!analysisPostText.trim()) {
@@ -1475,7 +1475,7 @@ export default function ReflectionPage() {
                     <Button
                       type="button"
                       size="sm"
-                      className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90"
+                      className="rounded-md bg-[#2e6fe6] text-white hover:opacity-90"
                       onClick={generateSelfEvalSections}
                       disabled={selfEvalAiLoading}
                     >

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -9,6 +9,13 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+// 나이스/행정시스템풍 산세리프 — 한글 지원. 헤딩에만 선택적으로 사용.
+const notoSansKr = Noto_Sans_KR({
+  variable: "--font-sans-kr",
+  weight: ["500", "700"],
   subsets: ["latin"],
 });
 
@@ -25,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-white antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} flex min-h-screen flex-col bg-white antialiased`}>
         <div className="flex min-h-screen flex-1 flex-col">
           <main className="flex-1 pb-6">{children}</main>
         </div>

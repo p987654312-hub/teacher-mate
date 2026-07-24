@@ -21,7 +21,7 @@ type Props = {
 };
 
 const DEFAULT_DOMAIN_ORDER = ["domain1", "domain2", "domain3", "domain4"] as const;
-const BAR_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#c084fc"];
+const BAR_COLORS = ["#1e5bc6", "#2e6fe6", "#5b8cec", "#87abf1"];
 
 function SubBarBlock({
   domainKey,
@@ -129,7 +129,7 @@ export default function DiagnosisResultRadarWithSub({
                 domain={[0, 5]}
                 tick={false}
               />
-              <Radar name="대영역" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+              <Radar name="대영역" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
             </RadarChart>
           </ResponsiveContainer>
         </div>

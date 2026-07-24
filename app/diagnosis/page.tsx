@@ -422,8 +422,33 @@ function DiagnosisContent() {
     );
   }
 
+  // 나이스/행정시스템풍 테마는 (사전) 진단에만 적용. (사후)는 기존 스타일 유지.
+  const neis = !isPost;
+  const c = {
+    progressTrack: neis
+      ? "bg-[#2E6FE6]/15 [&_[data-slot=progress-indicator]]:bg-[#2E6FE6]"
+      : "bg-blue-200/70 [&_[data-slot=progress-indicator]]:bg-blue-500",
+    answeredRow: neis ? "bg-[#E4EEFB]/60" : "bg-blue-50/60",
+    ansFixed: neis
+      ? "bg-[#2E6FE6] text-white ring-1 ring-[#2E6FE6]"
+      : "bg-blue-600 text-white ring-1 ring-blue-600",
+    ansSelected: neis
+      ? "bg-[#D5E4FA] text-[#1B3A6B] ring-1 ring-[#2E6FE6]/30"
+      : "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+    ansIdle: neis
+      ? "bg-slate-100 text-slate-400 hover:bg-[#E4EEFB] hover:text-[#2E6FE6]"
+      : "bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600",
+    submitBtn: neis
+      ? "rounded-md bg-[#2E6FE6] hover:bg-[#1E5BC6]"
+      : "rounded-md bg-[#2e6fe6] hover:opacity-95",
+    dots: neis ? "text-[#2E6FE6]" : "text-blue-600",
+    dot1: neis ? "bg-[#7EA6EE]" : "bg-blue-400",
+    dot2: neis ? "bg-[#4A85E9]" : "bg-blue-500",
+    dot3: neis ? "bg-[#2E6FE6]" : "bg-blue-600",
+  };
+
   return (
-    <div className="relative flex min-h-screen flex-col bg-white px-4 py-4">
+    <div className={`relative flex min-h-screen flex-col px-4 py-4 ${neis ? "bg-[#F2F6FC]" : "bg-white"}`}>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <CardPageHeader
           icon={<ClipboardCheck className="h-6 w-6" />}
@@ -461,7 +486,7 @@ function DiagnosisContent() {
           </div>
           <Progress
             value={progress}
-            className="h-1.5 bg-blue-200/70 [&_[data-slot=progress-indicator]]:bg-blue-500"
+            className={`h-1.5 ${c.progressTrack}`}
           />
         </Card>
 
@@ -487,7 +512,7 @@ function DiagnosisContent() {
                     key={question.id}
                     id={`question-${question.id}`}
                     className={`grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 items-center border-b border-slate-100 last:border-b-0 ${
-                      isAnswered ? "bg-blue-50/60" : "bg-white"
+                      isAnswered ? c.answeredRow : "bg-white"
                     }`}
                   >
                     <p className="text-sm text-slate-800 leading-snug min-w-0">
@@ -529,10 +554,10 @@ function DiagnosisContent() {
                             }}
                             className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center transition-colors ${
                               isFixed
-                                ? "bg-blue-600 text-white ring-1 ring-blue-600"
+                                ? c.ansFixed
                                 : isSelected
-                                  ? "bg-blue-100 text-blue-700 ring-1 ring-blue-200"
-                                  : "bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                                  ? c.ansSelected
+                                  : c.ansIdle
                             }`}
                             title={`선택 ${n}`}
                           >
@@ -578,7 +603,7 @@ function DiagnosisContent() {
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="w-full rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-sm font-semibold text-white shadow-md hover:shadow-lg hover:opacity-95 transition disabled:opacity-70 sm:w-64"
+            className={`w-full ${c.submitBtn} text-sm font-semibold text-white shadow-md hover:shadow-lg transition disabled:opacity-70 sm:w-64`}
           >
             {isSubmitting ? "제출 및 AI 분석 중..." : "진단 결과 제출하기"}
           </Button>
@@ -589,10 +614,10 @@ function DiagnosisContent() {
       {isSubmitting && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="rounded-2xl bg-white px-6 py-4 shadow-xl border border-slate-200 flex flex-col items-center gap-3 max-w-sm text-center">
-            <div className="flex items-center justify-center gap-1 text-blue-600">
-              <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.2s]" />
-              <span className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.1s]" />
-              <span className="h-2 w-2 rounded-full bg-blue-600 animate-bounce" />
+            <div className={`flex items-center justify-center gap-1 ${c.dots}`}>
+              <span className={`h-2 w-2 rounded-full ${c.dot1} animate-bounce [animation-delay:-0.2s]`} />
+              <span className={`h-2 w-2 rounded-full ${c.dot2} animate-bounce [animation-delay:-0.1s]`} />
+              <span className={`h-2 w-2 rounded-full ${c.dot3} animate-bounce`} />
             </div>
             <p className="text-sm font-semibold text-slate-800">
               제출된 진단 결과를 최첨단 AI 기술로 분석 중입니다.

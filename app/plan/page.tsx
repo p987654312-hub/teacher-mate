@@ -2242,7 +2242,7 @@ export default function PlanPage() {
             type="button"
             variant="outline"
             onClick={() => router.push("/dashboard")}
-            className="rounded-full border-slate-300 bg-white"
+            className="rounded-md border-slate-300 bg-white"
           >
             취소/돌아가기
           </Button>
@@ -2250,7 +2250,7 @@ export default function PlanPage() {
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white shadow-md hover:shadow-lg hover:opacity-95 disabled:opacity-70"
+            className="rounded-md bg-[#2e6fe6] text-white shadow-md hover:shadow-lg hover:opacity-95 disabled:opacity-70"
           >
             {isSaving ? "저장 중..." : "저장하기"}
           </Button>

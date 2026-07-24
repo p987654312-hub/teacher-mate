@@ -17,7 +17,7 @@ export default function ReflectionReportRadar(props: Props) {
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis dataKey="name" tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} />
           <Radar name="사전" dataKey="사전" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.25} strokeWidth={1} />
-          <Radar name="사후" dataKey="사후" stroke="#6366f1" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
+          <Radar name="사후" dataKey="사후" stroke="#2e6fe6" fill="transparent" fillOpacity={0} strokeWidth={1.5} />
         </RadarChart>
       </ResponsiveContainer>
     );
@@ -27,7 +27,7 @@ export default function ReflectionReportRadar(props: Props) {
       <RadarChart data={props.data} outerRadius="62%" margin={{ top: 24, right: 80, bottom: 24, left: 36 }}>
         <PolarGrid stroke="#e5e7eb" />
         <PolarAngleAxis dataKey="name" tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} />
-        <Radar name="역량" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+        <Radar name="역량" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
       </RadarChart>
     </ResponsiveContainer>
   );

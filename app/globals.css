@@ -7,8 +7,58 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), var(--font-sans-kr);
   --font-mono: var(--font-geist-mono);
+
+  /* 나이스(NEIS)/행정시스템풍 테마 — 기존 보라(violet)·인디고(indigo)·퍼플(purple)·자홍(fuchsia)
+     계열 유틸리티를 모두 나이스 블루 스케일로 재정의하여 앱 전역 색상을 일괄 변경한다. */
+  --color-violet-50: #f0f5fd;
+  --color-violet-100: #e4eefb;
+  --color-violet-200: #cbdff9;
+  --color-violet-300: #a9c7f3;
+  --color-violet-400: #6d9bee;
+  --color-violet-500: #2e6fe6;
+  --color-violet-600: #1e5bc6;
+  --color-violet-700: #1b4ba3;
+  --color-violet-800: #1b3a6b;
+  --color-violet-900: #152c52;
+  --color-violet-950: #0e1e38;
+
+  --color-indigo-50: #f0f5fd;
+  --color-indigo-100: #e4eefb;
+  --color-indigo-200: #cbdff9;
+  --color-indigo-300: #a9c7f3;
+  --color-indigo-400: #6d9bee;
+  --color-indigo-500: #2e6fe6;
+  --color-indigo-600: #1e5bc6;
+  --color-indigo-700: #1b4ba3;
+  --color-indigo-800: #1b3a6b;
+  --color-indigo-900: #152c52;
+  --color-indigo-950: #0e1e38;
+
+  --color-purple-50: #f0f5fd;
+  --color-purple-100: #e4eefb;
+  --color-purple-200: #cbdff9;
+  --color-purple-300: #a9c7f3;
+  --color-purple-400: #6d9bee;
+  --color-purple-500: #2e6fe6;
+  --color-purple-600: #1e5bc6;
+  --color-purple-700: #1b4ba3;
+  --color-purple-800: #1b3a6b;
+  --color-purple-900: #152c52;
+  --color-purple-950: #0e1e38;
+
+  --color-fuchsia-50: #f0f5fd;
+  --color-fuchsia-100: #e4eefb;
+  --color-fuchsia-200: #cbdff9;
+  --color-fuchsia-300: #a9c7f3;
+  --color-fuchsia-400: #6d9bee;
+  --color-fuchsia-500: #2e6fe6;
+  --color-fuchsia-600: #1e5bc6;
+  --color-fuchsia-700: #1b4ba3;
+  --color-fuchsia-800: #1b3a6b;
+  --color-fuchsia-900: #152c52;
+  --color-fuchsia-950: #0e1e38;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

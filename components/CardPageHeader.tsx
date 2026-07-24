@@ -29,11 +29,11 @@ export function CardPageHeader({
         {backLabel}
       </Link>
       <div className="flex min-w-0 flex-1 items-center justify-center gap-3">
-        <div className="shrink-0 rounded-2xl bg-violet-100 p-2.5 text-violet-600">
+        <div className="shrink-0 rounded-2xl bg-indigo-100 p-2.5 text-indigo-600">
           {icon}
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+          <h1 className="font-[family-name:var(--font-sans-kr)] text-xl font-bold tracking-tight text-[#1b3a6b]">
             {title}
           </h1>
           <p className="text-xs text-slate-500">{subtitle}</p>
