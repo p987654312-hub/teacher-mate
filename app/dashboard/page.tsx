@@ -36,7 +36,6 @@ import {
   Trash2,
   MessageSquare,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import {
   ResponsiveContainer,
   PieChart,
@@ -44,11 +43,7 @@ import {
   Cell,
 } from "recharts";
 import { Progress } from "@/components/ui/progress";
-
-const DashboardDiagnosisRadar = dynamic(
-  () => import("@/components/charts/DashboardDiagnosisRadar"),
-  { ssr: false }
-);
+import DashboardDiagnosisRadar from "@/components/charts/DashboardDiagnosisRadar";
 
 // "3-1", "3학년 1반", "3학년1반" 등을 "3-1" 형태로 정규화하여 학급을 매칭한다.
 function normalizeClassLabel(s: string | null | undefined): string {
@@ -172,7 +167,7 @@ export default function DashboardPage() {
     }[]
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
-  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass" | "mileage">("mileage");
+  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass" | "mileage" | "points">("mileage");
   const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(9999);
   const TEACHER_PAGE_SIZE = 10;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
@@ -496,26 +491,54 @@ export default function DashboardPage() {
   } | null>(null);
   const [showAdminMileageDetail, setShowAdminMileageDetail] = useState(false);
 
-  // 메인 대시보드(교사 보기): 성장 여정 바/비행기 동시 이동 애니메이션
+  // 메인 대시보드(교사 보기): 진행률/파이차트는 애니메이션 없이 즉시 표시
   useEffect(() => {
     if (!showTeacherView || !mileageSummary) {
       setAnimatedMileageProgress(0);
-      return;
-    }
-    const target = Math.min(100, Math.max(0, mileageSummary.overallProgress));
-    setAnimatedMileageProgress(0);
-    const id = window.setTimeout(() => setAnimatedMileageProgress(target), 40);
-    return () => window.clearTimeout(id);
-  }, [showTeacherView, mileageSummary?.overallProgress]);
-
-  // 메인 대시보드(교사 보기): 파이차트는 순차 표시하지 않고 동시에 표시
-  useEffect(() => {
-    if (!showTeacherView || !mileageSummary?.categories?.length) {
       setVisibleMileagePieCount(0);
       return;
     }
-    setVisibleMileagePieCount(mileageSummary.categories.length);
-  }, [showTeacherView, mileageSummary?.categories?.length]);
+    setAnimatedMileageProgress(Math.min(100, Math.max(0, mileageSummary.overallProgress)));
+    setVisibleMileagePieCount(mileageSummary.categories?.length ?? 0);
+  }, [showTeacherView, mileageSummary?.overallProgress, mileageSummary?.categories?.length]);
+
+  // 인증 완료 전에도 이전 대시보드 캐시를 즉시 복원해 방사형/마일리지가 바로 보이게 함
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const CACHE_KEY = "teacher_mate_dashboard_cache";
+      const raw = localStorage.getItem(CACHE_KEY) ?? sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const cached = JSON.parse(raw) as {
+        diagnosisSummary?: typeof diagnosisSummary;
+        hasPostDiagnosis?: boolean;
+        planCompleted?: boolean;
+        mileageStarted?: boolean;
+        mileageSummary?: typeof mileageSummary;
+        relativeDifficulty?: Record<string, 1 | 2 | 3> | null;
+        totalPoints?: number | null;
+        pointsDetail?: typeof pointsDetail;
+        mileagePointItems?: typeof mileagePointItems;
+        diagnosisRadarLabels?: string[];
+        schoolCategories?: CategoryConfigItem[];
+        planMissingGoals?: string[];
+      };
+      if (cached.diagnosisSummary != null) setDiagnosisSummary(cached.diagnosisSummary);
+      if (cached.hasPostDiagnosis != null) setHasPostDiagnosis(cached.hasPostDiagnosis);
+      if (cached.planCompleted != null) setPlanCompleted(cached.planCompleted);
+      if (cached.mileageStarted != null) setMileageStarted(cached.mileageStarted);
+      if (cached.mileageSummary != null) setMileageSummary(cached.mileageSummary);
+      if (cached.relativeDifficulty !== undefined) setRelativeDifficulty(cached.relativeDifficulty);
+      if (cached.totalPoints !== undefined) setTotalPoints(cached.totalPoints);
+      if (cached.pointsDetail != null) setPointsDetail(cached.pointsDetail);
+      if (cached.mileagePointItems != null) setMileagePointItems(cached.mileagePointItems);
+      if (cached.diagnosisRadarLabels != null) setDiagnosisRadarLabels(cached.diagnosisRadarLabels);
+      if (cached.schoolCategories != null) setSchoolCategories(cached.schoolCategories);
+      if (cached.planMissingGoals != null) setPlanMissingGoals(cached.planMissingGoals);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // 보호된 라우트: 로그인하지 않은 사용자는 / 로 리다이렉트
   useEffect(() => {
@@ -593,17 +616,19 @@ export default function DashboardPage() {
             })()
           : null;
 
-      // 교사용: 단일 API 1회 호출 + 재진입 시 캐시로 즉시 표시
+      // 교사용: 단일 API 1회 호출 + localStorage 캐시로 즉시 표시(stale-while-revalidate)
       if ((role === "teacher" || role === "admin") && user.email) {
         try {
           const CACHE_KEY = "teacher_mate_dashboard_cache";
-          const CACHE_TTL_MS = 60_000; // 60초
           let hadCacheHit = false;
           if (typeof window !== "undefined") {
             try {
-              const raw = sessionStorage.getItem(CACHE_KEY);
+              // 이전 sessionStorage 캐시도 함께 확인 후 localStorage로 이관
+              const raw =
+                localStorage.getItem(CACHE_KEY) ??
+                sessionStorage.getItem(CACHE_KEY);
               if (raw) {
-                const { ts, email: cacheEmail, ...cached } = JSON.parse(raw) as {
+                const { ts: _ts, email: cacheEmail, ...cached } = JSON.parse(raw) as {
                   ts: number;
                   email: string;
                   diagnosisSummary?: typeof diagnosisSummary;
@@ -619,7 +644,8 @@ export default function DashboardPage() {
                   schoolCategories?: CategoryConfigItem[];
                   planMissingGoals?: string[];
                 };
-                if (cacheEmail === user.email && Date.now() - ts < CACHE_TTL_MS) {
+                // TTL과 무관하게 같은 계정이면 즉시 표시 → 백그라운드에서 API로 갱신
+                if (cacheEmail === user.email) {
                   hadCacheHit = true;
                   if (cached.diagnosisSummary != null) setDiagnosisSummary(cached.diagnosisSummary);
                   if (cached.hasPostDiagnosis != null) setHasPostDiagnosis(cached.hasPostDiagnosis);
@@ -751,7 +777,7 @@ export default function DashboardPage() {
             }
           }
 
-          // 재진입 시 즉시 표시용 캐시 저장 (60초 TTL)
+          // 재진입 시 즉시 표시용 캐시 저장 (localStorage, stale-while-revalidate)
           if (typeof window !== "undefined" && user.email && token) {
             try {
               const cat = data?.category_scores as Record<string, { count?: number }> | undefined;
@@ -787,7 +813,7 @@ export default function DashboardPage() {
                 ? diagSettings.domains.map((d, i) => (d?.name ?? "").trim() || (DEFAULT_DIAGNOSIS_DOMAINS[i]?.name ?? ""))
                 : DEFAULT_DIAGNOSIS_DOMAINS.map((d) => d.name);
               const pointsJ = payload.points;
-              sessionStorage.setItem(
+              localStorage.setItem(
                 CACHE_KEY,
                 JSON.stringify({
                   ts: Date.now(),
@@ -815,6 +841,7 @@ export default function DashboardPage() {
                   planMissingGoals: goalsInit.filter((g) => !g.value).map((g) => g.label),
                 })
               );
+              try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
             } catch {
               // ignore
             }
@@ -1365,6 +1392,12 @@ export default function DashboardPage() {
     if (error) {
       alert(error.message);
       return;
+    }
+    try {
+      localStorage.removeItem("teacher_mate_dashboard_cache");
+      sessionStorage.removeItem("teacher_mate_dashboard_cache");
+    } catch {
+      // ignore
     }
 
     alert("로그아웃 되었습니다.");
@@ -1929,7 +1962,7 @@ export default function DashboardPage() {
                                 return (
                                   <div
                                     key={c.key}
-                                    className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${isVisible ? "opacity-100" : "opacity-0"}`}
+                                    className={`flex flex-col items-center gap-1 ${isVisible ? "opacity-100" : "opacity-0"}`}
                                   >
                                     <div className="relative h-20 w-20 sm:h-24 sm:w-24">
                                       {isVisible ? (
@@ -1944,7 +1977,7 @@ export default function DashboardPage() {
                                               dataKey="value"
                                               strokeWidth={0}
                                               cursor="pointer"
-                                              isAnimationActive={showAdminView ? false : true}
+                                              isAnimationActive={false}
                                             >
                                               {pieData.length ? pieData.map((d, j) => <Cell key={j} fill={d.fill} />) : <Cell fill={pieFill} />}
                                             </Pie>
@@ -2340,10 +2373,11 @@ export default function DashboardPage() {
                 <span className="text-xs text-slate-500">정렬</span>
                 <select
                   value={adminSortBy}
-                  onChange={(e) => setAdminSortBy(e.target.value as "createdAt" | "name" | "gradeClass" | "mileage")}
+                  onChange={(e) => setAdminSortBy(e.target.value as "createdAt" | "name" | "gradeClass" | "mileage" | "points")}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
                   <option value="mileage">마일리지 순</option>
+                  <option value="points">포인트 순</option>
                   <option value="createdAt">가입일 순</option>
                   <option value="name">성명순</option>
                   <option value="gradeClass">학년 반</option>
@@ -3089,6 +3123,9 @@ export default function DashboardPage() {
                     .sort((a, b) => {
                       if (adminSortBy === "mileage") {
                         return (b.mileageSummary?.overallProgress ?? 0) - (a.mileageSummary?.overallProgress ?? 0);
+                      }
+                      if (adminSortBy === "points") {
+                        return (b.totalPoints ?? 0) - (a.totalPoints ?? 0);
                       }
                       if (adminSortBy === "createdAt") {
                         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
