@@ -2,7 +2,12 @@ import { downloadPdf, printDocument } from "@/lib/printWithPageNumbers";
 
 export const SELF_EVAL_PERIOD = "2026년 3월 1일부터 2027년 2월 28일까지(학년도 단위)";
 
-export type SelfEvalFormLike = Record<string, unknown> | null | undefined;
+/** 자기실적평가서 폼 — 구체 인터페이스(SelfEvalFormState 등)도 받을 수 있게 object로 허용 */
+export type SelfEvalFormLike = object | null | undefined;
+
+function asFields(f: SelfEvalFormLike): Record<string, unknown> {
+  return (f ?? {}) as Record<string, unknown>;
+}
 
 function esc(s: unknown) {
   return String(s ?? "")
@@ -26,9 +31,10 @@ function blockLines(s: unknown) {
 /** 작성일 표시용 — dateYear/year 등 키 혼용 보정 */
 export function formatSelfEvalDate(f: SelfEvalFormLike): string {
   if (!f) return "년 월 일";
-  const rawY = f.dateYear ?? (f as { year?: unknown }).year ?? "";
-  const rawM = f.dateMonth ?? (f as { month?: unknown }).month ?? "";
-  const rawD = f.dateDay ?? (f as { day?: unknown }).day ?? "";
+  const fields = asFields(f);
+  const rawY = fields.dateYear ?? fields.year ?? "";
+  const rawM = fields.dateMonth ?? fields.month ?? "";
+  const rawD = fields.dateDay ?? fields.day ?? "";
   // 숫자로 저장된 경우·공백·전각 숫자 대비
   const y = String(rawY).replace(/[^\d]/g, "").trim();
   const m = String(rawM).replace(/[^\d]/g, "").trim();
@@ -39,14 +45,19 @@ export function formatSelfEvalDate(f: SelfEvalFormLike): string {
 /** 교사 자기실적평가서 HTML (미리보기·캡처 공용) */
 export function buildSelfEvalHtml(f: SelfEvalFormLike): string {
   if (!f) return "";
+  const fields = asFields(f);
   const homeroomLabel =
-    f.isHomeroom === "예" ? "담임교사" : f.isHomeroom === "아니오" ? "해당 없음" : esc(f.isHomeroom);
-  const positionLabel =
-    f.isPositionTeacher === "예"
-      ? "보직교사"
-      : f.isPositionTeacher === "아니오"
+    fields.isHomeroom === "예"
+      ? "담임교사"
+      : fields.isHomeroom === "아니오"
         ? "해당 없음"
-        : esc(f.isPositionTeacher);
+        : esc(fields.isHomeroom);
+  const positionLabel =
+    fields.isPositionTeacher === "예"
+      ? "보직교사"
+      : fields.isPositionTeacher === "아니오"
+        ? "해당 없음"
+        : esc(fields.isPositionTeacher);
   const sel = (val: unknown, opt: string) => (val === opt ? "○" : "");
   const dateLabel = formatSelfEvalDate(f);
 
@@ -92,24 +103,24 @@ export function buildSelfEvalHtml(f: SelfEvalFormLike): string {
       </div>
       <div class="sec">
         <h2>3. 평가자 인적사항</h2>
-        <p>○ 소속: ${esc(f.affiliation)} &nbsp; ○ 직위: ${esc(f.position)} &nbsp; ○ 성명: ${esc(f.evaluatorName)}</p>
+        <p>○ 소속: ${esc(fields.affiliation)} &nbsp; ○ 직위: ${esc(fields.position)} &nbsp; ○ 성명: ${esc(fields.evaluatorName)}</p>
       </div>
       <div class="sec">
         <h2>4. 평가자 기초 자료</h2>
         <div class="twocol">
           <div class="col">
-            <div class="row">○ 담당 학년 및 학급: ${esc(f.gradeClass)}</div>
-            <div class="row">○ 담당 과목: ${esc(f.subject)}</div>
+            <div class="row">○ 담당 학년 및 학급: ${esc(fields.gradeClass)}</div>
+            <div class="row">○ 담당 과목: ${esc(fields.subject)}</div>
             <div class="row">○ 담임 여부: ${homeroomLabel}</div>
-            <div class="row">○ 담당 업무: ${esc(f.assignedDuties)}</div>
+            <div class="row">○ 담당 업무: ${esc(fields.assignedDuties)}</div>
             <div class="row">○ 보직교사 여부: ${positionLabel}</div>
-            <div class="row">○ 주당 수업시간 수: ${esc(f.hoursPerWeek)}</div>
+            <div class="row">○ 주당 수업시간 수: ${esc(fields.hoursPerWeek)}</div>
           </div>
           <div class="col">
-            <div class="row">○ 연간 수업공개 실적: ${esc(f.openClassResult)}</div>
-            <div class="row">○ 연간 학생 상담 실적: ${esc(f.studentCounselResult)}</div>
-            <div class="row">○ 연간 학부모 상담 실적: ${esc(f.parentCounselResult)}</div>
-            <div class="row">○ 그 밖의 실적 사항: ${esc(f.otherResult)}</div>
+            <div class="row">○ 연간 수업공개 실적: ${esc(fields.openClassResult)}</div>
+            <div class="row">○ 연간 학생 상담 실적: ${esc(fields.studentCounselResult)}</div>
+            <div class="row">○ 연간 학부모 상담 실적: ${esc(fields.parentCounselResult)}</div>
+            <div class="row">○ 그 밖의 실적 사항: ${esc(fields.otherResult)}</div>
           </div>
         </div>
       </div>
@@ -118,32 +129,32 @@ export function buildSelfEvalHtml(f: SelfEvalFormLike): string {
         <div class="eval-item">
           <p class="tit">가. 학습지도</p>
           <p class="cap">○ 학습지도 추진 목표(학년 초에 계획되었던 학습지도 목표)</p>
-          ${blockLines(f.learningGoal)}
+          ${blockLines(fields.learningGoal)}
           <p class="cap">○ 학습지도 추진 실적(학년 초에 목표한 내용과 대비하여 추진 실적을 구체적으로 작성)</p>
-          ${blockLines(f.learningResult)}
+          ${blockLines(fields.learningResult)}
         </div>
         <div class="eval-item">
           <p class="tit">나. 생활지도</p>
           <p class="cap">○ 생활지도 추진 목표</p>
-          ${blockLines(f.lifeGoal)}
+          ${blockLines(fields.lifeGoal)}
           <p class="cap">○ 생활지도 추진 실적</p>
-          ${blockLines(f.lifeResult)}
+          ${blockLines(fields.lifeResult)}
         </div>
         <div class="eval-item">
           <p class="tit">다. 전문성계발</p>
           <p class="cap">○ 전문성개발 추진 목표:</p>
-          ${blockLines(f.professionalGoal)}
+          ${blockLines(fields.professionalGoal)}
           <p class="cap">○ 전문성개발 추진 실적:</p>
-          ${blockLines(f.professionalResult)}
+          ${blockLines(fields.professionalResult)}
         </div>
         <div class="eval-item">
           <p class="tit">라. 담당 업무</p>
           <p class="cap">○ 담당 업무 추진 목표:</p>
-          ${blockLines(f.dutyGoal)}
+          ${blockLines(fields.dutyGoal)}
           <p class="cap">○ 담당 업무 추진 실적:</p>
-          ${blockLines(f.dutyResult)}
+          ${blockLines(fields.dutyResult)}
           <p class="cap">○ 창의적 업무개선 사항:</p>
-          ${blockLines(f.creativeImprovement)}
+          ${blockLines(fields.creativeImprovement)}
         </div>
       </div>
       <div class="sec">
@@ -153,17 +164,17 @@ export function buildSelfEvalHtml(f: SelfEvalFormLike): string {
             <tr><th class="col-group"></th><th class="col-item">평가 항목</th><th class="col-desc">세부 내용</th><th class="col-opt">만족</th><th class="col-opt">보통</th><th class="col-opt">미흡</th></tr>
           </thead>
           <tbody>
-            <tr><td class="col-group" rowspan="4">자기<br>평가</td><td class="col-item">목표달성도</td><td class="col-desc">설정한 목표에 대한 달성 정도</td><td class="col-opt">${sel(f.goalAchievement, "만족")}</td><td class="col-opt">${sel(f.goalAchievement, "보통")}</td><td class="col-opt">${sel(f.goalAchievement, "미흡")}</td></tr>
-            <tr><td class="col-item">창의성</td><td class="col-desc">학습지도, 생활지도, 전문성계발, 담당 업무 등의 창의적인 수행 정도</td><td class="col-opt">${sel(f.creativity, "만족")}</td><td class="col-opt">${sel(f.creativity, "보통")}</td><td class="col-opt">${sel(f.creativity, "미흡")}</td></tr>
-            <tr><td class="col-item">적시성</td><td class="col-desc">학습지도, 생활지도, 전문성계발, 담당 업무 등을 기한 내에 효과적으로 처리한 정도</td><td class="col-opt">${sel(f.timeliness, "만족")}</td><td class="col-opt">${sel(f.timeliness, "보통")}</td><td class="col-opt">${sel(f.timeliness, "미흡")}</td></tr>
-            <tr><td class="col-item">노력도</td><td class="col-desc">목표 달성을 위한 노력, 공헌도</td><td class="col-opt">${sel(f.effort, "만족")}</td><td class="col-opt">${sel(f.effort, "보통")}</td><td class="col-opt">${sel(f.effort, "미흡")}</td></tr>
+            <tr><td class="col-group" rowspan="4">자기<br>평가</td><td class="col-item">목표달성도</td><td class="col-desc">설정한 목표에 대한 달성 정도</td><td class="col-opt">${sel(fields.goalAchievement, "만족")}</td><td class="col-opt">${sel(fields.goalAchievement, "보통")}</td><td class="col-opt">${sel(fields.goalAchievement, "미흡")}</td></tr>
+            <tr><td class="col-item">창의성</td><td class="col-desc">학습지도, 생활지도, 전문성계발, 담당 업무 등의 창의적인 수행 정도</td><td class="col-opt">${sel(fields.creativity, "만족")}</td><td class="col-opt">${sel(fields.creativity, "보통")}</td><td class="col-opt">${sel(fields.creativity, "미흡")}</td></tr>
+            <tr><td class="col-item">적시성</td><td class="col-desc">학습지도, 생활지도, 전문성계발, 담당 업무 등을 기한 내에 효과적으로 처리한 정도</td><td class="col-opt">${sel(fields.timeliness, "만족")}</td><td class="col-opt">${sel(fields.timeliness, "보통")}</td><td class="col-opt">${sel(fields.timeliness, "미흡")}</td></tr>
+            <tr><td class="col-item">노력도</td><td class="col-desc">목표 달성을 위한 노력, 공헌도</td><td class="col-opt">${sel(fields.effort, "만족")}</td><td class="col-opt">${sel(fields.effort, "보통")}</td><td class="col-opt">${sel(fields.effort, "미흡")}</td></tr>
           </tbody>
         </table>
       </div>
       <div class="footer">
         <div class="footer-date">${esc(dateLabel)}</div>
         <div class="footer-row">
-          <span class="label">작성자(본인) 성명</span><span class="line">${esc(f.preparerName)}</span>
+          <span class="label">작성자(본인) 성명</span><span class="line">${esc(fields.preparerName)}</span>
           <span class="label" style="margin-left:20px">서명(인)</span><span class="line"></span>
         </div>
       </div>
