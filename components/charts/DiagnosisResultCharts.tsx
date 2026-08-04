@@ -95,7 +95,7 @@ export default function DiagnosisResultCharts({
     if (compact) {
       const [leftCol, rightCol] = distributeIntoTwoColumns(barChartDataByDomain);
       const renderBarCard = ({ label, rows }: { label: string; rows: BarComparePoint[] }) => (
-        <Card key={label} className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-3 pt-1 pb-0.5 shadow-sm">
+        <Card key={label} className="rounded-2xl border border-[#e8edf3] bg-white px-3 pt-1 pb-0.5 shadow-none">
           <h3 className="text-sm font-semibold text-slate-800 leading-tight mb-0">{label}</h3>
           <div className="-mx-3 w-[calc(100%+1.5rem)] shrink-0 overflow-visible -mt-0.5 -mb-0.5" style={{ height: cardHeight(rows) }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -125,8 +125,8 @@ export default function DiagnosisResultCharts({
                     name === "사전" ? "사전 (100점 환산)" : "사후 (100점 환산)",
                   ]}
                 />
-                <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" />
-                <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" />
+                <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" isAnimationActive={false} />
+                <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -136,7 +136,7 @@ export default function DiagnosisResultCharts({
       return (
         <div className="flex flex-col gap-4">
           {/* 위: 방사형 그래프 카드 (세로 중앙 정렬) */}
-          <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 flex flex-col items-stretch">
+          <Card className="rounded-2xl border border-[#e8edf3] bg-white px-4 py-3 flex flex-col items-stretch shadow-none">
             <h2 className="text-base font-semibold text-slate-800 mb-1 shrink-0 text-center">역량 진단 결과 (사전·사후 비교)</h2>
             <div className="flex-1 flex items-center justify-center">
               <div className="w-full max-w-xl" style={{ height: radarHeight }}>
@@ -148,8 +148,8 @@ export default function DiagnosisResultCharts({
                       tick={{ fill: "#6b7280", fontSize: 10, fontWeight: 600 }}
                     />
                     <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
-                    <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
-                    <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} />
+                    <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} isAnimationActive={false} />
+                    <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} isAnimationActive={false} />
                     <Legend />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -166,77 +166,103 @@ export default function DiagnosisResultCharts({
       );
     }
 
-    // 기본(진단 결과 페이지) 레이아웃: 좌측 방사형, 우측 막대 2열
+    // 기본 레이아웃: 좌측 방사형, 우측 막대 2열
+    // 인쇄: .print-charts-scale(zoom)로 전체 축소 + overflow 정리 (globals.css)
     const radarHeightDefault = 320;
+    const [leftCol, rightCol] = distributeIntoTwoColumns(barChartDataByDomain);
+    const renderCard = ({ label, rows }: { label: string; rows: BarComparePoint[] }) => (
+      <Card
+        key={label}
+        className="print-bar-card overflow-hidden rounded-2xl border border-[#e8edf3] bg-white px-3 pt-1 pb-0.5 shadow-none print-break-inside-avoid"
+      >
+        <h3 className="text-sm font-semibold text-slate-800 leading-tight mb-0">{label}</h3>
+        <div
+          className="print-bar-chart-box -mx-3 w-[calc(100%+1.5rem)] shrink-0 overflow-hidden -mt-0.5 -mb-0.5"
+          style={{ height: cardHeight(rows) }}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={rows}
+              layout="vertical"
+              margin={{ top: 6, right: 6, left: 6, bottom: 6 }}
+              barCategoryGap="14%"
+              barGap={2}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={88}
+                tick={(props) => {
+                  const value = props.payload?.value ?? props.payload ?? "";
+                  return (
+                    <Text {...props} width={88} maxLines={1} style={{ fontSize: 11 }}>
+                      {String(value)}
+                    </Text>
+                  );
+                }}
+              />
+              <Tooltip
+                formatter={(value: number | undefined, name: string | undefined): [string, string] => [
+                  value != null ? `${Number(value)}점` : "-",
+                  name === "사전" ? "사전 (100점 환산)" : "사후 (100점 환산)",
+                ]}
+              />
+              <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" isAnimationActive={false} />
+              <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+    );
+    // 화면·인쇄: 방사형 | 막대열1 | 막대열2 = 각 1/3
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 h-full flex flex-col min-h-0">
-          <h2 className="text-base font-semibold text-slate-800 mb-1 shrink-0">역량 진단 결과 (사전·사후 비교)</h2>
-          <div className="flex-1 min-h-0 flex items-center justify-center">
-            <div className="w-full h-80 max-h-full print:min-h-[18rem]" style={{ height: radarHeightDefault }}>
+      <div className="print-charts-scale print-keep-3col grid grid-cols-1 gap-3 md:grid-cols-[1.22fr_0.89fr_0.89fr] md:items-stretch print:overflow-visible">
+        <Card className="min-w-0 w-full rounded-2xl border border-[#e8edf3] bg-white !gap-2 !py-3 px-4 flex flex-col overflow-visible shadow-none print:overflow-visible print-break-inside-avoid">
+          <h2 className="text-base font-semibold text-slate-800 mb-1 shrink-0">
+            역량 진단 결과 (사전·사후 비교)
+          </h2>
+          <div className="flex flex-1 flex-col items-center justify-center overflow-visible">
+            <div
+              className="print-radar-box mx-auto h-80 w-full overflow-visible"
+              style={{ height: radarHeightDefault }}
+            >
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart outerRadius="70%" data={radarCompareData}>
+                <RadarChart
+                  outerRadius="64%"
+                  data={radarCompareData}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                >
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis
                     dataKey="name"
                     tick={{ fill: "#6b7280", fontSize: 12, fontWeight: 600 }}
                   />
                   <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
-                  <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} />
-                  <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} />
-                  <Legend wrapperStyle={{ marginTop: "400px" }} />
+                  <Radar name={preDateStr ? `사전 (${preDateStr})` : "사전"} dataKey="사전" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.25} isAnimationActive={false} />
+                  <Radar name={postDateStr ? `사후 (${postDateStr})` : "사후"} dataKey="사후" stroke="#2e6fe6" strokeWidth={2} fill="transparent" fillOpacity={0} isAnimationActive={false} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[11px] text-slate-600 print:mt-0.5 print:text-[9px]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#9ca3af]" aria-hidden />
+                {preDateStr ? `사전 (${preDateStr})` : "사전"}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#2e6fe6]" aria-hidden />
+                {postDateStr ? `사후 (${postDateStr})` : "사후"}
+              </span>
+            </div>
           </div>
         </Card>
-        {(() => {
-          const [leftCol, rightCol] = distributeIntoTwoColumns(barChartDataByDomain);
-          const renderCard = ({ label, rows }: { label: string; rows: BarComparePoint[] }) => (
-            <Card key={label} className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-3 pt-1 pb-0.5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-800 leading-tight mb-0">{label}</h3>
-              <div className="-mx-3 w-[calc(100%+1.5rem)] shrink-0 overflow-visible -mt-0.5 -mb-0.5" style={{ height: cardHeight(rows) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={rows}
-                    layout="vertical"
-                    margin={{ top: 6, right: 6, left: 6, bottom: 6 }}
-                    barCategoryGap="14%"
-                    barGap={2}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={88}
-                      tick={(props) => {
-                        const value = props.payload?.value ?? props.payload ?? "";
-                        return (
-                          <Text {...props} width={88} maxLines={1} style={{ fontSize: 11 }}>{String(value)}</Text>
-                        );
-                      }}
-                    />
-                    <Tooltip
-                      formatter={(value: number | undefined, name: string | undefined): [string, string] => [
-                        value != null ? `${Number(value)}점` : "-",
-                        name === "사전" ? "사전 (100점 환산)" : "사후 (100점 환산)",
-                      ]}
-                    />
-                    <Bar name="사전" dataKey="사전" radius={[0, 2, 2, 0]} barSize={8} fill="#9ca3af" />
-                    <Bar name="사후" dataKey="사후" radius={[0, 2, 2, 0]} barSize={8} fill="#2e6fe6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-          );
-          return (
-            <div className="grid grid-cols-2 gap-3 items-start">
-              <div className="flex flex-col gap-3">{leftCol.map(renderCard)}</div>
-              <div className="flex flex-col gap-3">{rightCol.map(renderCard)}</div>
-            </div>
-          );
-        })()}
+        <div className="print-bars-col flex min-w-0 flex-col gap-3 print:gap-1.5">
+          {leftCol.map(renderCard)}
+        </div>
+        <div className="print-bars-col flex min-w-0 flex-col gap-3 print:gap-1.5">
+          {rightCol.map(renderCard)}
+        </div>
       </div>
     );
   }
@@ -252,7 +278,7 @@ export default function DiagnosisResultCharts({
           <PolarGrid stroke="#e5e7eb" />
           <PolarAngleAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 18, fontWeight: 700 }} />
           <PolarRadiusAxis angle={90} domain={[0, 5]} tick={false} tickCount={5} />
-          <Radar name="역량 진단" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
+          <Radar name="역량 진단" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} isAnimationActive={false} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

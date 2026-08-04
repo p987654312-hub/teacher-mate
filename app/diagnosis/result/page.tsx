@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useReactToPrint } from "react-to-print";
 
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import { formatMaskedNameWithAffiliation, resolveAffiliation } from "@/lib/displ
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { ArrowLeft, Printer, FileDown, RefreshCw } from "lucide-react";
+import { downloadPdf, printDocument } from "@/lib/printWithPageNumbers";
 
 const DiagnosisResultCharts = dynamic(
   () => import("@/components/charts/DiagnosisResultCharts"),
@@ -78,7 +78,6 @@ function DiagnosisResultContent() {
   const [domainLabelsReady, setDomainLabelsReady] = useState(false);
   const [diagnosisTitle, setDiagnosisTitle] = useState<string | null>(null);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const aiWarnedRef = useRef(false);
   const maybeAlertAiWarning = (warning: unknown) => {
     const w = typeof warning === "string" ? warning.trim() : "";
@@ -87,36 +86,14 @@ function DiagnosisResultContent() {
     alert(w);
   };
 
-  const handlePrint = useReactToPrint({
-    contentRef,
-    documentTitle: isPost ? "나의 교원 역량 사후 진단 결과" : "나의 교원 역량 사전 진단 결과",
-    pageStyle: `
-      @page { size: A4; margin: 12mm; }
-      @media print {
-        html, body {
-          width: 186mm !important;
-          min-width: 186mm !important;
-          max-width: 186mm !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
-          background: #f8fafc !important;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-          box-sizing: border-box;
-        }
-        .print-content-area {
-          width: 186mm !important;
-          min-width: 186mm !important;
-          max-width: 186mm !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
-          background: #f8fafc !important;
-          box-sizing: border-box;
-        }
-        .print-content-area * { box-sizing: border-box; }
-      }
-    `,
-  });
+  const handlePrint = () => {
+    printDocument();
+  };
+  const handleSavePdf = () => {
+    void downloadPdf({
+      filename: isPost ? "교원역량_사후진단_결과.pdf" : "교원역량_사전진단_결과.pdf",
+    });
+  };
 
   // 보호된 라우트 및 진단 결과 가져오기 (관리자는 ?email= 로 다른 교원 결과 조회)
   useEffect(() => {
@@ -621,7 +598,7 @@ function DiagnosisResultContent() {
     <div className="min-h-screen bg-white px-4 py-10">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         {/* 출력/PDF 대상: 헤더 + 본문 (우상단 버튼은 인쇄 시 숨김) */}
-        <div ref={contentRef} className="print-content-area flex flex-col gap-5 rounded-none print:bg-[#f8fafc]">
+        <div className="print-content-area flex flex-col gap-5 rounded-none print:bg-[#f8fafc]">
           {/* 헤더: 한 줄에 제목 + 이름/진단일시, 우측에 출력 버튼 */}
           <header className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
@@ -659,7 +636,7 @@ function DiagnosisResultContent() {
                     variant="outline"
                     className="rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
                     title="PDF로 저장"
-                    onClick={() => handlePrint()}
+                    onClick={() => handleSavePdf()}
                   >
                     <FileDown className="mr-1.5 h-3.5 w-3.5" />
                     PDF
@@ -684,7 +661,7 @@ function DiagnosisResultContent() {
               postDateStr={postDateStr}
             />
           ) : (
-            <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-1 shadow-sm">
+            <Card className="rounded-2xl border border-[#e8edf3] bg-white px-4 py-1 shadow-none">
               <h2 className="text-base font-semibold text-slate-800 mb-0">역량 진단 결과</h2>
               {subDomainScoresByDomain ? (
                 <DiagnosisResultRadarWithSub
@@ -708,8 +685,8 @@ function DiagnosisResultContent() {
 
           {/* 강점 영역(좌) / 개발 우선 영역(우) — 사전만 표시 */}
           {!isPost && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Card className="rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm">
+          <div className="print-pre-strengths grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card className="rounded-2xl border border-blue-100 bg-blue-50 p-3 shadow-sm">
               <h3 className="text-xs font-bold text-blue-700 mb-2">
                 강점 영역
               </h3>
@@ -725,12 +702,12 @@ function DiagnosisResultContent() {
                           {index + 1}
                         </span>
                         <span className="text-xs font-medium text-slate-700 truncate">{item.label}</span>
-                        <span className="text-[10px] text-slate-500 shrink-0">({item.avg.toFixed(1)})</span>
+                        <span className="text-[10px] text-slate-500 shrink-0 pl-1">({item.avg.toFixed(1)})</span>
                       </div>
                       {subList.length > 0 ? (
                         <ul className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-800">
                           {subList.map((s) => (
-                            <li key={s.name}>{s.name} ({s.avg.toFixed(1)})</li>
+                            <li key={s.name}>{s.name}&nbsp;({s.avg.toFixed(1)})</li>
                           ))}
                         </ul>
                       ) : null}
@@ -740,7 +717,7 @@ function DiagnosisResultContent() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl bg-gradient-to-br from-orange-50 to-red-50 p-3 shadow-sm">
+            <Card className="rounded-2xl border border-orange-100 bg-orange-50 p-3 shadow-sm">
               <h3 className="text-xs font-bold text-orange-700 mb-2">
                 개발 우선 영역
               </h3>
@@ -756,12 +733,12 @@ function DiagnosisResultContent() {
                           {index + 1}
                         </span>
                         <span className="text-xs font-medium text-slate-700 truncate">{item.label}</span>
-                        <span className="text-[10px] text-slate-500 shrink-0">({item.avg.toFixed(1)})</span>
+                        <span className="text-[10px] text-slate-500 shrink-0 pl-1">({item.avg.toFixed(1)})</span>
                       </div>
                       {subList.length > 0 ? (
                         <ul className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-800">
                           {subList.map((s) => (
-                            <li key={s.name}>{s.name} ({s.avg.toFixed(1)})</li>
+                            <li key={s.name}>{s.name}&nbsp;({s.avg.toFixed(1)})</li>
                           ))}
                         </ul>
                       ) : null}
@@ -774,8 +751,8 @@ function DiagnosisResultContent() {
           )}
         </div>
 
-        {/* 사전: 결과 분석 / 사후: 사전·사후 비교 분석 */}
-        <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 p-6 shadow-sm">
+        {/* 사전: 결과 분석 / 사후: 사전·사후 비교 분석 (인쇄 시 페이지 나눔 허용) */}
+        <Card className="print-allow-break print-text-box rounded-2xl border border-[#e8edf3] bg-white p-6 shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold text-slate-800">
               {isPost ? "사전·사후 진단 비교 분석" : "사전 검사 결과 분석"}
@@ -810,8 +787,8 @@ function DiagnosisResultContent() {
         </Card>
         </div>
 
-        {/* 본문 우측 하단 돌아가기 버튼 */}
-        <div className="flex justify-end pt-4">
+        {/* 본문 우측 하단 돌아가기 버튼 (인쇄 시 숨김) */}
+        <div className="flex justify-end pt-4 print:hidden">
           <Link href="/dashboard">
             <Button
               type="button"

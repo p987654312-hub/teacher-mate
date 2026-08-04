@@ -829,7 +829,18 @@ export default function ReflectionPage() {
       .footer-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 0;}
       .footer .label{font-weight:normal;}
       .footer .line{display:inline-block;min-width:100px;border-bottom:1px solid #000;margin-left:4px;}
-      @media print{ @page{size:A4;margin:12mm;} }
+      @page{
+        size:A4;
+        margin:18mm 7mm 18mm 7mm;
+        @bottom-center{
+          content:counter(page) "/" counter(pages);
+          font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;
+          font-size:10pt;
+          font-weight:600;
+          color:#000;
+          vertical-align:middle;
+        }
+      }
     </style></head><body><div class="outer">
       <p class="sub">교육공무원 승진규정 [별지 제3호의2서식]</p>
       <h1>교사 자기실적평가서</h1>

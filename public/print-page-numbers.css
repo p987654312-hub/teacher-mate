@@ -1,0 +1,20 @@
+/* 인쇄 여백·쪽번호
+   - 여백 규칙은 margin-box와 분리 (구형 브라우저는 @bottom-center 때문에 전체 @page가 무시될 수 있음)
+   - Chrome/Edge 131+ 에서 쪽번호 표시 */
+
+@page {
+  size: A4;
+  margin: 20mm 7mm 16mm 7mm;
+}
+
+@page {
+  @bottom-center {
+    content: counter(page) "/" counter(pages);
+    font-family: "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 10pt;
+    font-weight: 600;
+    color: #000;
+    vertical-align: bottom;
+    padding-bottom: 2mm;
+  }
+}

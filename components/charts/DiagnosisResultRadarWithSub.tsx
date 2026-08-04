@@ -36,7 +36,7 @@ function SubBarBlock({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="flex flex-col rounded-lg border border-slate-200/80 bg-white/80 py-1 px-2 shadow-sm min-w-0 overflow-visible">
+    <div className="print-text-box flex flex-col rounded-lg border border-[#e8edf3] bg-white/80 py-1 px-2 shadow-none min-w-0 overflow-visible">
       <span className="text-[12px] font-semibold text-slate-600 mb-0.5 truncate" title={label}>
         {label}
       </span>
@@ -79,7 +79,7 @@ export default function DiagnosisResultRadarWithSub({
     .sort((a, b) => b.score - a.score)
     .map((x) => x.key);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-4 w-full items-start overflow-visible">
+    <div className="print-pre-radar-layout grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-4 w-full items-start overflow-visible">
       {/* 좌측 2/3: 대영역 방사형 (크기/텍스트 80% 수준으로 축소) */}
       <div className="w-full pt-0 px-0 overflow-visible flex items-start justify-center -mt-1">
         <div className="w-full aspect-square max-w-[440px] sm:max-w-[520px] max-sm:max-w-[440px] min-w-0">
@@ -129,7 +129,7 @@ export default function DiagnosisResultRadarWithSub({
                 domain={[0, 5]}
                 tick={false}
               />
-              <Radar name="대영역" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} />
+              <Radar name="대영역" dataKey="score" stroke="#2e6fe6" fill="#2e6fe6" fillOpacity={0.35} isAnimationActive={false} />
             </RadarChart>
           </ResponsiveContainer>
         </div>

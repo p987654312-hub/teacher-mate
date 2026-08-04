@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { maskDisplayName } from "@/lib/displayName";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
-import { useReactToPrint } from "react-to-print";
+import { downloadPdf, printDocument } from "@/lib/printWithPageNumbers";
 
 const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
   domain1: "영역1",
@@ -56,7 +56,6 @@ type DiagnosisSummaryDetail = {
 function PlanPrintContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const contentRef = useRef<HTMLDivElement>(null);
   const [schoolCategories, setSchoolCategories] = useState<{ key: string; label: string; unit: string }[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [userSchool, setUserSchool] = useState<string>("");
@@ -306,15 +305,12 @@ function PlanPrintContent() {
     load();
   }, [router, searchParams]);
 
-  const handlePrint = useReactToPrint({
-    contentRef,
-    documentTitle: "목적지 플래너(자기역량 개발계획서)",
-    pageStyle: `
-      @page { size: A4; margin: 12mm; }
-      html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .print-content-area { background: #fff !important; }
-    `,
-  });
+  const handlePrint = () => {
+    printDocument();
+  };
+  const handleSavePdf = () => {
+    void downloadPdf({ filename: "목적지_플래너_자기역량_개발계획서.pdf" });
+  };
 
   // 데이터 로드 후 검증 (Hook은 조건부 렌더링 전에 선언되어야 함)
   useEffect(() => {
@@ -404,14 +400,15 @@ function PlanPrintContent() {
     };
   };
 
-  const handlePrintClick = () => {
+  const handlePrintClick = (saveAsPdf = false) => {
     const validation = validateAnnualGoals();
     if (!validation.isValid) {
       const missingList = validation.missingItems.join(", ");
       alert(`${missingList} 항목 연간목표가 비어있습니다. 계획서 출력이 불가합니다. 추후 기재 바랍니다.`);
       return;
     }
-    handlePrint();
+    if (saveAsPdf) handleSavePdf();
+    else handlePrint();
   };
 
   return (
@@ -421,7 +418,7 @@ function PlanPrintContent() {
         <div className="mb-4 flex flex-wrap items-center justify-end gap-2 print:hidden">
           <Button
             type="button"
-            onClick={handlePrintClick}
+            onClick={() => handlePrintClick(false)}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             <Printer className="h-4 w-4" />
@@ -429,8 +426,8 @@ function PlanPrintContent() {
           </Button>
           <Button
             type="button"
-            onClick={handlePrintClick}
-            title="인쇄 대화상자에서 대상을 'PDF로 저장'으로 선택하면 PDF 파일로 저장됩니다."
+            onClick={() => handlePrintClick(true)}
+            title="PDF 파일로 바로 다운로드"
             className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
             <FileDown className="h-4 w-4" />
@@ -449,7 +446,6 @@ function PlanPrintContent() {
 
         {/* 출력용 문서 영역 */}
         <div
-          ref={contentRef}
           className="print-content-area rounded-lg bg-white p-6 shadow-lg print:shadow-none print:rounded-none print:p-0 print:bg-white"
           style={{ minHeight: "297mm" }}
         >

@@ -47,7 +47,18 @@ export async function POST(req: Request) {
     }
 
     const admin = getSupabaseAdmin();
-    type ListedUser = { id: string; email?: string; user_metadata?: { role?: string; schoolName?: string; name?: string } };
+    type ListedUser = {
+      id: string;
+      email?: string;
+      user_metadata?: {
+        role?: string;
+        schoolName?: string;
+        name?: string;
+        gradeClass?: string;
+        subject?: string;
+        schoolLevel?: string;
+      };
+    };
     const findByEmail = async (): Promise<ListedUser | undefined> => {
       const perPage = 1000;
       const maxPages = 200;
@@ -101,6 +112,7 @@ export async function POST(req: Request) {
       { data: nextYearRow },
       { data: selfEvalRow },
       { data: analysisPrefRow },
+      { data: profileOverrideRow },
     ] = await Promise.all([
       admin.from("diagnosis_results").select("*").eq("user_email", targetEmail).or("diagnosis_type.is.null,diagnosis_type.eq.pre").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("diagnosis_results").select("*").eq("user_email", targetEmail).eq("diagnosis_type", "post").order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -110,17 +122,39 @@ export async function POST(req: Request) {
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_next_year_goal").maybeSingle(),
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_self_eval_form").maybeSingle(),
       admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "reflection_ai_analysis_first_person").maybeSingle(),
+      admin.from("user_preferences").select("pref_value").eq("user_email", targetEmail).eq("pref_key", "profile_overrides").maybeSingle(),
     ]);
 
     const reportAnalysisText = analysisPrefRow?.pref_value != null
       ? String(analysisPrefRow.pref_value).trim()
       : (postData as { ai_analysis?: string | null } | null)?.ai_analysis?.trim() ?? "";
 
+    const teacherMeta = teacher.user_metadata ?? {};
+    let name = teacherMeta.name ?? "";
+    let schoolNameOut = teacherSchool;
+    let gradeClass = teacherMeta.gradeClass ?? "";
+    if (profileOverrideRow?.pref_value != null) {
+      try {
+        const ov = JSON.parse(String(profileOverrideRow.pref_value)) as {
+          name?: string;
+          schoolName?: string;
+          gradeClass?: string;
+        };
+        if (ov.name != null && ov.name !== "") name = ov.name;
+        if (ov.schoolName != null && ov.schoolName !== "") schoolNameOut = ov.schoolName;
+        if (ov.gradeClass != null) gradeClass = ov.gradeClass;
+      } catch {
+        // ignore
+      }
+    }
     return NextResponse.json({
       ok: true,
       email: targetEmail,
-      name: teacher.user_metadata?.name ?? "",
-      schoolName: teacherSchool,
+      name,
+      schoolName: schoolNameOut,
+      gradeClass,
+      subject: teacherMeta.subject ?? "",
+      schoolLevel: teacherMeta.schoolLevel ?? "",
       preResult: preData ?? null,
       postResult: postData ?? null,
       mileageEntries: mileageData ?? [],

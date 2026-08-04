@@ -1,19 +1,18 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useReactToPrint } from "react-to-print";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { MILEAGE_CATEGORIES } from "@/lib/mileageProgress";
-import { maskDisplayName } from "@/lib/displayName";
+import { maskDisplayName, resolveAffiliation } from "@/lib/displayName";
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
-import { ResponsiveContainer } from "recharts";
 import { Card } from "@/components/ui/card";
+import { downloadPdf, printDocument } from "@/lib/printWithPageNumbers";
 const ReflectionRadarCharts = dynamic(() => import("@/components/charts/ReflectionRadarCharts"), { ssr: false });
 const DiagnosisResultCharts = dynamic(() => import("@/components/charts/DiagnosisResultCharts"), { ssr: false });
 
@@ -55,9 +54,10 @@ type MileageEntry = { id: string; content: string; category: string; created_at:
 function ResultReportContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const contentRef = useRef<HTMLDivElement>(null);
   const [userName, setUserName] = useState("");
   const [userSchool, setUserSchool] = useState("");
+  /** 학년반·담당과목 등 (프로필) */
+  const [userGradeClass, setUserGradeClass] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [preResult, setPreResult] = useState<DiagnosisRow | null>(null);
   const [postResult, setPostResult] = useState<DiagnosisRow | null>(null);
@@ -76,11 +76,12 @@ function ResultReportContent() {
   /** 기초정보 > 사전사후결과분석 탭 내용 (pref 우선, 없으면 진단 ai_analysis) */
   const [reportAnalysisText, setReportAnalysisText] = useState("");
 
-  const handlePrint = useReactToPrint({
-    contentRef,
-    documentTitle: "자기역량 개발 결과 보고서",
-    pageStyle: `@page { size: A4; margin: 12mm; } html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .print-content-area { background: #fff !important; }`,
-  });
+  const handlePrint = () => {
+    printDocument();
+  };
+  const handleSavePdf = () => {
+    void downloadPdf({ filename: "자기역량_개발_결과_보고서.pdf" });
+  };
 
   useEffect(() => {
     const ac = new AbortController();
@@ -129,6 +130,13 @@ function ResultReportContent() {
         if (!isMounted) return;
         setUserName(j.name ?? viewEmail ?? "");
         setUserSchool(j.schoolName ?? "");
+        setUserGradeClass(
+          resolveAffiliation({
+            gradeClass: j.gradeClass,
+            subject: j.subject,
+            schoolLevel: j.schoolLevel,
+          })
+        );
         setUserEmail(j.email ?? viewEmail);
         if (j.preResult) setPreResult(j.preResult as DiagnosisRow);
         if (j.postResult) setPostResult(j.postResult as DiagnosisRow);
@@ -189,10 +197,41 @@ function ResultReportContent() {
       // 관리자도 교원 권한을 가지므로 자신의 데이터를 볼 수 있음
       if (role === "teacher" || role === "admin") {
         email = user.email!;
-        const meta = (user.user_metadata || {}) as { name?: string; schoolName?: string };
+        const meta = (user.user_metadata || {}) as {
+          name?: string;
+          schoolName?: string;
+          gradeClass?: string;
+          subject?: string;
+          schoolLevel?: string;
+        };
+        let name = meta.name ?? user.email ?? "";
+        let schoolName = meta.schoolName ?? "";
+        let gradeClass = resolveAffiliation(meta);
+        const { data: { session: profileSession } } = await supabase.auth.getSession();
+        if (profileSession?.access_token) {
+          try {
+            const ovRes = await fetch("/api/account/profile-overrides", {
+              headers: { Authorization: `Bearer ${profileSession.access_token}` },
+              signal,
+            });
+            if (ovRes.ok) {
+              const ov = (await ovRes.json()) as {
+                name?: string | null;
+                schoolName?: string | null;
+                gradeClass?: string | null;
+              };
+              if (ov.name != null && ov.name !== "") name = ov.name;
+              if (ov.schoolName != null && ov.schoolName !== "") schoolName = ov.schoolName;
+              if (ov.gradeClass != null) gradeClass = ov.gradeClass.trim();
+            }
+          } catch (_) {
+            // ignore
+          }
+        }
         if (isMounted) {
-          setUserName(meta.name ?? user.email ?? "");
-          setUserSchool(meta.schoolName ?? "");
+          setUserName(name);
+          setUserSchool(schoolName);
+          setUserGradeClass(gradeClass);
           setUserEmail(email);
         }
       } else {
@@ -354,7 +393,18 @@ function ResultReportContent() {
       .footer-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 0;}
       .footer .label{font-weight:normal;}
       .footer .line{display:inline-block;min-width:100px;border-bottom:1px solid #000;margin-left:4px;}
-      @media print{ @page{size:A4;margin:12mm;} }
+      @page{
+        size:A4;
+        margin:18mm 7mm 18mm 7mm;
+        @bottom-center{
+          content:counter(page) "/" counter(pages);
+          font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;
+          font-size:10pt;
+          font-weight:600;
+          color:#000;
+          vertical-align:middle;
+        }
+      }
     </style></head><body><div class="outer">
       <p class="sub">교육공무원 승진규정 [별지 제3호의2서식]</p>
       <h1>교사 자기실적평가서</h1>
@@ -566,13 +616,13 @@ function ResultReportContent() {
   const selfEvalHtml = isSelfEvalPreview && selfEvalForm ? buildSelfEvalHtml(selfEvalForm) : "";
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-6">
-      <div className="mx-auto max-w-6xl px-[1cm] print:px-[0.7cm]">
+    <div className="result-report-root min-h-screen bg-slate-50 px-4 py-6">
+      <div className="result-report-inner mx-auto max-w-6xl px-[1cm]">
         <div className="mb-4 flex flex-wrap items-center justify-end gap-2 print:hidden">
-          <Button type="button" size="sm" variant="outline" onClick={() => handlePrint()} className="rounded-full border-slate-300">
+          <Button type="button" size="sm" variant="outline" onClick={handlePrint} className="rounded-full border-slate-300">
             <Printer className="mr-1.5 h-3.5 w-3.5" /> 인쇄
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => handlePrint()} title="PDF로 저장" className="rounded-full border-slate-300">
+          <Button type="button" size="sm" variant="outline" onClick={handleSavePdf} title="PDF 파일로 바로 다운로드" className="rounded-full border-slate-300">
             <FileDown className="mr-1.5 h-3.5 w-3.5" /> PDF 저장
           </Button>
           <Link href="/dashboard">
@@ -582,11 +632,10 @@ function ResultReportContent() {
           </Link>
         </div>
         <div
-          ref={contentRef}
           className={
             isSelfEvalPreview
-              ? "print-content-area bg-white p-0 shadow-none print:shadow-none print:p-0"
-              : "print-content-area rounded-lg bg-white p-6 shadow-sm print:shadow-none print:p-0"
+              ? "print-content-area bg-white p-0 shadow-none print:shadow-none"
+              : "print-content-area rounded-lg bg-white p-6 shadow-sm print:shadow-none"
           }
         >
           {isSelfEvalPreview ? (
@@ -615,7 +664,21 @@ function ResultReportContent() {
                 return `${y}.${m}.${d}.(${요일})`;
               })()}
             </p>
-            <p className="text-base font-medium text-slate-800" style={{ fontSize: "90%" }}>{userSchool} {userName ? maskDisplayName(userName) : ""} 선생님</p>
+            <p className="text-base font-medium text-slate-800" style={{ fontSize: "90%" }}>
+              {(() => {
+                const subjectOrGrade = [
+                  selfEvalForm?.subject,
+                  selfEvalForm?.gradeClass,
+                  userGradeClass,
+                ]
+                  .map((v) => String(v ?? "").trim())
+                  .find(Boolean) ?? "";
+                const position = String(selfEvalForm?.position ?? "").trim();
+                const masked = userName ? maskDisplayName(userName) : "";
+                return [userSchool, subjectOrGrade, position, masked].filter(Boolean).join(" ") +
+                  (masked ? " 선생님" : "");
+              })()}
+            </p>
           </div>
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-bold text-slate-800">역량 성장 변화</h2>
@@ -631,7 +694,7 @@ function ResultReportContent() {
                 />
               ) : (
                 domainAverages.length > 0 && (
-                  <Card className="rounded-2xl border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/50 px-4 py-3 shadow-sm">
+                  <Card className="rounded-2xl border border-[#e8edf3] bg-white px-4 py-3 shadow-none">
                     <h3 className="text-sm font-semibold text-slate-800 mb-1">역량 진단 결과</h3>
                     <div className="w-full min-w-0">
                       <ReflectionRadarCharts radarCompareData={null} domainAverages={domainAverages} hasPrePost={false} />
@@ -641,7 +704,7 @@ function ResultReportContent() {
               )}
             </div>
             {reportAnalysisText.trim() && (
-              <div className="mt-4 rounded border border-slate-200 bg-slate-50/50 p-3">
+              <div className="print-text-box mt-4 rounded border border-[#e8edf3] bg-slate-50/50 p-3 shadow-none">
                 <h3 className="mb-2 text-xs font-bold text-slate-800">결과 분석</h3>
                 <div className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">
                   {reportAnalysisText.trim()}
@@ -651,7 +714,7 @@ function ResultReportContent() {
           </div>
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-bold text-slate-800">목표달성도 및 실천 내용</h2>
-            <div className="rounded border border-slate-200 bg-slate-50/50 p-3">
+            <div className="print-text-box rounded border border-[#e8edf3] bg-slate-50/50 p-3 shadow-none">
               <div className="text-xs text-slate-700">
                 {goalAchievementText ? (
                 <div className="whitespace-pre-wrap">{toShortYear(goalAchievementText)}</div>
@@ -663,12 +726,12 @@ function ResultReportContent() {
           </div>
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-bold text-slate-800">성찰 및 내년 목표</h2>
-            <div className="rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700 space-y-4">
+            <div className="print-text-box rounded border border-[#e8edf3] bg-slate-50/50 p-3 text-xs text-slate-700 space-y-4 shadow-none">
               <div>
                 <p className="mb-1 text-[11px] font-semibold text-slate-600">성찰</p>
                 <div className="whitespace-pre-wrap">{reflectionText || "(작성된 내용 없음)"}</div>
               </div>
-              <div className="pt-2 border-t border-slate-200">
+              <div className="pt-2 border-t border-[#e8edf3]">
                 <p className="mb-1 text-[11px] font-semibold text-slate-600">내년도 목표</p>
                 <div className="whitespace-pre-wrap">{nextYearGoalText || "(작성된 내용 없음)"}</div>
               </div>
@@ -676,7 +739,7 @@ function ResultReportContent() {
           </div>
           <div>
             <h2 className="mb-2 text-sm font-bold text-slate-800">자기실적 평가서</h2>
-            <div className="whitespace-pre-wrap rounded border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700">
+            <div className="print-text-box whitespace-pre-wrap rounded border border-[#e8edf3] bg-slate-50/50 p-3 text-xs text-slate-700 shadow-none">
               {(evidenceText ?? "").trim() ? evidenceText : "별첨"}
             </div>
           </div>

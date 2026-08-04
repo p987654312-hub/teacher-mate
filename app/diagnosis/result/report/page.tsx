@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -10,7 +10,7 @@ import { formatMaskedNameWithAffiliation, resolveAffiliation } from "@/lib/displ
 import type { DiagnosisSurvey } from "@/lib/diagnosisSurvey";
 import { computeSubDomainScores } from "@/lib/diagnosisSurvey";
 import { Printer, FileDown, X } from "lucide-react";
-import { useReactToPrint } from "react-to-print";
+import { downloadPdf, printDocument } from "@/lib/printWithPageNumbers";
 import {
   ResponsiveContainer,
   RadarChart,
@@ -80,38 +80,15 @@ function DiagnosisReportContent() {
   const [diagnosisTitle, setDiagnosisTitle] = useState<string | null>(null);
   const [survey, setSurvey] = useState<DiagnosisSurvey | null>(null);
   const [loading, setLoading] = useState(true);
-  const contentRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef,
-    documentTitle: isPost ? "나의 교원 역량 사후 진단 결과 보고서" : "나의 교원 역량 사전 진단 결과 보고서",
-    pageStyle: `
-      @page { size: A4; margin: 12mm; }
-      @media print {
-        html, body {
-          width: 186mm !important;
-          min-width: 186mm !important;
-          max-width: 186mm !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-          box-sizing: border-box;
-        }
-        .report-print-area {
-          width: 186mm !important;
-          min-width: 186mm !important;
-          max-width: 186mm !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          box-sizing: border-box;
-        }
-        .report-print-area * { box-sizing: border-box; }
-      }
-    `,
-  });
+  const handlePrint = () => {
+    printDocument();
+  };
+  const handleSavePdf = () => {
+    void downloadPdf({
+      filename: isPost ? "교원역량_사후진단_결과보고서.pdf" : "교원역량_사전진단_결과보고서.pdf",
+    });
+  };
 
   // 데이터 로드 (기존 결과 페이지와 동일한 조건으로)
   useEffect(() => {
@@ -422,8 +399,8 @@ function DiagnosisReportContent() {
           </Button>
           <Button
             type="button"
-            onClick={handlePrint}
-            title="인쇄 대화상자에서 대상을 'PDF로 저장'으로 선택하면 PDF 파일로 저장됩니다."
+            onClick={handleSavePdf}
+            title="PDF 파일로 바로 다운로드"
             className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
             <FileDown className="h-4 w-4" />
@@ -442,8 +419,7 @@ function DiagnosisReportContent() {
 
         {/* 출력용 보고서 영역 */}
         <div
-          ref={contentRef}
-          className="report-print-area rounded-lg bg-white p-6 shadow-lg print:shadow-none print:rounded-none print:p-0"
+          className="report-print-area print-content-area rounded-lg bg-white p-6 shadow-lg print:shadow-none print:rounded-none print:p-0"
           style={{ minHeight: "297mm" }}
         >
           {/* 제목 */}
@@ -492,9 +468,9 @@ function DiagnosisReportContent() {
                       compact
                     />
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="print-keep-2col flex flex-col md:flex-row gap-3">
                       {/* 방사형 그래프 (대영역 요약) */}
-                      <div className="h-56 border border-slate-200 bg-white rounded-md">
+                      <div className="print-text-box h-56 min-w-0 flex-1 border border-[#e8edf3] bg-white rounded-md shadow-none">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart
                             data={domainAverages.map((d) => ({ name: d.label, score: d.avg }))}
@@ -523,7 +499,7 @@ function DiagnosisReportContent() {
                       </div>
 
                       {/* 소영역별 막대 (보고서용 카드 레이아웃) */}
-                      <div className="border border-slate-200 bg-white rounded-md px-3 py-2 text-[11px] text-slate-800">
+                      <div className="print-text-box min-w-0 flex-1 border border-[#e8edf3] bg-white rounded-md px-3 py-2 text-[11px] text-slate-800 shadow-none">
                         {subDomainScoresByDomain ? (
                           domainAverages.map((d) => {
                             const subs = subDomainScoresByDomain?.[d.key] ?? [];

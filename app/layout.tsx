@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
+import PrintPageNumbers from "@/components/PrintPageNumbers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,6 +33,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        {/* Tailwind 미경유 인쇄 @page 여백 */}
+        <link rel="stylesheet" href="/print-page-numbers.css" precedence="default" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} flex min-h-screen flex-col bg-white antialiased`}>
         <div className="flex min-h-screen flex-1 flex-col">
           <main className="flex-1 pb-6">{children}</main>
@@ -39,6 +44,7 @@ export default function RootLayout({
         <footer className="fixed bottom-0 left-0 right-0 py-1 text-center text-[10px] text-slate-400 bg-transparent print:hidden">
           © 2026 Shingu.es. All rights reserved. Crafted with care by SG_NAVI Research Team
         </footer>
+        <PrintPageNumbers />
       </body>
     </html>
   );
