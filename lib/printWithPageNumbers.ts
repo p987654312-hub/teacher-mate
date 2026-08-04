@@ -232,7 +232,7 @@ function addPageNumbers(pdf: jsPDF, marginBottom: number) {
   }
 }
 
-/** html2canvas가 괄호 앞 공백·flex gap을 무시해 글자가 붙는 문제 보정 */
+/** 괄호 앞이 붙은 텍스트만 일반 공백으로 보정 (자간/마진 조작 금지 — 기준선 깨짐 방지) */
 function fixParenSpacingInClone(clonedDoc: Document, element: HTMLElement) {
   const walker = clonedDoc.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
@@ -240,19 +240,9 @@ function fixParenSpacingInClone(clonedDoc: Document, element: HTMLElement) {
   while ((node = walker.nextNode())) textNodes.push(node as Text);
   for (const textNode of textNodes) {
     const t = textNode.textContent ?? "";
-    // 한글/영문/숫자 바로 뒤 '(' → 앞에 NBSP 삽입
-    const fixed = t.replace(/([^\s([{（])([(（])/g, "$1\u00A0$2");
+    const fixed = t.replace(/([^\s([{（])([(（])/g, "$1 $2");
     if (fixed !== t) textNode.textContent = fixed;
   }
-  element.querySelectorAll("span, li, p, td, th, h1, h2, h3, h4, label").forEach((el) => {
-    const raw = el.textContent ?? "";
-    const trimmed = raw.trimStart();
-    if (!trimmed.startsWith("(") && !trimmed.startsWith("（")) return;
-    const prev = el.previousSibling;
-    if (!prev) return;
-    const htmlEl = el as HTMLElement;
-    if (!htmlEl.style.marginLeft) htmlEl.style.marginLeft = "0.2em";
-  });
 }
 
 async function buildPdfFromElement(target: HTMLElement): Promise<jsPDF> {

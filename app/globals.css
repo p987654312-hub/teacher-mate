@@ -382,13 +382,17 @@ html.pdf-export body {
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
 }
-/* html2canvas: 괄호 앞 글자 붙음·자간 뭉개짐 완화 */
-html.pdf-export .print-content-area {
-  letter-spacing: 0.02em;
-  word-spacing: 0.05em;
-  font-kerning: none;
-  font-feature-settings: "kern" 0;
-  overflow-wrap: break-word;
+/* 캡처 시 한글/영문 기준선이 흔들리지 않도록 자간·커닝 조작 금지 */
+html.pdf-export .print-content-area,
+html.pdf-export .print-content-area * {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  font-kerning: auto !important;
+  font-feature-settings: normal !important;
+}
+html.pdf-export .print-content-area h1,
+html.pdf-export .print-content-area p {
+  line-height: 1.45 !important;
 }
 html.pdf-export body * {
   -webkit-print-color-adjust: exact !important;
