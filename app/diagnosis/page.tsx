@@ -428,7 +428,8 @@ function DiagnosisContent() {
     progressTrack: neis
       ? "bg-[#2E6FE6]/15 [&_[data-slot=progress-indicator]]:bg-[#2E6FE6]"
       : "bg-blue-200/70 [&_[data-slot=progress-indicator]]:bg-blue-500",
-    answeredRow: neis ? "bg-[#E4EEFB]/60" : "bg-blue-50/60",
+    // 사전·사후 모두 같은 연한 톤 — 체크 행이 너무 진하면 칸 구분이 안 보임
+    answeredRow: "bg-blue-50/60",
     ansFixed: neis
       ? "bg-[#2E6FE6] text-white ring-1 ring-[#2E6FE6]"
       : "bg-blue-600 text-white ring-1 ring-blue-600",
