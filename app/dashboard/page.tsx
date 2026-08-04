@@ -1483,7 +1483,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-[calc(100vh-40px)] bg-white px-4 py-6 md:py-8">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
@@ -1546,12 +1546,12 @@ export default function DashboardPage() {
 
         <div className="-mt-[6mm] mb-2 w-full border-b-2 border-slate-300/80" aria-hidden />
 
-        <main className="flex flex-col gap-6 md:flex-row md:items-stretch">
-          {/* 교원 대시보드 (교원이거나 관리자가 교원 모드로 전환한 경우) */}
+        <main className="flex flex-col gap-4 md:flex-row md:items-stretch">
+          {/* 교원 대시보드: 왼쪽(1·2) 1/3 · 오른쪽(3 / 4·5) 2/3 → 4·5가 1·2와 같은 너비 */}
           {showTeacherView && (
             <>
-              {/* 왼쪽: 사용자 정보 + 진단 + 계획 (가로는 오른쪽보다 짧게) */}
-              <div className="flex w-full flex-col gap-4 md:w-[38%] md:min-w-0 md:flex-shrink-0">
+              {/* 왼쪽: 배너 + 1 + 2 */}
+              <div className="flex w-full flex-col gap-4 md:w-1/3 md:min-w-0 md:flex-shrink-0">
                 <Card className="overflow-hidden rounded-lg border-0 bg-gradient-to-br from-[#CBDFF9] via-[#B6D0F5] to-[#9DC0F1] p-4 shadow-md">
                   <style dangerouslySetInnerHTML={{ __html: `
                     @keyframes dashboard-car-float {
@@ -1631,7 +1631,7 @@ export default function DashboardPage() {
 
               <Card className="group min-h-[210px] rounded-2xl border-0 bg-gradient-to-br from-violet-50/90 via-violet-50/40 to-indigo-50/70 p-4 shadow-sm backdrop-blur-sm flex flex-col justify-between transition-all hover:shadow-md hover:-translate-y-0.25 hover:from-violet-100/80 hover:via-violet-50/60 hover:to-indigo-100/70">
                 <div className="relative flex flex-col gap-3">
-                  <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/50 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>1</span>
+                  <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8),0_2px_4px_rgba(15,23,42,0.18)]" aria-hidden>1<span className="text-[0.55em]">st</span></span>
                   <div className="flex w-full justify-end">
                     <div className="flex items-center gap-2">
                       <span
@@ -1789,7 +1789,7 @@ export default function DashboardPage() {
                   }`}
                 >
                   <div className="relative flex min-h-0 flex-1 flex-col gap-3">
-                    <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>2</span>
+                    <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8),0_2px_4px_rgba(15,23,42,0.18)]" aria-hidden>2<span className="text-[0.55em]">nd</span></span>
                     <div className="flex w-full justify-end">
                       <div className="flex items-center gap-2">
 <span
@@ -1863,8 +1863,8 @@ export default function DashboardPage() {
 
               </div>
 
-              {/* 오른쪽: 목적지 마일리지 + (사후) 교원 역량 진단 + 교사 성찰 기록장 — 2번 완료 시에만 활성화 */}
-              <div className="flex w-full flex-1 flex-col gap-4 md:min-w-0 md:w-[60%]">
+              {/* 오른쪽: 3 + (4·5) — 전체의 2/3, 4·5 각각이 왼쪽 1·2와 같은 너비 */}
+              <div className="flex w-full flex-1 flex-col gap-4 md:min-w-0 md:w-2/3">
                 <div className="relative flex min-h-0 flex-1 flex-col isolate">
                   {!planCompleted && (
                     <div className="absolute inset-0 z-[50] rounded-2xl bg-slate-200/50 backdrop-blur-[0.5px]" aria-hidden role="presentation" />
@@ -1877,7 +1877,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="relative flex flex-col gap-2">
-                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>3</span>
+                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8),0_2px_4px_rgba(15,23,42,0.18)]" aria-hidden>3<span className="text-[0.55em]">rd</span></span>
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
@@ -2018,7 +2018,7 @@ export default function DashboardPage() {
                   </Card>
                 </div>
 
-                <div className="relative flex flex-col md:flex-row min-h-[180px] md:h-[180px] shrink-0 gap-3 isolate">
+                <div className="relative flex flex-col md:flex-row min-h-[180px] md:h-[180px] shrink-0 gap-4 isolate">
                   {!planCompleted && (
                     <div className="absolute inset-0 z-[50] rounded-2xl bg-slate-200/50 backdrop-blur-[0.5px]" aria-hidden role="presentation" />
                   )}
@@ -2030,7 +2030,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="relative flex flex-col gap-3 min-w-0">
-                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>4</span>
+                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8),0_2px_4px_rgba(15,23,42,0.18)]" aria-hidden>4<span className="text-[0.55em]">th</span></span>
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
@@ -2062,15 +2062,12 @@ export default function DashboardPage() {
                           }}
                           className={
                             perceptionPostMatched
-                              ? "shrink-0 inline-flex flex-col items-start leading-tight text-[10px] sm:text-[11px] font-medium text-slate-500 hover:text-slate-700"
-                              : "shrink-0 inline-flex flex-col items-start leading-tight text-[10px] sm:text-[11px] font-medium text-slate-300 cursor-not-allowed"
+                              ? "shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                              : "shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 underline underline-offset-2 cursor-not-allowed"
                           }
                         >
-                          <span className="inline-flex items-center gap-1">
-                            <NotebookPen className="h-3 w-3" />
-                            <span className="underline underline-offset-2">(사후)학생인식</span>
-                          </span>
-                          <span className="underline underline-offset-2">조사 결과 보기</span>
+                          <NotebookPen className="h-3 w-3" />
+                          (사후)학생인식조사 결과 보기
                         </button>
                         <div className="flex flex-wrap justify-end gap-2 min-w-0">
                           {planCompleted ? (
@@ -2119,7 +2116,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="relative flex flex-col gap-3 min-w-0">
-                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8)]" aria-hidden>5</span>
+                      <span className="absolute left-1 -top-2 text-[43px] font-extrabold text-white/40 select-none pointer-events-none leading-none drop-shadow-sm [text-shadow:0_1px_2px_rgba(255,255,255,0.8),0_2px_4px_rgba(15,23,42,0.18)]" aria-hidden>5<span className="text-[0.55em]">th</span></span>
                       <div className="flex w-full justify-end">
                         <div className="flex items-center gap-2">
                           <span
