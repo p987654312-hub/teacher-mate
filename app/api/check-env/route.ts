@@ -13,6 +13,8 @@ export async function GET() {
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "GEMINI_API_KEY",
+    "GEMINI_API_KEY_2",
+    "GEMINI_API_KEYS",
     "GEMINI_MODEL",
     "ADMIN_CODE",
   ] as const;
