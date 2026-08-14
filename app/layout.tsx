@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import PrintPageNumbers from "@/components/PrintPageNumbers";
 import "./globals.css";
 
@@ -10,13 +10,6 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// 나이스/행정시스템풍 산세리프 — 한글 지원. 헤딩에만 선택적으로 사용.
-const notoSansKr = Noto_Sans_KR({
-  variable: "--font-sans-kr",
-  weight: ["500", "700"],
   subsets: ["latin"],
 });
 
@@ -36,8 +29,15 @@ export default function RootLayout({
       <head>
         {/* Tailwind 미경유 인쇄 @page 여백 */}
         <link rel="stylesheet" href="/print-page-numbers.css" precedence="default" />
+        {/* Noto Sans KR: next/font/google + Turbopack fails on Vercel (gstatic 404). Load at runtime. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} flex min-h-screen flex-col bg-white antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col bg-white antialiased`}>
         <div className="flex min-h-screen flex-1 flex-col">
           <main className="flex-1 pb-6">{children}</main>
         </div>

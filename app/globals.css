@@ -7,6 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Runtime-loaded via Google Fonts link in layout (next/font Noto Sans KR breaks Turbopack on Vercel) */
+  --font-sans-kr: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-sans: var(--font-geist-sans), var(--font-sans-kr);
   --font-mono: var(--font-geist-mono);
 
