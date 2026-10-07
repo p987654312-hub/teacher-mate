@@ -22,6 +22,7 @@ import { computeMileageProgress } from "@/lib/mileageProgress";
 // mileageDifficulty 관련 별표 표기는 더 이상 사용하지 않음
 import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
 import { DIAGNOSIS_SAMPLE_CSV } from "@/lib/diagnosisSampleCsv";
+import { isTemporaryAdmin } from "@/lib/adminAccess";
 import { AI_PROMPT_DEFAULTS, AI_PROMPT_KEYS, type AiPromptKey } from "@/lib/aiPromptDefaults";
 import {
   ClipboardCheck,
@@ -143,6 +144,60 @@ function progressToBlue(pct: number): string {
   return "#eef4fd"; // 시작 단계 — 가장 연함
 }
 
+type PerceptionMatrix = {
+  classes: string[];
+  rows: { domain: string; values: (number | null)[] }[];
+  updatedAt: string | null;
+};
+
+function PerceptionResultTable({ title, matrix }: { title: string; matrix: PerceptionMatrix | null }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2">
+      <p className="text-[11px] font-semibold text-slate-700">
+        {title}
+        {matrix?.updatedAt ? (
+          <span className="ml-2 font-normal text-slate-500">
+            {new Date(matrix.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} 반영
+          </span>
+        ) : null}
+      </p>
+      {!matrix || matrix.rows.length === 0 ? (
+        <p className="mt-1 text-[11px] text-slate-500">업로드된 결과가 없습니다.</p>
+      ) : (
+        <div className="mt-2 max-h-64 overflow-auto">
+          <table className="min-w-full border-collapse text-[11px]">
+            <thead>
+              <tr>
+                <th className="sticky left-0 border border-slate-200 bg-slate-50 px-2 py-1 text-left font-medium text-slate-600">영역</th>
+                {matrix.classes.map((c) => (
+                  <th key={c} className="border border-slate-200 bg-slate-50 px-2 py-1 text-right font-medium text-slate-600 whitespace-nowrap">
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.rows.map((r) => (
+                <tr key={r.domain}>
+                  <td className="sticky left-0 border border-slate-200 bg-white px-2 py-1 text-slate-700 whitespace-nowrap">{r.domain}</td>
+                  {matrix.classes.map((_, i) => {
+                    const v = r.values?.[i];
+                    return (
+                      <td key={`${r.domain}-${i}`} className="border border-slate-200 px-2 py-1 text-right text-slate-700">
+                        {typeof v === "number" && Number.isFinite(v) ? v : "-"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [userSchool, setUserSchool] = useState<string | null>(null);
@@ -168,6 +223,7 @@ export default function DashboardPage() {
   const showTeacherView = isTeacher || (isAdmin && viewMode === "teacher");
   const showAdminView = isAdmin && viewMode === "admin";
   const isPermanentAdmin = isAdmin && !adminExpiresAt;
+  const settingsReadOnly = isAdmin && isTemporaryAdmin({ role: "admin", adminExpiresAt });
   const [teachers, setTeachers] = useState<
     { id: string; name: string; email: string; createdAt: string }[]
   >([]);
@@ -190,7 +246,7 @@ export default function DashboardPage() {
     }[]
   >([]);
   const [expandedTeacherCards, setExpandedTeacherCards] = useState<Record<string, boolean>>({});
-  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass" | "mileage" | "points">("mileage");
+  const [adminSortBy, setAdminSortBy] = useState<"createdAt" | "name" | "gradeClass" | "mileage" | "points">("points");
   const [teacherDisplayLimit, setTeacherDisplayLimit] = useState(9999);
   const TEACHER_PAGE_SIZE = 10;
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
@@ -238,6 +294,8 @@ export default function DashboardPage() {
   const [showTemporaryAdminGrant, setShowTemporaryAdminGrant] = useState(false);
   const [perceptionUploading, setPerceptionUploading] = useState<"pre" | "post" | null>(null);
   const [perceptionStatus, setPerceptionStatus] = useState<{ pre?: string; post?: string }>({});
+  const [perceptionStored, setPerceptionStored] = useState<{ pre: PerceptionMatrix | null; post: PerceptionMatrix | null } | null>(null);
+  const [perceptionReloadKey, setPerceptionReloadKey] = useState(0);
   const perceptionPreInputRef = useRef<HTMLInputElement | null>(null);
   const perceptionPostInputRef = useRef<HTMLInputElement | null>(null);
   const [perceptionPreMatched, setPerceptionPreMatched] = useState<{ classLabel: string; rows: { domain: string; value: number }[] } | null>(null);
@@ -326,6 +384,7 @@ export default function DashboardPage() {
         return;
       }
       setPerceptionStatus((s) => ({ ...s, [phase]: `업로드 완료 (${parsed.rows.length}개 영역 × ${parsed.classes.length}개 학급)` }));
+      setPerceptionReloadKey((n) => n + 1);
     } finally {
       setPerceptionUploading(null);
     }
@@ -396,6 +455,36 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [userGradeClass, userSchool]);
+
+  useEffect(() => {
+    if (!showPerceptionUpload || !showAdminView) return;
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const load = async (phase: "pre" | "post"): Promise<PerceptionMatrix | null> => {
+        const res = await fetch(`/api/admin/student-perception?phase=${phase}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const j = await res.json().catch(() => ({}));
+        const data = j?.data as { classes?: string[]; rows?: { domain: string; values: (number | null)[] }[] } | null;
+        if (!res.ok || !data || !Array.isArray(data.classes) || !Array.isArray(data.rows)) return null;
+        return {
+          classes: data.classes,
+          rows: data.rows,
+          updatedAt: typeof j?.updatedAt === "string" ? j.updatedAt : null,
+        };
+      };
+      const [pre, post] = await Promise.all([load("pre"), load("post")]);
+      if (!cancelled) setPerceptionStored({ pre, post });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPerceptionUpload, showAdminView, perceptionReloadKey]);
+
   const [aiPromptSettings, setAiPromptSettings] = useState<Record<string, { value: string; description: string; label: string }>>({});
   const [aiPromptSettingsLoading, setAiPromptSettingsLoading] = useState(false);
   const [aiPromptSettingsSaving, setAiPromptSettingsSaving] = useState(false);
@@ -2252,6 +2341,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-1.5">
                   <p className="text-base font-semibold text-slate-800">{userSchool ? `${userSchool} 관리자 페이지` : "관리자 페이지"}</p>
                   {showAdminView && (
+                    <>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
@@ -2259,7 +2349,7 @@ export default function DashboardPage() {
                         size="sm"
                         className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
                         onClick={() => {
-                          if (!showPointSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
+                          if (!settingsReadOnly && !showPointSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
                           setShowDiagnosisSettings(false);
                           setShowPointSettings((v) => !v);
                         }}
@@ -2275,7 +2365,7 @@ export default function DashboardPage() {
                         size="sm"
                         className="w-fit rounded-lg border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
                         onClick={() => {
-                          if (!showDiagnosisSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
+                          if (!settingsReadOnly && !showDiagnosisSettings && !window.confirm("기존 데이터에 심각한 오류가 발생될 수 있습니다. 계속 하시겠습니까?")) return;
                           setShowPointSettings(false);
                           setShowDiagnosisSettings((v) => !v);
                         }}
@@ -2347,6 +2437,7 @@ export default function DashboardPage() {
                           </span>
                         </Button>
                       )}
+                      {!settingsReadOnly && (
                       <Button
                         type="button"
                         variant="outline"
@@ -2386,7 +2477,12 @@ export default function DashboardPage() {
                           {resettingAllData ? "처리 중..." : "모든 구성원 데이터 초기화"}
                         </span>
                       </Button>
+                      )}
                     </div>
+                    {settingsReadOnly && (
+                      <p className="text-[11px] text-amber-700">임시 관리자는 아래 설정을 조회만 할 수 있습니다. 저장·업로드·초기화는 할 수 없습니다.</p>
+                    )}
+                    </>
                   )}
                   {showPerceptionUpload && (
                     <Card className="rounded-xl border-sky-200/80 bg-sky-50/40 p-3 shadow-sm">
@@ -2416,10 +2512,12 @@ export default function DashboardPage() {
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-slate-800">학생인식조사 결과 업로드</p>
                           <p className="mt-0.5 text-[11px] text-slate-500">
-                            행=영역(교수/학생지도/전문성개발/현장실무), 열=학년반(예: 3-1, 4-1), 값=평균점수 형태의 CSV를 올리세요.
-                            학급 수는 고정이 아닙니다 — 첫 줄에 열을 원하는 만큼 추가/삭제하면 그대로 반영됩니다.
+                            {settingsReadOnly
+                              ? "업로드된 사전·사후 결과를 조회만 할 수 있습니다."
+                              : "행=영역(교수/학생지도/전문성개발/현장실무), 열=학년반(예: 3-1, 4-1), 값=평균점수 형태의 CSV를 올리세요. 학급 수는 고정이 아닙니다 — 첫 줄에 열을 원하는 만큼 추가/삭제하면 그대로 반영됩니다."}
                           </p>
                         </div>
+                        {!settingsReadOnly && (
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
@@ -2448,6 +2546,11 @@ export default function DashboardPage() {
                           >
                             샘플양식 다운받기
                           </Button>
+                        </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-2">
+                          <PerceptionResultTable title="사전 결과" matrix={perceptionStored?.pre ?? null} />
+                          <PerceptionResultTable title="사후 결과" matrix={perceptionStored?.post ?? null} />
                         </div>
                         {(perceptionStatus.pre || perceptionStatus.post) && (
                           <div className="flex flex-col gap-1 text-[11px]">
@@ -2493,9 +2596,15 @@ export default function DashboardPage() {
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-800">AI 프롬프트 설정</p>
-                        <p className="mt-0.5 text-xs text-slate-500">각 항목별 AI 프롬프트를 수정할 수 있습니다. <span className="font-medium text-red-600">{"{{변수명}}"} 형태의 플레이스홀더는 삭제하지 마세요.</span></p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {settingsReadOnly
+                            ? "임시 관리자는 프롬프트를 조회만 할 수 있습니다."
+                            : <>각 항목별 AI 프롬프트를 수정할 수 있습니다. <span className="font-medium text-red-600">{"{{변수명}}"} 형태의 플레이스홀더는 삭제하지 마세요.</span></>}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {!settingsReadOnly && (
+                        <>
                         <Button
                           type="button"
                           size="sm"
@@ -2566,6 +2675,8 @@ export default function DashboardPage() {
                         >
                           {aiPromptSettingsSaving ? "저장 중..." : "저장"}
                         </Button>
+                        </>
+                        )}
                         <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setShowAiPromptSettings(false)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -2581,6 +2692,7 @@ export default function DashboardPage() {
                           <div key={key} className="rounded-lg border border-slate-200 bg-white p-3">
                             <div className="mb-1 flex items-center justify-between gap-2">
                               <span className="text-sm font-medium text-slate-800">{label}</span>
+                              {!settingsReadOnly && (
                               <div className="flex shrink-0 items-center gap-2">
                                 <Button
                                   type="button"
@@ -2635,6 +2747,7 @@ export default function DashboardPage() {
                                 {aiPromptSavingKey === key ? "저장 중..." : "저장"}
                               </Button>
                               </div>
+                              )}
                             </div>
                             <p className="mb-2 text-xs text-slate-500">{description}</p>
                             <div className="relative min-h-[360px] w-full rounded border border-slate-200 bg-slate-50/50 overflow-hidden">
@@ -2655,7 +2768,9 @@ export default function DashboardPage() {
                                 className="relative block w-full min-h-[360px] p-2 text-xs font-mono bg-transparent text-transparent caret-slate-800 resize-none border-0 rounded focus:outline-none focus:ring-0"
                                 style={{ zIndex: 1 }}
                                 value={value}
+                                readOnly={settingsReadOnly}
                                 onChange={(e) => {
+                                  if (settingsReadOnly) return;
                                   setAiPromptSettings((prev) => ({
                                     ...prev,
                                     [key]: { ...(prev[key] ?? { label: meta?.label ?? key, description: meta?.description ?? "" }), value: e.target.value },
@@ -2677,9 +2792,13 @@ export default function DashboardPage() {
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-800">교사 활동 영역(6가지) 설정</p>
-                        <p className="mt-0.5 text-xs text-slate-500">영역명·활동기준(단위)을 설정합니다. (저장 버튼을 눌러 반영)</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {settingsReadOnly ? "영역명·활동기준(단위)을 조회만 할 수 있습니다." : "영역명·활동기준(단위)을 설정합니다. (저장 버튼을 눌러 반영)"}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {!settingsReadOnly && (
+                        <>
                         <Button
                           type="button"
                           size="sm"
@@ -2787,6 +2906,8 @@ export default function DashboardPage() {
                         >
                           {savingCategoryConfig ? "저장 중..." : "저장"}
                         </Button>
+                        </>
+                        )}
                         <Button
                           type="button"
                           size="sm"
@@ -2822,6 +2943,7 @@ export default function DashboardPage() {
                                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
                                   {categoryConfig.find((x) => x.key === c.key)?.label || c.label || "(영역명)"}
                                 </span>
+                                {!settingsReadOnly && (
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -2834,13 +2956,15 @@ export default function DashboardPage() {
                                 >
                                   수정
                                 </Button>
+                                )}
                               </>
                             )}
                           </div>
                           <div className="flex items-center justify-between gap-2">
                             <select
-                              className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
+                              className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] text-slate-700 disabled:bg-slate-50"
                               value={categoryConfig.find((x) => x.key === c.key)?.unit ?? c.unit}
+                              disabled={settingsReadOnly}
                               onChange={(e) => {
                                 const u = e.target.value;
                                 const nextCat = categoryConfig.map((x) => (x.key === c.key ? { ...x, unit: u } : x));
@@ -2864,9 +2988,12 @@ export default function DashboardPage() {
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-800">포인트 설정</p>
-                        <p className="mt-0.5 text-xs text-slate-500">위에서 설정된 영역명·단위는 고정이며, 단위당 점수만 입력합니다.</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {settingsReadOnly ? "단위당 점수를 조회만 할 수 있습니다." : "위에서 설정된 영역명·단위는 고정이며, 단위당 점수만 입력합니다."}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {!settingsReadOnly && (
                         <Button
                           type="button"
                           size="sm"
@@ -2895,6 +3022,7 @@ export default function DashboardPage() {
                         >
                           {savingPointSettings ? "저장 중..." : "저장"}
                         </Button>
+                        )}
                         <Button
                           type="button"
                           size="sm"
@@ -2918,7 +3046,8 @@ export default function DashboardPage() {
                               type="number"
                               min={0}
                               step={0.5}
-                              className="h-8 w-24 rounded-lg border-slate-200 text-right text-xs"
+                              readOnly={settingsReadOnly}
+                              className="h-8 w-24 rounded-lg border-slate-200 text-right text-xs read-only:bg-slate-50"
                               value={pointSettings[c.key] ?? ""}
                               onChange={(e) => {
                                 const v = parseFloat(e.target.value);
@@ -2941,7 +3070,8 @@ export default function DashboardPage() {
                             type="number"
                             min={0}
                             step={0.5}
-                            className="h-8 w-24 rounded-lg border-slate-200 text-right text-xs"
+                            readOnly={settingsReadOnly}
+                            className="h-8 w-24 rounded-lg border-slate-200 text-right text-xs read-only:bg-slate-50"
                             value={pointSettings.login_points ?? 2}
                             onChange={(e) => {
                               const v = parseFloat(e.target.value);
@@ -2977,14 +3107,18 @@ export default function DashboardPage() {
                     {/* 설문 제목 (관리자 입력) */}
                     <div className="mb-4 rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
                       <Label className="text-xs font-semibold text-slate-700">설문 제목</Label>
-                      <p className="mt-0.5 mb-2 text-[11px] text-slate-500">진단 화면 상단에 표시됩니다. 업로드 시 입력하거나 여기서 수정 후 저장하세요.</p>
+                      <p className="mt-0.5 mb-2 text-[11px] text-slate-500">
+                        {settingsReadOnly ? "현재 적용된 설문 제목입니다." : "진단 화면 상단에 표시됩니다. 업로드 시 입력하거나 여기서 수정 후 저장하세요."}
+                      </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <Input
-                          className="max-w-md h-9 text-sm"
+                          className="max-w-md h-9 text-sm read-only:bg-white"
                           placeholder="예: 자기역량진단, 임의로 만든 검사지"
                           value={diagnosisSurveyTitle}
+                          readOnly={settingsReadOnly}
                           onChange={(e) => setDiagnosisSurveyTitle(e.target.value)}
                         />
+                        {!settingsReadOnly && (
                         <Button
                           type="button"
                           size="sm"
@@ -3010,18 +3144,23 @@ export default function DashboardPage() {
                         >
                           제목 저장
                         </Button>
+                        )}
                       </div>
                     </div>
 
                     {/* CSV 업로드 (2~6대영역 설문) */}
                     <div className="mb-4 rounded-lg border border-blue-200/80 bg-blue-50/40 p-3">
-                      <p className="mb-2 text-xs font-semibold text-slate-700">CSV로 설문 업로드</p>
+                      <p className="mb-2 text-xs font-semibold text-slate-700">{settingsReadOnly ? "현재 적용된 설문" : "CSV로 설문 업로드"}</p>
+                      {!settingsReadOnly && (
+                      <>
                       <p className="mb-2 text-[11px] text-slate-500">
                         대영역 2~6개, 소영역은 영역당 4개 이하. 열 순서: 번호, 대영역, 소영역, 방향, 설문내용 (1번 행은 설명이면 자동 제외)
                       </p>
                       <p className="mb-2 text-[11px] text-amber-700">
                         주의: 한글이 깨지지 않도록 엑셀에서 저장 시 <strong>파일 형식을 &quot;CSV UTF-8(쉼표로 분리)&quot;</strong>로 선택해 주세요.
                       </p>
+                      </>
+                      )}
                       {diagnosisSurveyCurrent && diagnosisSurveyCurrent.questionCount > 0 && (
                         <p className="mb-2 text-[11px] text-slate-600">
                           현재 적용: {diagnosisSurveyCurrent.questionCount}문항, {diagnosisSurveyCurrent.domains.length}영역 ({diagnosisSurveyCurrent.domains.join(", ")})
@@ -3032,6 +3171,8 @@ export default function DashboardPage() {
                           업로드된 파일: <span className="font-normal text-slate-600">{diagnosisUploadFileName}</span>
                         </p>
                       )}
+                      {!settingsReadOnly && (
+                      <>
                       <div className="mb-2">
                         <Button
                           type="button"
@@ -3111,6 +3252,8 @@ export default function DashboardPage() {
                           {diagnosisUploading ? "업로드 중..." : "업로드"}
                         </Button>
                       </div>
+                      </>
+                      )}
                     </div>
 
                     {/* 기존 6역량 수동 설정 (CSV 미사용 시) */}
@@ -3119,6 +3262,7 @@ export default function DashboardPage() {
                         <span className="inline-flex items-center gap-1">기존 방식: 6개 역량·역량당 5문항 수동 입력</span>
                       </summary>
                       <div className="mt-3 flex flex-col gap-4">
+                      {!settingsReadOnly && (
                       <div className="flex justify-end">
                         <Button
                           type="button"
@@ -3156,11 +3300,13 @@ export default function DashboardPage() {
                           {savingDiagnosisSettings ? "저장 중..." : "저장"}
                         </Button>
                       </div>
+                      )}
                       <div className="rounded-lg border border-violet-200/80 bg-violet-50/40 p-3">
                         <p className="mb-2 text-xs font-semibold text-slate-600">검사 제목 작성</p>
                         <Input
                           className="border-violet-200/60 bg-white text-slate-800 placeholder:text-slate-400 focus-visible:ring-violet-300"
                           value={diagnosisTitle}
+                          readOnly={settingsReadOnly}
                           onChange={(e) => setDiagnosisTitle(e.target.value)}
                           placeholder="예: 나의 교원 역량 진단"
                         />
@@ -3173,6 +3319,7 @@ export default function DashboardPage() {
                             <Input
                               className="min-w-0 flex-1 border-amber-200/80 bg-amber-50/50 font-medium text-slate-800 placeholder:text-slate-400 focus-visible:ring-amber-300"
                               value={domain.name}
+                              readOnly={settingsReadOnly}
                               onChange={(e) => {
                                 const next = diagnosisDomains.map((d, i) =>
                                   i === di ? { ...d, name: e.target.value } : d
@@ -3189,6 +3336,7 @@ export default function DashboardPage() {
                                 <Input
                                   className="min-w-0 flex-1 text-xs"
                                   value={item}
+                                  readOnly={settingsReadOnly}
                                   onChange={(e) => {
                                     const items = [...(domain.items ?? [])];
                                     while (items.length < 5) items.push("");
@@ -3472,6 +3620,7 @@ export default function DashboardPage() {
                                 </span>
                               </>
                             )}
+                            {!settingsReadOnly && (
                             <button
                               type="button"
                               className={`inline-flex h-[30px] shrink-0 flex-col items-center justify-center rounded-md border px-1.5 py-1 leading-tight sm:h-[36px] sm:px-2 ${
@@ -3494,6 +3643,7 @@ export default function DashboardPage() {
                                 초기화
                               </span>
                             </button>
+                            )}
                             </div>
                           </div>
 

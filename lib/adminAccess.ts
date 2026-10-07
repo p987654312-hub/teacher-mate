@@ -20,3 +20,11 @@ export function isPermanentAdmin(
 ): boolean {
   return adminStanding(meta) === "permanent";
 }
+
+export function isTemporaryAdmin(
+  meta: { role?: string | null; adminExpiresAt?: string | null } | null | undefined
+): boolean {
+  return adminStanding(meta) === "temporary";
+}
+
+export const TEMPORARY_ADMIN_WRITE_ERROR = "임시 관리자는 조회만 가능하며 수정할 수 없습니다.";

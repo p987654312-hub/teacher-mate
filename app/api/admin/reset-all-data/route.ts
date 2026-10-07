@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isTemporaryAdmin, TEMPORARY_ADMIN_WRITE_ERROR } from "@/lib/adminAccess";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabaseAdmin() {
@@ -23,9 +24,12 @@ export async function POST(req: Request) {
     const { data: { user: caller }, error: callerError } = await supabaseAuth.auth.getUser(token);
     if (callerError || !caller) return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
 
-    const meta = (caller.user_metadata ?? {}) as { role?: string; schoolName?: string };
+    const meta = (caller.user_metadata ?? {}) as { role?: string; schoolName?: string; adminExpiresAt?: string | null };
     if (meta.role !== "admin" || !meta.schoolName?.trim()) {
       return NextResponse.json({ error: "학교 관리자만 실행할 수 있습니다." }, { status: 403 });
+    }
+    if (isTemporaryAdmin(meta)) {
+      return NextResponse.json({ error: TEMPORARY_ADMIN_WRITE_ERROR }, { status: 403 });
     }
 
     const schoolName = meta.schoolName.trim();

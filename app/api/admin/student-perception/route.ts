@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isTemporaryAdmin, TEMPORARY_ADMIN_WRITE_ERROR } from "@/lib/adminAccess";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabaseAdmin() {
@@ -21,11 +22,11 @@ async function getCallerAdmin(req: Request) {
   const { data: { user: caller }, error: callerError } = await supabaseAuth.auth.getUser(token);
   if (callerError || !caller) return { error: "인증에 실패했습니다.", status: 401 as const };
 
-  const meta = (caller.user_metadata ?? {}) as { role?: string; schoolName?: string };
+  const meta = (caller.user_metadata ?? {}) as { role?: string; schoolName?: string; adminExpiresAt?: string | null };
   if (meta.role !== "admin" || !meta.schoolName?.trim()) {
     return { error: "학교 관리자만 실행할 수 있습니다.", status: 403 as const };
   }
-  return { email: caller.email ?? "", schoolName: meta.schoolName.trim() };
+  return { email: caller.email ?? "", schoolName: meta.schoolName.trim(), meta };
 }
 
 function isMissingTable(error: unknown): boolean {
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
   try {
     const caller = await getCallerAdmin(req);
     if ("error" in caller) return NextResponse.json({ error: caller.error }, { status: caller.status });
+    if (isTemporaryAdmin(caller.meta)) {
+      return NextResponse.json({ error: TEMPORARY_ADMIN_WRITE_ERROR }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const phase = body?.phase as string | undefined;

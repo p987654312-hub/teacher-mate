@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { maskDisplayName } from "@/lib/displayName";
+import { isTemporaryAdmin } from "@/lib/adminAccess";
 import { ChevronLeft } from "lucide-react";
 
 export default function AccountPage() {
@@ -23,6 +24,7 @@ export default function AccountPage() {
   const [isGoogleOnly, setIsGoogleOnly] = useState(false);
   const [initialSchoolName, setInitialSchoolName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [schoolNameLocked, setSchoolNameLocked] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -33,7 +35,7 @@ export default function AccountPage() {
       }
       const u = data.user;
       setEmail(u.email ?? null);
-      const meta = (u.user_metadata ?? {}) as { name?: string; schoolName?: string; gradeClass?: string; role?: string };
+      const meta = (u.user_metadata ?? {}) as { name?: string; schoolName?: string; gradeClass?: string; role?: string; adminExpiresAt?: string | null };
       // API로 저장된 프로필 우선 사용 (OAuth 재로그인 후에도 우리가 저장한 이름 유지)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -48,6 +50,7 @@ export default function AccountPage() {
               setInitialSchoolName(sn ?? "");
               setGradeClass(String(overrides.gradeClass ?? meta.gradeClass ?? ""));
               setIsAdmin(meta.role === "admin");
+              setSchoolNameLocked(isTemporaryAdmin(meta));
               const identities = (u as any).identities as Array<{ provider: string }> | undefined;
               const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth") ?? false;
               const hasEmailPassword = identities?.some((id) => id.provider === "email") ?? false;
@@ -65,6 +68,7 @@ export default function AccountPage() {
       setInitialSchoolName(sn);
       setGradeClass(meta.gradeClass ?? "");
       setIsAdmin(meta.role === "admin");
+      setSchoolNameLocked(isTemporaryAdmin(meta));
 
       const identities = (u as any).identities as Array<{ provider: string }> | undefined;
       const hasOAuthProvider = identities?.some((id) => id.provider === "google" || id.provider === "oauth") ?? false;
@@ -89,6 +93,11 @@ export default function AccountPage() {
 
     try {
       // 관리자가 학교명을 바꾼 경우: 학교별 세팅(영역/포인트, 사전사후검사)을 새 학교명으로 옮기고, 해당 학교 구성원 schoolName 통일
+      if (schoolNameLocked && newSn !== oldSn) {
+        setMessage("임시 관리자는 학교명을 변경할 수 없습니다.");
+        setLoading(false);
+        return;
+      }
       if (isAdmin && oldSn && newSn !== oldSn) {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
@@ -239,8 +248,12 @@ export default function AccountPage() {
                 id="school"
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
-                className="rounded-2xl"
+                readOnly={schoolNameLocked}
+                className="rounded-2xl read-only:bg-slate-50"
               />
+              {schoolNameLocked && (
+                <p className="text-[11px] text-amber-700">임시 관리자는 학교명을 변경할 수 없습니다.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="gradeClass">학년 반 / 교과</Label>
