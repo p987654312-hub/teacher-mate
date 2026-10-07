@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isPermanentAdmin } from "@/lib/adminAccess";
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,10 +63,10 @@ export async function POST(req: Request) {
         perPage: 1000,
       });
       if (!listError && listData?.users) {
-        const users = listData.users as Array<{ user_metadata?: { role?: string; schoolName?: string } }>;
+        const users = listData.users as Array<{ user_metadata?: { role?: string; schoolName?: string; adminExpiresAt?: string | null } }>;
         const adminCount = users.filter(
           (u) =>
-            (u.user_metadata?.role ?? "") === "admin" &&
+            isPermanentAdmin(u.user_metadata) &&
             (u.user_metadata?.schoolName ?? "").trim() === trimmedSchool
         ).length;
         if (adminCount >= MAX_ADMINS_PER_SCHOOL) {

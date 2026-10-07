@@ -16,6 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
+import DiagnosisResultsExportPanel from "@/components/admin/DiagnosisResultsExportPanel";
+import TemporaryAdminPanel from "@/components/admin/TemporaryAdminPanel";
 import { computeMileageProgress } from "@/lib/mileageProgress";
 // mileageDifficulty 관련 별표 표기는 더 이상 사용하지 않음
 import { DEFAULT_DIAGNOSIS_DOMAINS, type DiagnosisDomainConfig } from "@/lib/diagnosisQuestions";
@@ -35,6 +37,8 @@ import {
   X,
   Trash2,
   MessageSquare,
+  Download,
+  Shield,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -109,6 +113,23 @@ function getPlanFillRatio(row: PlanRow): number {
   return total > 0 ? filled / total : 0;
 }
 
+async function syncTemporaryAdmin(token: string, expiresAt: string): Promise<{ role: "teacher" | "admin"; adminExpiresAt: string | null }> {
+  const res = await fetch("/api/admin/temporary-admins", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: "sync" }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (json?.expired === true || json?.role === "teacher" || (!res.ok && new Date(expiresAt).getTime() <= Date.now())) {
+    await supabase.auth.refreshSession();
+    return { role: "teacher", adminExpiresAt: null };
+  }
+  return {
+    role: "admin",
+    adminExpiresAt: typeof json?.adminExpiresAt === "string" ? json.adminExpiresAt : expiresAt,
+  };
+}
+
 /** 진행률(0~100)에 따라 연한 파랑 → 파랑으로 이어지는 나이스 블루 톤을 반환한다.
  *  가장 진한 값도 남색이 아닌 선명한 파랑(#2e6fe6)이 되도록 한다. */
 function progressToBlue(pct: number): string {
@@ -128,6 +149,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState<string | null>(null);
   const [userGradeClass, setUserGradeClass] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<"teacher" | "admin" | null>(null);
+  const [adminExpiresAt, setAdminExpiresAt] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [viewMode, setViewMode] = useState<"admin" | "teacher">(() => {
     // localStorage에서 저장된 모드 불러오기
@@ -145,6 +167,7 @@ export default function DashboardPage() {
   const isAdmin = userRole === "admin";
   const showTeacherView = isTeacher || (isAdmin && viewMode === "teacher");
   const showAdminView = isAdmin && viewMode === "admin";
+  const isPermanentAdmin = isAdmin && !adminExpiresAt;
   const [teachers, setTeachers] = useState<
     { id: string; name: string; email: string; createdAt: string }[]
   >([]);
@@ -211,6 +234,8 @@ export default function DashboardPage() {
   const [showDiagnosisSettings, setShowDiagnosisSettings] = useState(false);
   const [showAiPromptSettings, setShowAiPromptSettings] = useState(false);
   const [showPerceptionUpload, setShowPerceptionUpload] = useState(false);
+  const [showDiagnosisExport, setShowDiagnosisExport] = useState(false);
+  const [showTemporaryAdminGrant, setShowTemporaryAdminGrant] = useState(false);
   const [perceptionUploading, setPerceptionUploading] = useState<"pre" | "post" | null>(null);
   const [perceptionStatus, setPerceptionStatus] = useState<{ pre?: string; post?: string }>({});
   const perceptionPreInputRef = useRef<HTMLInputElement | null>(null);
@@ -559,13 +584,18 @@ export default function DashboardPage() {
             schoolLevel?: string;
             gradeClass?: string;
             role?: "teacher" | "admin";
+            adminExpiresAt?: string | null;
           }
         | undefined;
 
-      const role = metadata?.role ?? null;
+      let role = metadata?.role ?? null;
       const name = metadata?.name ?? user.email ?? null;
       let schoolName = metadata?.schoolName ?? null;
       let gradeClass = metadata?.gradeClass ?? metadata?.schoolLevel ?? null;
+      let nextAdminExpiresAt =
+        typeof metadata?.adminExpiresAt === "string" && metadata.adminExpiresAt.trim()
+          ? metadata.adminExpiresAt.trim()
+          : null;
 
       // 세션 1회만 조회 후 토큰 재사용 (중복 getSession 제거로 체감 속도 개선)
       const { data: { session: initSession } } = await supabase.auth.getSession();
@@ -596,10 +626,25 @@ export default function DashboardPage() {
         }
       }
 
+      if (token && role === "admin" && nextAdminExpiresAt) {
+        const currentExpiry = nextAdminExpiresAt;
+        try {
+          const synced = await syncTemporaryAdmin(token, currentExpiry);
+          role = synced.role;
+          nextAdminExpiresAt = synced.adminExpiresAt;
+        } catch {
+          if (new Date(currentExpiry).getTime() <= Date.now()) {
+            role = "teacher";
+            nextAdminExpiresAt = null;
+          }
+        }
+      }
+
       setUserName(name);
       setUserSchool(schoolName);
       setUserGradeClass(gradeClass);
       setUserRole(role);
+      setAdminExpiresAt(role === "admin" ? nextAdminExpiresAt : null);
       setCurrentUserEmail(user.email ?? null);
       setIsChecking(false);
 
@@ -885,9 +930,12 @@ export default function DashboardPage() {
     const refreshUserMetadata = async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
       if (!u) return;
-      const meta = (u.user_metadata as { name?: string; schoolName?: string; gradeClass?: string; schoolLevel?: string; role?: string }) ?? {};
+      const meta = (u.user_metadata as { name?: string; schoolName?: string; gradeClass?: string; schoolLevel?: string; role?: string; adminExpiresAt?: string | null }) ?? {};
       let schoolName = meta.schoolName ?? null;
       let gradeClass = meta.gradeClass ?? meta.schoolLevel ?? null;
+      let role: "teacher" | "admin" | null = meta.role === "admin" || meta.role === "teacher" ? meta.role : null;
+      let nextAdminExpiresAt =
+        typeof meta.adminExpiresAt === "string" && meta.adminExpiresAt.trim() ? meta.adminExpiresAt.trim() : null;
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
         try {
@@ -903,11 +951,25 @@ export default function DashboardPage() {
         } catch {
           // ignore
         }
+        if (role === "admin" && nextAdminExpiresAt) {
+          const currentExpiry = nextAdminExpiresAt;
+          try {
+            const synced = await syncTemporaryAdmin(session.access_token, currentExpiry);
+            role = synced.role;
+            nextAdminExpiresAt = synced.adminExpiresAt;
+          } catch {
+            if (new Date(currentExpiry).getTime() <= Date.now()) {
+              role = "teacher";
+              nextAdminExpiresAt = null;
+            }
+          }
+        }
       }
       setUserName(meta.name ?? u.email ?? null);
       setUserSchool(schoolName);
       setUserGradeClass(gradeClass);
-      setUserRole(meta.role === "admin" || meta.role === "teacher" ? meta.role : null);
+      setUserRole(role);
+      setAdminExpiresAt(role === "admin" ? nextAdminExpiresAt : null);
     };
     const onFocus = () => { refreshUserMetadata(); };
     if (typeof window !== "undefined") window.addEventListener("focus", onFocus);
@@ -1505,6 +1567,11 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex shrink-0 items-center gap-3 text-xs text-slate-600">
+            {isAdmin && adminExpiresAt && (
+              <span className="text-[11px] font-medium text-amber-700">
+                임시 관리자 · {new Date(adminExpiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}까지
+              </span>
+            )}
             {isAdmin && (
               <Button
                 type="button"
@@ -2250,6 +2317,40 @@ export default function DashboardPage() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className={`w-fit rounded-lg text-xs hover:bg-emerald-50 ${
+                          showDiagnosisExport
+                            ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                            : "border-slate-300 text-slate-700"
+                        }`}
+                        onClick={() => setShowDiagnosisExport((v) => !v)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Download className="h-3.5 w-3.5" />
+                          검사 결과 추출
+                        </span>
+                      </Button>
+                      {isPermanentAdmin && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`w-fit rounded-lg text-xs hover:bg-amber-50 ${
+                            showTemporaryAdminGrant
+                              ? "border-amber-400 bg-amber-50 text-amber-800"
+                              : "border-slate-300 text-slate-700"
+                          }`}
+                          onClick={() => setShowTemporaryAdminGrant((v) => !v)}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Shield className="h-3.5 w-3.5" />
+                            임시 관리자 권한
+                          </span>
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         className="w-fit rounded-lg border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
                         disabled={resettingAllData}
                         onClick={async () => {
@@ -2381,6 +2482,9 @@ export default function DashboardPage() {
                 </select>
                 </div>
               </div>
+
+              {showDiagnosisExport && <DiagnosisResultsExportPanel />}
+              {showTemporaryAdminGrant && isPermanentAdmin && <TemporaryAdminPanel />}
 
               {showAdminView && (showPointSettings || showDiagnosisSettings || showAiPromptSettings) && (
                 <div className="flex flex-col gap-3">

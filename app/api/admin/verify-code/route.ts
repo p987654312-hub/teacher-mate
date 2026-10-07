@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isPermanentAdmin } from "@/lib/adminAccess";
 
 // 관리자 코드: 서버 전용 환경 변수만 사용 (NEXT_PUBLIC_ 사용 시 클라이언트 번들에 노출되므로 사용 금지)
 // ADMIN_CODE만 사용. 로컬 개발 시 .env.local에 ADMIN_CODE=원하는값 설정
@@ -36,10 +37,10 @@ export async function POST(req: Request) {
         console.error("verify-code listUsers error:", error);
         return NextResponse.json({ ok: true });
       }
-      const users = (data?.users ?? []) as Array<{ user_metadata?: { role?: string; schoolName?: string } }>;
+      const users = (data?.users ?? []) as Array<{ user_metadata?: { role?: string; schoolName?: string; adminExpiresAt?: string | null } }>;
       const adminCount = users.filter(
         (u) =>
-          (u.user_metadata?.role ?? "") === "admin" &&
+          isPermanentAdmin(u.user_metadata) &&
           (u.user_metadata?.schoolName ?? "").trim() === schoolName
       ).length;
       return NextResponse.json({ ok: true, adminCount });
