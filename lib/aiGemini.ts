@@ -1,8 +1,63 @@
 /**
  * AI 텍스트 생성: Google Gemini API(AI Studio 키) 전용.
- * - 일시 과부하(503 등): 백오프 재시도 후 보조 모델로 폴백
- * - 쿼터/한도 소진 등: 다음 API 키로 폴백 (GEMINI_API_KEY → GEMINI_API_KEY_2 또는 GEMINI_API_KEY2)
+ * - 일시 과부하(503 등): 같은 키로 재시도한 뒤 보조 모델로 폴백
+ * - 쿼터/한도 소진 등: 다음 API 키로 전환 (GEMINI_API_KEY → GEMINI_API_KEY_2 또는 GEMINI_API_KEY2)
+ * - 한 번 다음 키로 넘어가면 그 인덱스를 저장하고, 이후 요청은 앞 키를 다시 호출하지 않는다.
  */
+import { createClient } from "@supabase/supabase-js";
+
+const STICKY_KEY = "gemini_active_key_index";
+/** 이 프로세스에서 확정된 시작 인덱스. 0이면 아직 앞 키를 쓸 수 있어 DB를 다시 본다. */
+let memoryKeyIndex = 0;
+
+function getSettingsAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+async function readStickyIndex(): Promise<number> {
+  try {
+    const admin = getSettingsAdmin();
+    if (!admin) return 0;
+    const { data, error } = await admin
+      .from("app_global_settings")
+      .select("value")
+      .eq("key", STICKY_KEY)
+      .maybeSingle();
+    if (error || data?.value == null) return 0;
+    const n = Number.parseInt(String(data.value), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveStartIndex(keyCount: number): Promise<number> {
+  const cap = Math.max(0, keyCount - 1);
+  if (memoryKeyIndex > 0) return Math.min(memoryKeyIndex, cap);
+  const fromDb = await readStickyIndex();
+  if (fromDb > memoryKeyIndex) memoryKeyIndex = fromDb;
+  return Math.min(memoryKeyIndex, cap);
+}
+
+/** 앞 키는 다시 호출하지 않도록 시작 인덱스를 앞으로만 옮긴다. */
+async function advanceStickyIndex(nextIndex: number): Promise<void> {
+  if (nextIndex <= memoryKeyIndex) return;
+  memoryKeyIndex = nextIndex;
+  try {
+    const admin = getSettingsAdmin();
+    if (!admin) return;
+    const { error } = await admin.from("app_global_settings").upsert(
+      { key: STICKY_KEY, value: String(nextIndex), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+    if (error) console.error("[aiGemini] 활성 키 인덱스 저장 실패:", error.message);
+  } catch (e) {
+    console.error("[aiGemini] 활성 키 인덱스 저장 실패:", e);
+  }
+}
 
 /** 사용할 키 목록: GEMINI_API_KEY, GEMINI_API_KEY_2, … 또는 GEMINI_API_KEYS(쉼표 구분) */
 export function getGeminiApiKeys(): string[] {
@@ -139,12 +194,13 @@ async function generateGeminiInternal(
   const keys = getGeminiApiKeys();
   if (keys.length === 0) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
 
+  const start = await resolveStartIndex(keys.length);
   let lastErr: unknown;
-  for (let ki = 0; ki < keys.length; ki++) {
+  for (let ki = start; ki < keys.length; ki++) {
     try {
       const result = await generateWithKey(keys[ki], prompt, opts);
       if (ki > 0) {
-        console.warn(`[aiGemini] GEMINI_API_KEY 폴백 사용: key#${ki + 1}`);
+        console.warn(`[aiGemini] GEMINI_API_KEY 폴백 유지: key#${ki + 1}`);
       }
       return result;
     } catch (e) {
@@ -152,12 +208,12 @@ async function generateGeminiInternal(
       const hasNext = ki < keys.length - 1;
       if (hasNext && shouldFailoverKey(e)) {
         console.warn(
-          `[aiGemini] key#${ki + 1} 실패 → key#${ki + 2}로 전환:`,
+          `[aiGemini] key#${ki + 1} 한도 소진 → key#${ki + 2}로 고정:`,
           String((e as { message?: string })?.message ?? e).slice(0, 160)
         );
+        await advanceStickyIndex(ki + 1);
         continue;
       }
-      // 다음 키가 없거나, 키 전환 대상이 아닌 오류면 즉시 중단
       if (!hasNext || !shouldFailoverKey(e)) throw e;
     }
   }
