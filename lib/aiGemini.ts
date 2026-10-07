@@ -1,7 +1,7 @@
 /**
  * AI 텍스트 생성: Google Gemini API(AI Studio 키) 전용.
  * - 일시 과부하(503 등): 백오프 재시도 후 보조 모델로 폴백
- * - 쿼터/한도 소진 등: 다음 API 키로 폴백 (GEMINI_API_KEY → GEMINI_API_KEY_2 …)
+ * - 쿼터/한도 소진 등: 다음 API 키로 폴백 (GEMINI_API_KEY → GEMINI_API_KEY_2 또는 GEMINI_API_KEY2)
  */
 
 /** 사용할 키 목록: GEMINI_API_KEY, GEMINI_API_KEY_2, … 또는 GEMINI_API_KEYS(쉼표 구분) */
@@ -16,7 +16,9 @@ export function getGeminiApiKeys(): string[] {
   const primary = process.env.GEMINI_API_KEY?.trim();
   if (primary) keys.push(primary);
   for (let i = 2; i <= 5; i++) {
-    const k = process.env[`GEMINI_API_KEY_${i}`]?.trim();
+    const k =
+      process.env[`GEMINI_API_KEY_${i}`]?.trim() ||
+      process.env[`GEMINI_API_KEY${i}`]?.trim();
     if (k) keys.push(k);
   }
   return [...new Set(keys)];
