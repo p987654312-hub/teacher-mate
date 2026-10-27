@@ -1,7 +1,7 @@
 /**
  * AI 텍스트 생성: Google Gemini API(AI Studio 키) 전용.
  * - 일시 과부하(503 등): 같은 키로 재시도한 뒤 보조 모델로 폴백
- * - 쿼터/한도 소진 등: 다음 API 키로 전환 (GEMINI_API_KEY → GEMINI_API_KEY_2 또는 GEMINI_API_KEY2)
+ * - 쿼터/한도 소진, 선불 잔액 0(402), 키 차단 등: 다음 API 키로 전환 (GEMINI_API_KEY → GEMINI_API_KEY_2 또는 GEMINI_API_KEY2)
  * - 한 번 다음 키로 넘어가면 그 인덱스를 저장하고, 이후 요청은 앞 키를 다시 호출하지 않는다.
  */
 import { createClient } from "@supabase/supabase-js";
@@ -112,15 +112,20 @@ function transientError(err: unknown): boolean {
   );
 }
 
-/** 이 키로는 더 이상 쓸 수 없음 → 다음 키로 전환 (쿼터/한도/인증 등) */
+/** 이 키로는 더 이상 쓸 수 없음 → 다음 키로 전환 (쿼터/한도/선불 잔액 소진/인증 등) */
 function shouldFailoverKey(err: unknown): boolean {
   const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
   const status = Number((err as { status?: number })?.status ?? NaN);
   return (
+    status === 402 ||
     status === 429 ||
     status === 403 ||
+    msg.includes("402") ||
     msg.includes("429") ||
     msg.includes("403") ||
+    msg.includes("payment required") ||
+    msg.includes("prepay") ||
+    msg.includes("depleted") ||
     msg.includes("quota") ||
     msg.includes("resource_exhausted") ||
     msg.includes("rate limit") ||
